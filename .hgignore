@@ -11,4 +11,5 @@ syntax: glob
 *.pyc
 syntax: glob
 *.so
-
+syntax: glob
+*.pyd
