@@ -92,7 +92,8 @@ def exportGeometry(ob, me, l, smoothing_enabled):
 		normal = face.normal
 		for vertex in face.verts:
 			if (smoothing_enabled and face.smooth):
-				normal = vertex.normal
+				v = me.verts[vertex]
+				normal = v.normal
 			for no in normal:
 				normals.append(no)
 				
@@ -241,7 +242,7 @@ def write_lxo(render_engine, l, scene, smoothing_enabled=True):
 			ob.create_dupli_list(scene)
 
 			for dupli_ob in ob.dupli_list:
-				if dupli_ob.object.type in ('LAMP', 'CAMERA', 'EMPTY', 'META', 'ARMATURE', 'LATTICE'):
+				if dupli_ob.object.type != 'MESH':
 					continue
 				exportMesh(l, scene, dupli_ob.object, dupli_ob.matrix, smoothing_enabled)
 				if dupli_ob.object.name not in duplis:
@@ -254,7 +255,7 @@ def write_lxo(render_engine, l, scene, smoothing_enabled=True):
 	# browse all scene objects for "mesh-convertible" ones
 	# skip duplicated objects here
 	for ob in sel:		
-		if ob.type in ('LAMP', 'CAMERA', 'EMPTY', 'META', 'ARMATURE', 'LATTICE'):
+		if ob.type != 'MESH':
 			continue
 		
 		# Check layers
