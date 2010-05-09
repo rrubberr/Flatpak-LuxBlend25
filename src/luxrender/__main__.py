@@ -414,7 +414,7 @@ class luxrender(engine_base):
 
 				# Get binary from OSX package
 				if sys.platform == 'darwin':
-					luxrender_path += '.app/Contents/MacOS/luxrender'
+					luxrender_path += '/Contents/MacOS/luxrender'
 				
 				try:
 					for k,v in config_updates.items():
