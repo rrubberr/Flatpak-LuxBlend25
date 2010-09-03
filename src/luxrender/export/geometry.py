@@ -98,7 +98,7 @@ def exportGeometry(ob, me, lux_context, smoothing_enabled):
 				
 	# uv coordinates
 	try:
-		uv_layer = me.active_uv_texture.data
+		uv_layer = me.uv_textures.active.data
 	except:
 		uv_layer = None
 		
