@@ -412,10 +412,11 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 		#print('parse %s' % parse)
 		#print('worldEnd %s' % worldEnd)
 		
-		fn = self.LuxManager.lux_context.file_names[0]
-		cmd_cwd = os.path.dirname(fn)
-		
 		if self.LuxManager.lux_context.API_TYPE == 'FILE':
+			
+			fn = self.LuxManager.lux_context.file_names[0]
+			cmd_cwd = os.path.dirname(fn)
+			
 			#print('calling pylux.context.worldEnd() (1)')
 			self.LuxManager.lux_context.worldEnd()
 			if parse:
