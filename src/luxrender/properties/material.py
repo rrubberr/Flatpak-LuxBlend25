@@ -265,9 +265,9 @@ class luxrender_material(declarative_property_group):
 		
 		if self.type == 'mix':
 			# First export the other mix mats
-			m1 = bpy.data.materials[self.mix.namedmaterial1] 
+			m1 = bpy.data.materials[self.mix.namedmaterial1_material] 
 			m1.luxrender_material.export(scene, lux_context, m1, 'indirect')
-			m2 = bpy.data.materials[self.mix.namedmaterial2] 
+			m2 = bpy.data.materials[self.mix.namedmaterial2_material] 
 			m2.luxrender_material.export(scene, lux_context, m2, 'indirect')
 		
 		material_params = ParamSet()
@@ -817,8 +817,8 @@ class mix(declarative_property_group):
 	def get_params(self):
 		mix_params = ParamSet()
 		
-		mix_params.add_string('namedmaterial1', self.namedmaterial1)
-		mix_params.add_string('namedmaterial2', self.namedmaterial2)
+		mix_params.add_string('namedmaterial1', self.namedmaterial1_material)
+		mix_params.add_string('namedmaterial2', self.namedmaterial2_material)
 		mix_params.update( TF_amount.get_params(self) )
 		
 		return mix_params

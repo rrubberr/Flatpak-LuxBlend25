@@ -412,6 +412,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 		#print('parse %s' % parse)
 		#print('worldEnd %s' % worldEnd)
 		
+		fn = self.LuxManager.lux_context.file_names[0]
+		cmd_cwd = os.path.dirname(fn)
+		
 		if self.LuxManager.lux_context.API_TYPE == 'FILE':
 			#print('calling pylux.context.worldEnd() (1)')
 			self.LuxManager.lux_context.worldEnd()
@@ -419,7 +422,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 				# file_api.parse() creates a real pylux context. we must replace
 				# LuxManager's context with that one so that the running renderer
 				# can be controlled.
-				ctx = self.LuxManager.lux_context.parse(self.LuxManager.lux_context.file_names[0], True)
+				os.chdir(cmd_cwd)
+				ctx = self.LuxManager.lux_context.parse(fn, True)
 				self.LuxManager.lux_context = ctx
 				self.LuxManager.stats_thread.LocalStorage['lux_context'] = ctx
 				self.LuxManager.fb_thread.LocalStorage['lux_context'] = ctx
@@ -468,8 +472,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 					LuxLog('Saving LuxRender config failed: %s' % err)
 					return False
 				
-				fn = self.LuxManager.lux_context.file_names[0]
-				cmd_cwd = os.path.dirname(fn)
 				cmd_args = [luxrender_path, fn]
 				# TODO: add support for luxrender command line options
 				LuxLog('Launching: %s' % cmd_args)
