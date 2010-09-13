@@ -498,7 +498,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 				
 				# Set number of threads for external processes
 				if not scene.luxrender_engine.threads_auto:
-					cmd_args.append('--threads %i' % scene.luxrender_engine.threads)
+					cmd_args.append('--threads=%i' % scene.luxrender_engine.threads)
 				
 				if scene.luxrender_networking.use_network_servers:
 					for server in scene.luxrender_networking.servers.split(','):
