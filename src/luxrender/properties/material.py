@@ -723,6 +723,7 @@ class metal(declarative_property_group):
 				('copper', 'copper', 'copper'),
 				('gold', 'gold', 'gold'),
 				('silver', 'silver', 'silver'),
+				('aluminium', 'aluminium', 'aluminium')
 			]
 		},
 		{
