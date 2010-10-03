@@ -168,7 +168,7 @@ def mat_list():
 		('shinymetal','Shiny Metal','shinymetal'),
 	]
 	
-	if LUXRENDER_VERSION >= '0.8':
+	if LUXRENDER_VERSION >= '0.7.1':
 		mat_list += [
 			('velvet', 'Velvet', 'velvet'),
 		]
