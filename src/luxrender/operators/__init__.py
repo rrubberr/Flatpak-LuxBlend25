@@ -47,20 +47,27 @@ from luxrender.outputs.pure_api			import LUXRENDER_VERSION
 
 # Per-IDPropertyGroup preset handling
 
+def try_preset_path_create(preset_subdir):
+	target_path = os.path.join(bpy.utils.preset_paths('')[0], preset_subdir)
+	if not os.path.exists(target_path):
+		os.makedirs(target_path)
+
 class LUXRENDER_MT_base(object):
 	preset_operator = "script.execute_preset"
-	
 	def draw(self, context):
-		target_path = os.path.join(bpy.utils.preset_paths('')[0], self.preset_subdir)
-		if not os.path.exists(target_path):
-			os.makedirs(target_path)
-		bpy.types.Menu.draw_preset(self, context)
+		try_preset_path_create(self.preset_subdir)
+		return bpy.types.Menu.draw_preset(self, context)
+
+class LUXRENDER_OT_preset_base(AddPresetBase):
+	def execute(self, context):
+		try_preset_path_create(self.preset_subdir)
+		return super().execute(context)
 
 class LUXRENDER_MT_presets_engine(LUXRENDER_MT_base, bpy.types.Menu):
 	bl_label = "LuxRender Engine Presets"
 	preset_subdir = "luxrender/engine"
 
-class LUXRENDER_OT_preset_engine_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_engine_add(LUXRENDER_OT_preset_base, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_engine_add'
 	bl_label = 'Add LuxRender Engine settings preset'
@@ -84,7 +91,7 @@ class LUXRENDER_MT_presets_networking(LUXRENDER_MT_base, bpy.types.Menu):
 	bl_label = "LuxRender Networking Presets"
 	preset_subdir = "luxrender/networking"
 
-class LUXRENDER_OT_preset_networking_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_networking_add(LUXRENDER_OT_preset_base, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_networking_add'
 	bl_label = 'Add LuxRender Networking settings preset'
@@ -98,7 +105,7 @@ class LUXRENDER_MT_presets_material(LUXRENDER_MT_base, bpy.types.Menu):
 	bl_label = "LuxRender Material Presets"
 	preset_subdir = "luxrender/material"
 
-class LUXRENDER_OT_preset_material_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_material_add(LUXRENDER_OT_preset_base, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_material_add'
 	bl_label = 'Add LuxRender Material settings preset'
@@ -128,7 +135,7 @@ class LUXRENDER_MT_presets_texture(LUXRENDER_MT_base, bpy.types.Menu):
 	bl_label = "LuxRender Texture Presets"
 	preset_subdir = "luxrender/texture"
 
-class LUXRENDER_OT_preset_texture_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_texture_add(LUXRENDER_OT_preset_base, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_texture_add'
 	bl_label = 'Add LuxRender Texture settings preset'
