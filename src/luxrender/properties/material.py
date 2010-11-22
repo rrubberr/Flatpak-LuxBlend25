@@ -145,7 +145,7 @@ TC_Ks3			= ColorTextureParameter('Ks3', 'Specular color 3',	default=(1.0,1.0,1.0
 TC_Kt			= ColorTextureParameter('Kt', 'Transmission color',	default=(1.0,1.0,1.0) )
 TC_L			= EmissionColorTextureParameter('L', 'Emission color',		default=(1.0,1.0,1.0) )
 
-TC_absorption	= VolumeDataColorTextureParameter('absorption', 'Absorption')
+TC_absorption	= VolumeDataColorTextureParameter('absorption', 'Absorption',	default=(1.0,1.0,1.0))
 
 def dict_merge(*args):
 	vis = {}
