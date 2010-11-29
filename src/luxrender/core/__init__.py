@@ -65,6 +65,7 @@ from luxrender.properties.material		import ( luxrender_material,
 												 luxrender_mat_glass,
 												 luxrender_mat_glass2,
 												 luxrender_mat_roughglass,
+												 luxrender_mat_glossytranslucent,
 												 luxrender_mat_glossy,
 												 luxrender_mat_glossy_lossy,
 												 luxrender_mat_matte,
@@ -115,6 +116,7 @@ from luxrender.ui.materials				import ( main				as ui_materials,
 												 glass				as ui_materials_glass,
 												 glass2				as ui_materials_glass2,
 												 roughglass			as ui_materials_roughglass,
+												 glossytranslucent	as ui_materials_glossytranslucent,
 												 glossy_lossy		as ui_materials_glossy_lossy,
 												 glossy				as ui_materials_glossy,
 												 matte				as ui_materials_matte,
@@ -230,14 +232,14 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 	
 	bl_idname			= 'luxrender'
 	bl_label			= 'LuxRender'
-	bl_use_preview		= (LUXRENDER_VERSION >= '0.8')
+	bl_use_preview		= True #(LUXRENDER_VERSION >= '0.8')
 	
 	LuxManager			= None
 	render_update_timer	= None
 	output_dir			= './'
 	output_file			= 'default.png'
 	
-#	# This member is read by the extensions_Framework to set up custom property groups
+#	# This member is read by the extensions_framework to set up custom property groups
 	property_groups = [
 		('Scene', luxrender_accelerator),
 		('Scene', luxrender_engine),
@@ -258,6 +260,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 		('luxrender_material', luxrender_mat_glass),
 		('luxrender_material', luxrender_mat_glass2),
 		('luxrender_material', luxrender_mat_roughglass),
+		('luxrender_material', luxrender_mat_glossytranslucent),
 		('luxrender_material', luxrender_mat_glossy),
 		('luxrender_material', luxrender_mat_glossy_lossy),
 		('luxrender_material', luxrender_mat_matte),
@@ -332,8 +335,12 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 			self.render_start(scene)
 	
 	def render_preview(self, scene):
+		from extensions_framework.util import path_relative_to_export
 		prev_dir = os.getcwd()
-		os.chdir( efutil.temp_directory() )
+		tmp_path = efutil.temp_directory()
+		efutil.export_path = path_relative_to_export(tmp_path)
+		self.output_dir = tmp_path
+		os.chdir( tmp_path )
 		
 		from luxrender.outputs.pure_api import PYLUX_AVAILABLE
 		if not PYLUX_AVAILABLE:
@@ -428,7 +435,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 				
 				# progressively update the preview
 				time.sleep(0.2) # safety-sleep
-				if preview_context.statistics('samplesPx') > 24:
+				if LUXRENDER_VERSION < '0.8' or preview_context.statistics('samplesPx') > 24:
 					interruptible_sleep(1.8) # up to HALTSPP every 2 seconds in sum
 					
 				LuxLog('Updating preview (%ix%i - %s)' % (xres, yres, preview_context.printableStatistics(False)))

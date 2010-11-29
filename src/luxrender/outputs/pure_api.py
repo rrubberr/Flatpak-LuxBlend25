@@ -66,6 +66,7 @@ try:
 			
 			# no further action required
 		
+		# Backwards-compatibility Context method substitution
 		if LUXRENDER_VERSION < '0.8':
 			from extensions_framework.util import format_elapsed_time
 			
@@ -95,7 +96,10 @@ try:
 				return stats_string
 			
 			Custom_Context.printableStatistics = printableStatistics
+			
+			Custom_Context.setAttribute = Custom_Context.setOption
 			Custom_Context.getAttribute = Custom_Context.getOption
+			
 			def getRenderingServersStatus(self):
 				server_list = []
 				for i in range(self.getServerCount()):
@@ -104,6 +108,15 @@ try:
 					server_list.append(rsi)
 				return server_list
 			Custom_Context.getRenderingServersStatus = getRenderingServersStatus
+			
+			def saveEXR(self, filename, useHalfFloat, includeZBuffer, tonemapped):
+				pass # can't do anything
+			Custom_Context.saveEXR = saveEXR
+			
+			def portalInstance(self, name):
+				LuxLog('WARNING: Exporting PortalInstance as ObjectInstance; Portal will not be effective')
+				self.objectInstance(name)
+			Custom_Context.portalInstace = portalInstance
 		
 		PYLUX_AVAILABLE = True
 		LuxLog('Using pylux version %s' % LUXRENDER_VERSION)
