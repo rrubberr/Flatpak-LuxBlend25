@@ -24,6 +24,8 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
+import os
+
 from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil
 from extensions_framework.validate import Logic_OR as O
@@ -573,7 +575,7 @@ class luxrender_texture(declarative_property_group):
 		Return		tuple(string('float'|'color'|'fresnel'), ParamSet)
 		'''
 		
-		# this requires the sub-IDPropertyGroup name to be the same as the texture name
+		# this requires part of the sub-IDPropertyGroup name to be the same as the texture name
 		if hasattr(self, 'luxrender_tex_%s'%self.type):
 			lux_texture = getattr(self, 'luxrender_tex_%s'%self.type) 
 			features, params = lux_texture.get_paramset()
@@ -1311,6 +1313,7 @@ class luxrender_tex_imagemap(declarative_property_group):
 	controls = [
 		'variant',
 		'filename',
+		'embed',
 		'channel',
 		'discardmipmaps',
 		'filtertype',
@@ -1342,6 +1345,13 @@ class luxrender_tex_imagemap(declarative_property_group):
 			'subtype': 'FILE_PATH',
 			'attr': 'filename',
 			'name': 'File Name',
+			'save_in_preset': True
+		},
+		{
+			'type': 'bool',
+			'attr': 'embed',
+			'name': 'Embed file data',
+			'default': False,
 			'save_in_preset': True
 		},
 		{
@@ -1426,8 +1436,15 @@ class luxrender_tex_imagemap(declarative_property_group):
 		
 		params = ParamSet()
 		
-		params.add_string('filename', efutil.path_relative_to_export(self.filename) ) \
-			  .add_integer('discardmipmaps', self.discardmipmaps) \
+		if self.embed:
+			from luxrender.util import bencode_file2string
+			fn = efutil.filesystem_path(self.filename)
+			params.add_string('imagedata_filename', os.path.basename(fn))
+			params.add_string('imagedata', bencode_file2string(fn) )
+		else:
+			params.add_string('filename', efutil.path_relative_to_export(self.filename) )
+		
+		params.add_integer('discardmipmaps', self.discardmipmaps) \
 			  .add_string('filtertype', self.filtertype) \
 			  .add_float('gain', self.gain) \
 			  .add_float('gamma', self.gamma) \
