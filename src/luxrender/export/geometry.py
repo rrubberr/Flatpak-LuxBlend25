@@ -35,6 +35,7 @@ from luxrender.export import ParamSet, ExportProgressThread, ExportCache, object
 from luxrender.export import matrix_to_list
 from luxrender.export.materials import get_material_volume_defs
 
+
 class InvalidGeometryException(Exception):
 	pass
 
@@ -544,6 +545,11 @@ def iterateScene(lux_context, scene):
 			
 			if obj.parent and obj.parent.is_duplicator:
 				raise UnexportableObjectException(' -> parent is duplicator')
+			
+			for mod in obj.modifiers:
+				if mod.name == 'Smoke':
+					if mod.smoke_type == 'DOMAIN':
+						raise UnexportableObjectException(' -> Smoke domain')
 			
 			number_psystems = len(obj.particle_systems)
 			

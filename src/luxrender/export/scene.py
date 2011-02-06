@@ -35,6 +35,7 @@ from luxrender.export 			import get_worldscale, object_anim_matrix
 from luxrender.export			import lights		as export_lights
 from luxrender.export			import materials	as export_materials
 from luxrender.export			import geometry		as export_geometry
+from luxrender.export			import volumes		as export_volumes
 from luxrender.outputs			import LuxManager, LuxLog
 from luxrender.outputs.file_api	import Files
 from luxrender.outputs.pure_api	import LUXRENDER_VERSION
@@ -111,10 +112,12 @@ class SceneExporter(object):
 				LXS = True
 				LXM = True
 				LXO = True
+				LXV = True
 			else:
 				LXS = scene.luxrender_engine.write_lxs
 				LXM = scene.luxrender_engine.write_lxm
 				LXO = scene.luxrender_engine.write_lxo
+				LXV = scene.luxrender_engine.write_lxv
 			
 			if not os.access( self.properties.directory, os.W_OK):
 				self.report({'ERROR'}, 'Output path "%s" is not writable' % self.properties.directory)
@@ -125,10 +128,11 @@ class SceneExporter(object):
 					lxs_filename,
 					LXS = LXS, 
 					LXM = LXM,
-					LXO = LXO
+					LXO = LXO,
+					LXV = LXV
 				)
 			else:
-				self.report({'ERROR'}, 'Nothing to do! Select at least one of LXM/LXS/LXO')
+				self.report({'ERROR'}, 'Nothing to do! Select at least one of LXM/LXS/LXO/LXV')
 				return {'CANCELLED'}
 		
 		if lux_context == False:
@@ -190,6 +194,11 @@ class SceneExporter(object):
 				lux_context.set_output_file(Files.MATS)
 			for volume in scene.luxrender_volumes.volumes:
 				lux_context.makeNamedVolume( volume.name, *volume.api_output(lux_context) )
+		
+		if (self.properties.api_type in ['API', 'LUXFIRE_CLIENT'] and not self.properties.write_files) or (self.properties.write_files and scene.luxrender_engine.write_lxv):
+			if self.properties.api_type == 'FILE':
+				lux_context.set_output_file(Files.VOLM)
+			export_volumes.export_smoke(lux_context, scene)	
 		
 		mesh_names = set()
 		
