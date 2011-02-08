@@ -182,6 +182,7 @@ class luxrender_mesh(declarative_property_group):
 		},
 	]
 	
+
 	def get_shape_IsSupport(self):
 		return self.AR_enabled
 	

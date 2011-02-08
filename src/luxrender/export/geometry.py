@@ -477,7 +477,7 @@ class GeometryExporter(object):
 		# Some situations require full geometry export
 		if self.scene.luxrender_engine.renderer == 'hybrid':
 			return False
-
+		
 		# Only allow instancing for duplis and particles in non-hybrid mode, or
 		# for normal objects if the object has certain modifiers applied against
 		# the same shared base mesh.
@@ -646,10 +646,10 @@ class GeometryExporter(object):
 					dupli_object_names.add( dupli_ob.object.name )
 					
 					det.exported_objects += 1
-				
+
 				det.stop()
 				det.join()
-				
+			
 				LuxLog('... done, exported %s duplis' % det.exported_objects)
 			
 			# free object dupli list again. Warning: all dupli objects are INVALID now!
