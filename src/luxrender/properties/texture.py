@@ -25,7 +25,7 @@
 # ***** END GPL LICENCE BLOCK *****
 #
 import os
-
+import math
 import bpy
 
 from extensions_framework import declarative_property_group
@@ -137,14 +137,15 @@ class ColorTextureParameter(TextureParameterBase):
 	
 	def get_controls(self):
 		return [
-			#[ 0.8, [0.425,'%s_colorlabel' % self.attr, '%s_color' % self.attr], '%s_usecolorrgc' % self.attr, '%s_usecolortexture' % self.attr ],
+			#[ 0.8, [0.425,'%s_colorlabel' % self.attr, '%s_color' % self.attr], '%s_usecolortexture' % self.attr ],
 			[ 0.9, [0.375,'%s_colorlabel' % self.attr, '%s_color' % self.attr], '%s_usecolortexture' % self.attr ],
-			'%s_colortexture' % self.attr
+			[ 0.9, '%s_colortexture' % self.attr, '%s_multiplycolor' % self.attr ],
 		] + self.get_extra_controls()
 	
 	def get_visibility(self):
 		vis = {
 			'%s_colortexture' % self.attr: { '%s_usecolortexture' % self.attr: True },
+			'%s_multiplycolor' % self.attr: { '%s_usecolortexture' % self.attr: True },
 		}
 		vis.update(self.get_extra_visibility())
 		return vis
@@ -186,19 +187,19 @@ class ColorTextureParameter(TextureParameterBase):
 				'default': self.get_real_param_name()
 			},
 			{
-				'attr': '%s_usecolortexture' % self.attr,
+				'attr': '%s_multiplycolor' % self.attr,
 				'type': 'bool',
-				'name': 'T',
-				'description': 'Textured %s' % self.name,
+				'name': 'M',
+				'description': 'Multiply texture by color',
 				'default': False,
 				'toggle': True,
 				'save_in_preset': True
 			},
 			{
-				'attr': '%s_usecolorrgc' % self.attr,
+				'attr': '%s_usecolortexture' % self.attr,
 				'type': 'bool',
-				'name': 'R',
-				'description': 'Reverse Gamma Correct %s' % self.name,
+				'name': 'T',
+				'description': 'Textured %s' % self.name,
 				'default': False,
 				'toggle': True,
 				'save_in_preset': True
@@ -264,6 +265,8 @@ class FloatTextureParameter(TextureParameterBase):
 	texture_only	= False
 	multiply_float	= False
 	ignore_zero		= False
+	sub_type		= 'NONE'
+	unit			= 'NONE'
 	
 	def __init__(self,
 			attr, name,
@@ -271,6 +274,8 @@ class FloatTextureParameter(TextureParameterBase):
 			multiply_float = False,		# Specify that when texture is in use, it should be scaled by the float value
 			ignore_zero = False,		# Don't export this parameter if the float value == 0.0
 			real_attr = None,			# translate self.attr into something else at export time (overcome 31 char RNA limit)
+			sub_type = 'NONE',
+			unit = 'NONE',
 			default = 0.0, min = 0.0, max = 1.0, precision=6
 		):
 		self.attr = attr
@@ -278,6 +283,8 @@ class FloatTextureParameter(TextureParameterBase):
 		self.texture_only = (not add_float_value)
 		self.multiply_float = multiply_float
 		self.ignore_zero = ignore_zero
+		self.sub_type = sub_type
+		self.unit = unit
 		self.real_attr = real_attr
 		self.default = default
 		self.min = min
@@ -296,7 +303,7 @@ class FloatTextureParameter(TextureParameterBase):
 		else:
 			return [
 				[0.9, '%s_floatvalue' % self.attr, '%s_usefloattexture' % self.attr],
-				'%s_floattexture' % self.attr,
+				[0.9, '%s_floattexture' % self.attr,'%s_multiplyfloat' % self.attr],
 			] + self.get_extra_controls()
 	
 	def get_visibility(self):
@@ -304,6 +311,7 @@ class FloatTextureParameter(TextureParameterBase):
 		if not self.texture_only:
 			vis = {
 				'%s_floattexture' % self.attr: { '%s_usefloattexture' % self.attr: True },
+				'%s_multiplyfloat' % self.attr: { '%s_usefloattexture' % self.attr: True },
 			}
 		vis.update(self.get_extra_visibility())
 		return vis
@@ -318,7 +326,10 @@ class FloatTextureParameter(TextureParameterBase):
 			{
 				'attr': '%s_multiplyfloat' % self.attr,
 				'type': 'bool',
+				'name': 'M',
+				'description': 'Multiply texture by value',
 				'default': self.multiply_float,
+				'toggle': True,
 				'save_in_preset': True
 			},
 			{
@@ -339,6 +350,8 @@ class FloatTextureParameter(TextureParameterBase):
 			{
 				'attr': '%s_floatvalue' % self.attr,
 				'type': 'float',
+				'subtype': self.sub_type,
+				'unit': self.unit,
 				'name': self.name,
 				'description': '%s Value' % self.name,
 				'default': self.default,
@@ -543,23 +556,24 @@ class luxrender_texture(declarative_property_group):
 				('BLENDER', 'Use Blender Texture', 'BLENDER'),
 				('', 'Lux Textures', ''),
 				('bilerp', 'bilerp', 'bilerp'),
-				('blackbody','blackbody','blackbody'),
 				('brick', 'brick', 'brick'),
 				('checkerboard', 'checkerboard', 'checkerboard'),
 				('dots', 'dots', 'dots'),
-				('equalenergy', 'equalenergy', 'equalenergy'),
 				('fbm', 'fbm', 'fbm'),
-				('gaussian', 'gaussian', 'gaussian'),
 				('harlequin', 'harlequin', 'harlequin'),
 				('imagemap', 'imagemap', 'imagemap'),
-				('lampspectrum', 'lampspectrum', 'lampspectrum'),
 				('marble', 'marble', 'marble'),
 				('mix', 'mix', 'mix'),
 				('scale', 'scale', 'scale'),
-				('tabulateddata', 'tabulateddata', 'tabulateddata'),
 				('uv', 'uv', 'uv'),
 				('windy', 'windy', 'windy'),
 				('wrinkled', 'wrinkled', 'wrinkled'),
+				('', 'Emission & Spectrum Textures', ''),
+				('blackbody','blackbody','blackbody'),
+				('equalenergy', 'equalenergy', 'equalenergy'),
+				('lampspectrum', 'lampspectrum', 'lampspectrum'),
+				('gaussian', 'gaussian', 'gaussian'),
+				('tabulateddata', 'tabulateddata', 'tabulateddata'),
 				('', 'Fresnel Textures', ''),
 				('constant', 'constant', 'constant'),
 				('cauchy', 'cauchy', 'cauchy'),
@@ -792,30 +806,34 @@ class luxrender_tex_brick(declarative_property_group):
 		'brickmodtex_color': 				{ 'variant': 'color' },
 		'brickmodtex_usecolortexture':		{ 'variant': 'color' },
 		'brickmodtex_colortexture':			{ 'variant': 'color', 'brickmodtex_usecolortexture': True },
+		'brickmodtex_multiplycolor':		{ 'variant': 'color', 'brickmodtex_usecolortexture': True },
 		
 		'brickmodtex_usefloattexture':		{ 'variant': 'float' },
 		'brickmodtex_floatvalue':			{ 'variant': 'float' },
 		'brickmodtex_floattexture':			{ 'variant': 'float', 'brickmodtex_usefloattexture': True },
-		
+		'brickmodtex_multiplyfloat':		{ 'variant': 'float', 'brickmodtex_usefloattexture': True },
 		
 		'bricktex_colorlabel':				{ 'variant': 'color' },
 		'bricktex_color': 					{ 'variant': 'color' },
 		'bricktex_usecolortexture':			{ 'variant': 'color' },
 		'bricktex_colortexture':			{ 'variant': 'color', 'bricktex_usecolortexture': True },
+		'bricktex_multiplycolor':			{ 'variant': 'color', 'bricktex_usecolortexture': True },
 		
 		'bricktex_usefloattexture':			{ 'variant': 'float' },
 		'bricktex_floatvalue':				{ 'variant': 'float' },
 		'bricktex_floattexture':			{ 'variant': 'float', 'bricktex_usefloattexture': True },
-		
+		'bricktex_multiplyfloat':			{ 'variant': 'float', 'bricktex_usefloattexture': True },
 		
 		'mortartex_colorlabel':				{ 'variant': 'color' },
 		'mortartex_color': 					{ 'variant': 'color' },
 		'mortartex_usecolortexture':		{ 'variant': 'color' },
 		'mortartex_colortexture':			{ 'variant': 'color', 'mortartex_usecolortexture': True },
+		'mortartex_multiplycolor':			{ 'variant': 'color', 'mortartex_usecolortexture': True },
 		
 		'mortartex_usefloattexture':		{ 'variant': 'float' },
 		'mortartex_floatvalue':				{ 'variant': 'float' },
 		'mortartex_floattexture':			{ 'variant': 'float', 'mortartex_usefloattexture': True },
+		'mortartex_multiplyfloat':			{ 'variant': 'float', 'mortartex_usefloattexture': True },
 	}
 	
 	properties = [
@@ -1023,7 +1041,9 @@ class luxrender_tex_checkerboard(declarative_property_group):
 	
 	visibility = {
 		'tex1_floattexture':	{ 'tex1_usefloattexture': True },
+		'tex1_multiplyfloat':	{ 'tex1_usefloattexture': True },
 		'tex2_floattexture':	{ 'tex2_usefloattexture': True },
+		'tex2_multiplyfloat':	{ 'tex2_usefloattexture': True },
 	}
 	
 	properties = [
@@ -1102,6 +1122,7 @@ class luxrender_tex_constant(declarative_property_group):
 			'soft_min': 0.0,
 			'max': 10.0,
 			'soft_max': 10.0,
+			'precision': 4,
 			'save_in_preset': True
 		},
 	]
@@ -1124,10 +1145,12 @@ class luxrender_tex_dots(declarative_property_group):
 		'inside_usefloattexture':		{ 'variant': 'float' },
 		'inside_floatvalue':			{ 'variant': 'float' },
 		'inside_floattexture':			{ 'variant': 'float', 'inside_usefloattexture': True },
+		'inside_multiplyfloat':			{ 'variant': 'float', 'inside_usefloattexture': True },
 		
 		'outside_usefloattexture':		{ 'variant': 'float' },
 		'outside_floatvalue':			{ 'variant': 'float' },
 		'outside_floattexture':			{ 'variant': 'float', 'outside_usefloattexture': True },
+		'outside_multiplyfloat':		{ 'variant': 'float', 'outside_usefloattexture': True },
 	} 
 	
 	properties = [
@@ -1421,13 +1444,17 @@ class luxrender_tex_imagemap(declarative_property_group):
 		},
 	]
 	
-	def get_paramset(self, scene, texture):
-		params = ParamSet()
+	def get_filename(self, texture):
 		if texture.library is not None:
 			fn = bpy.path.abspath(self.filename, texture.library.filepath)
 		else:
 			fn = self.filename
-		fn = efutil.filesystem_path(fn)
+		return efutil.filesystem_path(fn)
+
+	
+	def get_paramset(self, scene, texture):
+		params = ParamSet()
+		fn = self.get_filename(texture)
 		if scene.luxrender_engine.embed_filedata:
 			from luxrender.util import bencode_file2string
 			params.add_string('filename', os.path.basename(fn))
@@ -1480,6 +1507,10 @@ class luxrender_tex_mapping(declarative_property_group):
 		['uscale', 'vscale'],
 		['udelta', 'vdelta'],
 		'v1', 'v2',
+		'ARScale',
+		'current_cam',
+		'dir', 'up',
+		['fov','aspect'],
 	]
 	
 	visibility = {
@@ -1489,6 +1520,13 @@ class luxrender_tex_mapping(declarative_property_group):
 		'vscale':			{ 'type': O(['uv', 'spherical']) },
 		# 'udelta': # always visible
 		'vdelta':			{ 'type': O(['uv', 'spherical', 'planar']) },
+		'udelta':			{ 'type': O(['uv', 'spherical','cylindrical', 'planar']) },
+		'ARScale':			{ 'type': 'projector' },
+		'current_cam':			{ 'type': 'projector' },
+		'dir':				{ 'current_cam': False, 'type': 'projector' },
+		'up':				{ 'current_cam': False, 'type': 'projector' },
+		'fov':				{ 'current_cam': False, 'type': 'projector' },
+		'aspect':			{ 'current_cam': False, 'type': 'projector' },
 	}
 	
 	properties = [
@@ -1501,6 +1539,7 @@ class luxrender_tex_mapping(declarative_property_group):
 				('planar','planar','planar'),
 				('spherical','spherical','spherical'),
 				('cylindrical','cylindrical','cylindrical'),
+				('projector','projector','projector'),
 			],
 			'save_in_preset': True
 		},
@@ -1562,19 +1601,73 @@ class luxrender_tex_mapping(declarative_property_group):
 			'default': (0.0, 1.0, 0.0),
 			'save_in_preset': True
 		},
+		{
+			'type': 'bool',
+			'attr': 'ARScale',
+			'name': 'Scale for Augmented Reality',
+			'description': 'enable this option if these texture is for AR objects',
+			'default': False,
+		},
+		{
+			'type': 'bool',
+			'attr': 'current_cam',
+			'name': 'Use current camera data',
+			'default': False,
+		},
+		{
+			'attr': 'dir',
+			'type': 'float_vector',
+			'name': 'DIR',
+			'default': (0.0, 0.0, 1.0),
+			'description': 'Direction vector for projection camera',
+			'save_in_preset': True
+		},
+		{
+			'attr': 'up',
+			'type': 'float_vector',
+			'name': 'UP',
+			'default': (0.0, 1.0, 0.0),
+			'description': 'Up vector for projection camera',
+			'save_in_preset': True
+		},
+		{
+			'attr': 'fov',
+			'type': 'float',
+			'name': 'FOV',
+			'default': 0.0,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 180.0,
+			'soft_max': 180.0,
+			'description': 'FOV of the projection camera',
+			'save_in_preset': True
+		},
+		{
+			'attr': 'aspect',
+			'type': 'float',
+			'name': 'y/x Aspect',
+			'default': 0.0,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 5.0,
+			'soft_max': 5.0,
+			'description': 'y/x aspect ratio of the projection camera',
+			'save_in_preset': True
+		},
 	]
 	
 	def get_paramset(self, scene):
 		mapping_params = ParamSet()
 		
 		mapping_params.add_string('mapping', self.type)
-		mapping_params.add_float('udelta', self.udelta)
 		
 		if self.type == 'planar':
+			mapping_params.add_float('udelta', self.udelta)
 			mapping_params.add_vector('v1', self.v1)
 			mapping_params.add_vector('v2', self.v2)
 			
 		if self.type in {'uv', 'spherical', 'cylindrical'}:
+			mapping_params.add_float('udelta', self.udelta)
 			mapping_params.add_float('uscale', self.uscale)
 			
 		if self.type in {'uv', 'spherical'}:
@@ -1582,6 +1675,22 @@ class luxrender_tex_mapping(declarative_property_group):
 			
 		if self.type in {'uv', 'spherical', 'planar'}:
 			mapping_params.add_float('vdelta', self.vdelta)
+
+		if self.type == 'projector':
+			if self.current_cam == True:
+				proj =  scene.camera.data.luxrender_camera.lookAt(scene.camera)
+				mapping_params.add_vector('dir', (proj[3] - proj[0],proj[4] - proj[1],proj[5] - proj[2] ) )
+				mapping_params.add_vector('up', (proj[6],proj[7],proj[8] ) )
+				mapping_params.add_float('fov', math.degrees(scene.camera.data.angle))
+				xrt, yrt = scene.camera.data.luxrender_camera.luxrender_film.resolution()
+				mapping_params.add_float('y/x', yrt/xrt )
+			else:
+				mapping_params.add_vector('dir', self.dir)
+				mapping_params.add_vector('up', self.up)
+				mapping_params.add_float('fov', self.fov)
+				mapping_params.add_float('y/x', self.aspect)
+
+			mapping_params.add_bool('ARScale', self.ARScale)
 		
 		return mapping_params
 
@@ -1669,25 +1778,29 @@ class luxrender_tex_mix(declarative_property_group):
 	# Visibility we do manually because of the variant switch
 	visibility = {
 		'amount_floattexture':			{ 'amount_usefloattexture': True },
+		'amount_multiplyfloat':			{ 'amount_usefloattexture': True },
 		
 		'tex1_colorlabel':				{ 'variant': 'color' },
 		'tex1_color': 					{ 'variant': 'color' },
 		'tex1_usecolortexture':			{ 'variant': 'color' },
 		'tex1_colortexture':			{ 'variant': 'color', 'tex1_usecolortexture': True },
+		'tex1_multiplycolor':			{ 'variant': 'color', 'tex1_usecolortexture': True },
 		
 		'tex1_usefloattexture':			{ 'variant': 'float' },
 		'tex1_floatvalue':				{ 'variant': 'float' },
 		'tex1_floattexture':			{ 'variant': 'float', 'tex1_usefloattexture': True },
-		
+		'tex1_multiplyfloat':			{ 'variant': 'float', 'tex1_usefloattexture': True },
 		
 		'tex2_colorlabel':				{ 'variant': 'color' },
 		'tex2_color': 					{ 'variant': 'color' },
 		'tex2_usecolortexture':			{ 'variant': 'color' },
 		'tex2_colortexture':			{ 'variant': 'color', 'tex2_usecolortexture': True },
+		'tex2_multiplycolor':			{ 'variant': 'color', 'tex2_usecolortexture': True },
 		
 		'tex2_usefloattexture':			{ 'variant': 'float' },
 		'tex2_floatvalue':				{ 'variant': 'float' },
 		'tex2_floattexture':			{ 'variant': 'float', 'tex2_usefloattexture': True },
+		'tex2_multiplyfloat':			{ 'variant': 'float', 'tex2_usefloattexture': True },
 	}
 	
 	properties = [
@@ -1814,20 +1927,23 @@ class luxrender_tex_scale(declarative_property_group):
 		'tex1_color': 					{ 'variant': 'color' },
 		'tex1_usecolortexture':			{ 'variant': 'color' },
 		'tex1_colortexture':			{ 'variant': 'color', 'tex1_usecolortexture': True },
+		'tex1_multiplycolor':			{ 'variant': 'color', 'tex1_usecolortexture': True },
 		
 		'tex1_usefloattexture':			{ 'variant': 'float' },
 		'tex1_floatvalue':				{ 'variant': 'float' },
 		'tex1_floattexture':			{ 'variant': 'float', 'tex1_usefloattexture': True },
-		
+		'tex1_multiplyfloat':			{ 'variant': 'float', 'tex1_usefloattexture': True },
 		
 		'tex2_colorlabel':				{ 'variant': 'color' },
 		'tex2_color': 					{ 'variant': 'color' },
 		'tex2_usecolortexture':			{ 'variant': 'color' },
 		'tex2_colortexture':			{ 'variant': 'color', 'tex2_usecolortexture': True },
+		'tex2_multiplycolor':			{ 'variant': 'color', 'tex2_usecolortexture': True },
 		
 		'tex2_usefloattexture':			{ 'variant': 'float' },
 		'tex2_floatvalue':				{ 'variant': 'float' },
 		'tex2_floattexture':			{ 'variant': 'float', 'tex2_usefloattexture': True },
+		'tex2_multiplyfloat':			{ 'variant': 'float', 'tex2_usefloattexture': True },
 	}
 	
 	properties = [

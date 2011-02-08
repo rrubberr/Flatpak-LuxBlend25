@@ -30,6 +30,40 @@ from properties_object import ObjectButtonsPanel
 
 from extensions_framework.ui import property_group_renderer
 
+class transform(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
+	'''
+	Object Transform Settings
+	'''
+	
+	bl_label = 'LuxRender Transform Settings'
+	COMPAT_ENGINES = {'luxrender'}
+	
+	@classmethod
+	def poll(cls, context):
+		engine = context.scene.render.engine
+		return context.object and context.object.type != 'CAMERA' and (engine in cls.COMPAT_ENGINES)
+	
+	display_property_groups = [
+		( ('object',), 'luxrender_transform' )
+	]
+
+class lookat(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
+	'''
+	Camera LookAt Transform Settings
+	'''
+	
+	bl_label = 'LuxRender Camera LookAt Settings'
+	COMPAT_ENGINES = {'luxrender'}
+	
+	@classmethod
+	def poll(cls, context):
+		engine = context.scene.render.engine
+		return context.object and context.object.type == 'CAMERA' and (engine in cls.COMPAT_ENGINES)
+	
+	display_property_groups = [
+		( ('object',), 'luxrender_lookat' )
+	]
+
 class object(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
 	'''
 	Object settings

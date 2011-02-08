@@ -25,10 +25,10 @@
 # ***** END GPL LICENCE BLOCK *****
 #
 from extensions_framework import declarative_property_group
-from extensions_framework.validate import Logic_Operator as LO
+from extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 
 from luxrender.export import ParamSet
-from luxrender.properties.material import dict_merge
+from luxrender.properties.material import dict_merge, texture_append_visibility
 from luxrender.properties.texture import FloatTextureParameter
 
 class MeshFloatTextureParameter(FloatTextureParameter):
@@ -43,6 +43,22 @@ TF_displacementmap = MeshFloatTextureParameter(
 	add_float_value=False
 )
 
+def mesh_visibility():
+	
+	vis = dict_merge({
+		'ccam':		{'projection': True },
+		'ucam': 	{'projection': True , 'ccam': False },
+		'nsmooth':		{ 'subdiv': LO({'!=': 'None'}) },
+		'sharpbound':	{ 'subdiv': LO({'!=': 'None'}) },
+		'sublevels':	{ 'subdiv': LO({'!=': 'None'}) },
+		'dmscale':		{ 'subdiv': LO({'!=': 'None'}), 'dm_floattexturename': LO({'!=': ''}) },
+		'dmoffset':		{ 'subdiv': LO({'!=': 'None'}), 'dm_floattexturename': LO({'!=': ''}) },
+	}, TF_displacementmap.visibility )
+	
+	vis = texture_append_visibility(vis, TF_displacementmap, { 'subdiv': LO({'!=': 'None'}) })
+	
+	return vis
+
 class luxrender_mesh(declarative_property_group):
 	'''
 	Storage class for LuxRender Camera settings.
@@ -51,9 +67,11 @@ class luxrender_mesh(declarative_property_group):
 	'''
 	
 	controls = [
-		'portal',
-		'subdiv',
-		'sublevels',
+		'mesh_type',
+		['portal', 'AR_enabled'],
+		['projection', 'ccam'],
+		'ucam',
+		['subdiv','sublevels'],
 		['nsmooth', 'sharpbound'],
 	] + \
 		TF_displacementmap.controls + \
@@ -61,15 +79,20 @@ class luxrender_mesh(declarative_property_group):
 		['dmscale', 'dmoffset']
 	]
 	
-	visibility = dict_merge({
-		'nsmooth':		{ 'subdiv': LO({'!=': 'None'}) },
-		'sharpbound':	{ 'subdiv': LO({'!=': 'None'}) },
-		'sublevels':	{ 'subdiv': LO({'!=': 'None'}) },
-		'dmscale':		{ 'dm_floattexturename': LO({'!=': ''}) },
-		'dmoffset':		{ 'dm_floattexturename': LO({'!=': ''}) },
-	}, TF_displacementmap.visibility )
+	visibility = mesh_visibility()
 	
 	properties = [
+		{
+			'type': 'enum',
+			'attr': 'mesh_type',
+			'name': 'Export as',
+			'items': [
+				('global', 'Use default setting', 'global'),
+				('native', 'LuxRender mesh', 'native'),
+				('binary_ply', 'Binary PLY', 'binary_ply')
+			],
+			'default': 'global'
+		},
 		{
 			'type': 'bool',
 			'attr': 'portal',
@@ -109,6 +132,35 @@ class luxrender_mesh(declarative_property_group):
 			'max': 300,
 			'soft_max': 300
 		},
+		{ 
+			'type': 'bool',
+			'attr': 'AR_enabled',
+			'name': 'Is an AR surface',
+			'description': 'Using for declare the object as support object in Augmented Reality Scene',
+			'default': False,
+		},
+		{
+			'type': 'bool',
+			'attr': 'projection',
+			'name': 'Use projector texture',
+			'description': 'Select the projector texture type for the object',
+			'default': False,
+		},
+		{
+			'type': 'bool',
+			'attr': 'ccam',
+			'name': 'Projection point at current Camera',
+			'description': 'Select the position of current camera as the projection point for texture',
+			'default': False,
+		},
+		{
+			'type': 'float_vector',
+			'attr': 'ucam',
+			'name': 'Define Projection point',
+			'description': 'Define the projection point for texture',
+			'default': (0.0, 0.0, 0.0),
+			'save_in_preset': True,
+		},
 	] + \
 		TF_displacementmap.properties + \
 	[
@@ -130,10 +182,11 @@ class luxrender_mesh(declarative_property_group):
 		},
 	]
 	
-	def get_shape_type(self):
-		return 'mesh'
+	def get_shape_IsSupport(self):
+		return self.AR_enabled
 	
-	def get_paramset(self):
+	def get_paramset(self, scene):
+
 		params = ParamSet()
 		
 		# check if subdivision is used
@@ -150,5 +203,15 @@ class luxrender_mesh(declarative_property_group):
 			params.add_string('displacementmap', self.dm_floattexturename)
 			params.add_float('dmscale', self.dmscale)
 			params.add_float('dmoffset', self.dmoffset)
+
+		if self.AR_enabled:
+			params.add_bool('support', self.AR_enabled)
+		if self.projection:
+			params.add_bool('projection', self.projection)
+			if self.ccam:
+				cam_pos =  scene.camera.data.luxrender_camera.lookAt(scene.camera)
+				params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
+			else:
+				params.add_point('cam', self.ucam)
 		
 		return params

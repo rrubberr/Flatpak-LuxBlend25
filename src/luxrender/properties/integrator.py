@@ -125,7 +125,7 @@ class luxrender_integrator(declarative_property_group):
 		'lightrrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		
 		# dl +
-		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path']) },
+		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path', 'arpath', 'ardirectlighting']) },
 		
 		# dp
 		'lbl_direct':						{ 'surfaceintegrator': 'distributedpath' },
@@ -173,8 +173,8 @@ class luxrender_integrator(declarative_property_group):
 		'finalgathersamples':				{ 'finalgather': True, 'surfaceintegrator': 'exphotonmap' },
 		'gatherangle':						{ 'finalgather': True, 'surfaceintegrator': 'exphotonmap' },
 		'renderingmode':					{ 'surfaceintegrator': 'exphotonmap' },
-		'rrstrategy':						{ 'surfaceintegrator': O(['exphotonmap', 'path']) },
-		'rrcontinueprob':					{ 'surfaceintegrator': O(['exphotonmap', 'path']) },
+		'rrstrategy':						{ 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath']) },
+		'rrcontinueprob':					{ 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath']) },
 		# epm advanced
 		'distancethreshold':				{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
 		'photonmapsfile':					{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
@@ -190,7 +190,7 @@ class luxrender_integrator(declarative_property_group):
 		'mindist':							{ 'surfaceintegrator': 'igi' },
 		
 		# path
-		'includeenvironment':				{ 'surfaceintegrator': 'path' },
+		'includeenvironment':				{ 'surfaceintegrator': O(['path', 'arpath']) },
 	}
 	
 	properties = [
@@ -207,6 +207,8 @@ class luxrender_integrator(declarative_property_group):
 				('distributedpath', 'Distributed Path', 'distributedpath'),
 				('igi', 'Instant Global Illumination', 'igi',),
 				('exphotonmap', 'Ex-Photon Map', 'exphotonmap'),
+				('arpath', 'Augmented Reality Path Tracing', 'arpath'),
+				('ardirectlighting', 'Augmented Reality Direct Lighting', 'ardirectlighting'),
 			],
 			'save_in_preset': True
 		},
@@ -573,6 +575,8 @@ class luxrender_integrator(declarative_property_group):
 			'items': [
 				('directlighting', 'directlighting', 'directlighting'),
 				('path', 'path', 'path'),
+				('arpath', 'Augmented Reality Path Tracing', 'arpath'),
+				('ardirectlighting', 'Augmented Reality Direct Lighting', 'ardirectlighting'),
 			],
 			'save_in_preset': True
 		},
@@ -699,6 +703,9 @@ class luxrender_integrator(declarative_property_group):
 		if self.surfaceintegrator == 'directlighting':
 			params.add_integer('maxdepth', self.maxdepth)
 		
+		if self.surfaceintegrator == 'ardirectlighting':
+			params.add_integer('maxdepth', self.maxdepth)
+
 		if self.surfaceintegrator == 'distributedpath':
 			params.add_bool('directsampleall', self.directsampleall) \
 				  .add_integer('directsamples', self.directsamples) \
@@ -758,6 +765,12 @@ class luxrender_integrator(declarative_property_group):
 				  .add_float('mindist', self.mindist)
 		
 		if self.surfaceintegrator == 'path':
+			params.add_integer('maxdepth', self.maxdepth) \
+				  .add_float('rrcontinueprob', self.rrcontinueprob) \
+				  .add_string('rrstrategy', self.rrstrategy) \
+				  .add_bool('includeenvironment', self.includeenvironment)
+
+		if self.surfaceintegrator == 'arpath':
 			params.add_integer('maxdepth', self.maxdepth) \
 				  .add_float('rrcontinueprob', self.rrcontinueprob) \
 				  .add_string('rrstrategy', self.rrstrategy) \

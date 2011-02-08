@@ -67,3 +67,36 @@ class luxrender_object(declarative_property_group):
 			'description': 'External PLY mesh file to place in scene',
 		}
 	]
+
+class luxrender_transform(declarative_property_group):
+	controls = [
+		'op_transform',
+	]
+	visibility = {
+	}
+	properties = [
+
+		{
+			'type': 'operator',
+			'attr': 'op_transform',
+			'operator': 'luxrender.transform_load',
+			'text': 'Load Transform file',
+			'icon': 'FILE_FOLDER',
+		},
+	]
+
+class luxrender_lookat(declarative_property_group):
+	controls = [
+		'op_lookat',
+	]
+	visibility = {
+	}
+	properties = [
+		{
+			'type': 'operator',
+			'attr': 'op_lookat',
+			'operator': 'luxrender.lookat_load',
+			'text': 'Load an LookAt file',
+			'icon': 'FILE_FOLDER',
+		},
+	]

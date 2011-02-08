@@ -272,6 +272,9 @@ class Custom_Context(object):
 	def scale(self, x,y,z):
 		self.wf(self.current_file, '\nScale %s' % ' '.join(['%0.15f'%i for i in [x,y,z]]))
 	
+	def rotate(self, a,x,y,z):
+		self.wf(self.current_file, '\nRotate %s' % ' '.join(['%0.15f'%i for i in [a,x,y,z]]))
+	
 	def shape(self, *args):
 		self._api('Shape', args, file=self.current_file)
 	
@@ -301,9 +304,9 @@ class Custom_Context(object):
 		self._api('Exterior ', [name, []])
 	
 	def texture(self, name, type, texture, params):
-		self.wf(self.current_file, '\nTexture "%s" "%s" "%s"' % (name, type, texture))
+		self.wf(Files.MATS, '\nTexture "%s" "%s" "%s"' % (name, type, texture))
 		for p in params:
-			self.wf(self.current_file, p.to_string(), 1)
+			self.wf(Files.MATS, p.to_string(), 1)
 	
 	def worldEnd(self):
 		'''

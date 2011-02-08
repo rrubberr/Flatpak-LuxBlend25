@@ -81,9 +81,12 @@ from luxrender.properties.material		import ( luxrender_material,
 												 luxrender_mat_velvet,
 												 luxrender_volume_data,
 												 luxrender_volumes,
-												 luxrender_emission )
+												 luxrender_emission,
+												 luxrender_transparency )
 from luxrender.properties.mesh			import ( luxrender_mesh )
-from luxrender.properties.object		import ( luxrender_object )
+from luxrender.properties.object		import ( luxrender_object,
+												 luxrender_transform,
+												 luxrender_lookat )
 from luxrender.properties.texture		import ( luxrender_texture,
 												 luxrender_tex_bilerp,
 												 luxrender_tex_blackbody,
@@ -172,6 +175,8 @@ from luxrender.ui.world					import ( world as ui_world )
 from luxrender.operators				import ( EXPORT_OT_luxrender,
 												 LUXRENDER_OT_volume_add,
 												 LUXRENDER_OT_volume_remove )
+
+from luxrender.export.scene				import SceneExporter
 
 # Add standard Blender Interface elements
 import properties_render
@@ -280,6 +285,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 		('TextCurve', luxrender_mesh),
 		('Material', luxrender_material),
 		('Material', luxrender_emission),
+		('Material', luxrender_transparency),
 		('luxrender_material', luxrender_mat_compositing),
 		('luxrender_material', luxrender_mat_carpaint),
 		('luxrender_material', luxrender_mat_glass),
@@ -298,6 +304,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 		('luxrender_material', luxrender_mat_null),
 		('luxrender_material', luxrender_mat_velvet),
 		('Object', luxrender_object),
+		('Object', luxrender_transform),
+		('Object', luxrender_lookat),
 		(None, luxrender_volume_data),		# call init_properties, but don't create instance
 		('Texture', luxrender_texture),
 		('luxrender_texture', luxrender_tex_bilerp),
@@ -343,7 +351,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 			prev_dir = os.getcwd()
 			
 			if scene is None:
-				bpy.ops.ef.msg(msg_type='ERROR', msg_text='Scene to render is not valid')
+				LuxLog('ERROR: Scene to render is not valid')
 				return
 			
 			if scene.name == 'preview':
@@ -354,7 +362,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 				LuxLog('WARNING: Colour Management is switched off, render results may look too dark.')
 			
 			if self.render_scene(scene) == False:
-				#bpy.ops.ef.msg(msg_type='ERROR', msg_text='Export failed')
 				return
 			
 			self.render_start(scene)
@@ -373,7 +380,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 		from luxrender.outputs.pure_api import PYLUX_AVAILABLE
 		if not PYLUX_AVAILABLE:
 			self.bl_use_preview = False
-			bpy.ops.ef.msg(msg_type='ERROR', msg_text='Material previews require pylux')
+			LuxLog('ERROR: Material previews require pylux')
 			return
 		
 		from luxrender.export import materials as export_materials
@@ -539,15 +546,16 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 					LM.lux_context.addServer(server.strip())
 		
 		output_filename = efutil.scene_filename() + '.%s.%05i' % (scene.name, scene.frame_current)
-		export_result = bpy.ops.export.luxrender(
-			directory = self.output_dir,
-			filename = output_filename,
-			
-			api_type = api_type,			# Set export target
-			write_files = write_files,		# Use file write decision from above
-			write_all_files = False,		# Use UI file write settings
-			scene = scene.name,				# Export this named scene
-		)
+		
+		scene_exporter = SceneExporter()
+		scene_exporter.properties.directory = self.output_dir
+		scene_exporter.properties.filename = output_filename
+		scene_exporter.properties.api_type = api_type			# Set export target
+		scene_exporter.properties.write_files = write_files		# Use file write decision from above
+		scene_exporter.properties.write_all_files = False		# Use UI file write settings
+		scene_exporter.set_scene(scene)
+		
+		export_result = scene_exporter.export()
 		
 		if 'CANCELLED' in export_result:
 			return False
@@ -634,7 +642,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine, engine_base):
 		
 		# Begin rendering
 		if start_rendering:
-			bpy.ops.ef.msg(msg_text='Starting LuxRender')
+			LuxLog('Starting LuxRender')
 			if internal:
 				
 				self.LuxManager.lux_context.logVerbosity(scene.luxrender_engine.log_verbosity)

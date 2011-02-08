@@ -120,7 +120,33 @@ class luxrender_lamp_basic(declarative_property_group):
 class luxrender_lamp_point(luxrender_lamp_basic):
 	pass
 class luxrender_lamp_spot(luxrender_lamp_basic):
-	pass
+	def get_paramset(self, lamp_object):
+		params = super().get_paramset(lamp_object)
+		if self.projector:
+			params.add_string('mapname', self.mapname)
+		return params
+
+luxrender_lamp_spot.controls.extend([
+	'projector',
+	'mapname'
+])
+luxrender_lamp_spot.visibility['mapname'] = { 'projector': True }
+luxrender_lamp_spot.properties.extend([
+	{
+		'type': 'bool',
+		'attr': 'projector',
+		'name': 'Projector',
+		'default': False
+	},
+	{
+		'type': 'string',
+		'subtype': 'FILE_PATH',
+		'attr': 'mapname',
+		'name': 'Projector image',
+		'description': 'Image to project from this lamp',
+		'default': ''
+	},
+])
 
 class luxrender_lamp_sun(declarative_property_group):
 	controls = [
@@ -280,8 +306,10 @@ class luxrender_lamp_hemi(declarative_property_group):
 	controls = [
 		[0.323, 'L_colorlabel', 'L_color'],
 		'infinite_map',
+		'sampling_method',
 		'mapping_type',
-		'hdri_multiply'
+		'hdri_multiply',
+		'LNsamples',
 	]
 	
 	visibility = {
@@ -318,6 +346,25 @@ class luxrender_lamp_hemi(declarative_property_group):
 				('vcross', 'Vert Cross', 'vcross')
 			]
 		},
+		{
+			'type': 'enum',
+			'attr': 'sampling_method',
+			'name': 'Sampling Method',
+			'default': 'infinitesample',
+			'items': [
+				('infinitesample', 'Importance', 'infinitesample'),
+				('infinite', 'Uniform', 'infinite')
+			]
+		},
+		{
+			'type': 'int',
+			'attr': 'LNsamples',
+			'name': 'AR Samples',
+			'min': 0,
+			'max': 12,
+			'description': 'Number of samples for MedianCut algorithm (needed only by AR)',
+			'default': 10,
+		},
 	]
 	
 	def get_paramset(self, lamp_object):
@@ -333,5 +380,7 @@ class luxrender_lamp_hemi(declarative_property_group):
 			
 		if self.infinite_map == '' or self.hdri_multiply:
 			params.add_color('L', self.L_color)
+
+		params.add_integer('LNsamples', self.LNsamples)
 		
 		return params

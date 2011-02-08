@@ -31,11 +31,12 @@ from copy import deepcopy
 
 from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil
+from extensions_framework.validate import Logic_OR as O, Logic_AND as A, Logic_Operator as LO
 
 from luxrender.properties.texture import FresnelTextureParameter, FloatTextureParameter, ColorTextureParameter
 from luxrender.export import ParamSet
-from luxrender.export.materials import ExportedMaterials
-from luxrender.outputs import LuxManager
+from luxrender.export.materials import ExportedMaterials, ExportedTextures, get_texture_from_scene
+from luxrender.outputs import LuxManager, LuxLog
 from luxrender.outputs.pure_api import LUXRENDER_VERSION
 
 def MaterialParameter(attr, name, property_group):
@@ -121,6 +122,10 @@ class SubGroupFloatTextureParameter(FloatTextureParameter):
 		# Looks in a different location than other FloatTextureParameters
 		return lambda s,c: c.luxrender_material
 
+class SubGroupColorTextureParameter(ColorTextureParameter):
+	def texture_slot_set_attr(self):
+		# Looks in a different location than other ColorTextureParameters
+		return lambda s,c: c.luxrender_material
 
 # Float Textures
 TF_bumpmap				= SubGroupFloatTextureParameter('bumpmap', 'Bump Map',				add_float_value=True, precision=6, multiply_float=True, ignore_zero=True )
@@ -146,6 +151,7 @@ TF_backface_vroughness	= FloatTextureParameter('bf_vroughness', 'Backface vrough
 TF_g					= FloatTextureParameter('g', 'Scattering asymmetry',				add_float_value=True, default=0.0, min=-1.0, max=1.0 ) # default 0.0 for Uniform
 
 # Color Textures
+TC_Sc					= SubGroupColorTextureParameter('Sc', 'Background color',				default=(0.9,0.9,0.9) )
 TC_Ka					= ColorTextureParameter('Ka', 'Absorption color',					default=(0.0,0.0,0.0) )
 TC_Kd					= ColorTextureParameter('Kd', 'Diffuse color',						default=(0.64,0.64,0.64) )
 TC_Kr					= ColorTextureParameter('Kr', 'Reflection color',					default=(1.0,1.0,1.0) )
@@ -159,7 +165,7 @@ TC_backface_Kd			= ColorTextureParameter('backface_Kd', 'Backface Diffuse color'
 TC_backface_Ks			= ColorTextureParameter('backface_Ks', 'Backface Specular color',	default=(0.25,0.25,0.25) )
 
 # Volume related Textures
-TFR_IOR					= VolumeDataFresnelTextureParameter('fresnel', 'Fresnel Tex',		add_float_value = False)
+TFR_IOR					= VolumeDataFresnelTextureParameter('fresnel', 'IOR',		add_float_value = True, min=0.0, max=25.0, default=1.0)
 
 TC_absorption			= VolumeDataColorTextureParameter('absorption', 'Absorption',		default=(1.0,1.0,1.0))
 TC_sigma_a				= VolumeDataColorTextureParameter('sigma_a', 'Absorption',			default=(1.0,1.0,1.0))
@@ -211,9 +217,10 @@ class luxrender_material(declarative_property_group):
 		'Interior',
 		'Exterior'
 	] + \
-	TF_bumpmap.controls
+	TF_bumpmap.controls +\
+	TC_Sc.controls 
 	
-	visibility = dict_merge({}, TF_bumpmap.visibility)
+	visibility = dict_merge({}, TF_bumpmap.visibility, TC_Sc.visibility)
 	
 	properties = [
 		# Material Type Select
@@ -228,40 +235,65 @@ class luxrender_material(declarative_property_group):
 		},
 	] + \
 		TF_bumpmap.properties + \
+		TC_Sc.properties + \
 		VolumeParameter('Interior', 'Interior') + \
 		VolumeParameter('Exterior', 'Exterior')
 	
 	def export(self, lux_context, material, mode='indirect'):
-		if mode=='indirect' and material.name in ExportedMaterials.exported_material_names:
-			return
+		if not (mode=='indirect' and material.name in ExportedMaterials.exported_material_names):
+			if self.type == 'mix':
+				# First export the other mix mats
+				m1 = bpy.data.materials[self.luxrender_mat_mix.namedmaterial1_material]
+				m1.luxrender_material.export(lux_context, m1, 'indirect')
+				m2 = bpy.data.materials[self.luxrender_mat_mix.namedmaterial2_material]
+				m2.luxrender_material.export(lux_context, m2, 'indirect')
+			
+			material_params = ParamSet()
+			
+			sub_type = getattr(self, 'luxrender_mat_%s'%self.type)
+			
+			alpha_type = None
+			# find alpha texture if material should be transparent
+			if hasattr(material, 'luxrender_transparency') and material.luxrender_transparency.transparent:
+				alpha_type, alpha_amount = material.luxrender_transparency.export(lux_context, material)
+
+			# Bump mapping
+			if self.type not in ['mix', 'null']:
+				material_params.update( TF_bumpmap.get_paramset(self) )
+
+			material_params.update( TC_Sc.get_paramset(self) )			
+			material_params.update( sub_type.get_paramset(material) )
+			
+			# DistributedPath compositing
+			if LuxManager.CurrentScene.luxrender_integrator.surfaceintegrator == 'distributedpath':
+				material_params.update( self.luxrender_mat_compositing.get_paramset() )
+			
+			if alpha_type == None:
+				mat_type = self.type
+			else: # export mix for transparency
+				material_params.add_string('type', self.type)
+				ExportedMaterials.makeNamedMaterial(material.name + '_null', ParamSet().add_string('type', 'null'))
+				ExportedMaterials.makeNamedMaterial(material.name + '_base', material_params)
+				ExportedMaterials.export_new_named(lux_context)
+				
+				# replace material params with mix
+				mat_type = 'mix'
+				material_params = ParamSet() \
+					.add_string('namedmaterial1', material.name + '_null') \
+					.add_string('namedmaterial2', material.name + '_base')
+				if alpha_type == 'float':
+					material_params.add_float('amount', alpha_amount)
+				else:
+					material_params.add_texture('amount', alpha_amount)
+				
+			if mode == 'indirect':
+				material_params.add_string('type', mat_type)
+				ExportedMaterials.makeNamedMaterial(material.name, material_params)
+				ExportedMaterials.export_new_named(lux_context)
+			elif mode == 'direct':
+				lux_context.material(mat_type, material_params)
 		
-		if self.type == 'mix':
-			# First export the other mix mats
-			m1 = bpy.data.materials[self.luxrender_mat_mix.namedmaterial1_material] 
-			m1.luxrender_material.export(lux_context, m1, 'indirect')
-			m2 = bpy.data.materials[self.luxrender_mat_mix.namedmaterial2_material] 
-			m2.luxrender_material.export(lux_context, m2, 'indirect')
-		
-		material_params = ParamSet()
-		
-		sub_type = getattr(self, 'luxrender_mat_%s'%self.type)
-		
-		# Bump mapping
-		if self.type not in ['mix', 'null']:
-			material_params.update( TF_bumpmap.get_paramset(self) )
-		
-		material_params.update( sub_type.get_paramset(material) )
-		
-		# DistributedPath compositing
-		if LuxManager.CurrentScene.luxrender_integrator.surfaceintegrator == 'distributedpath':
-			material_params.update( self.luxrender_mat_compositing.get_paramset() )
-		
-		if mode == 'indirect':
-			material_params.add_string('type', self.type)
-			ExportedMaterials.makeNamedMaterial(material.name, material_params)
-			ExportedMaterials.export_new_named(lux_context)
-		elif mode == 'direct':
-			lux_context.material(self.type, material_params)
+		return material.luxrender_emission.use_emission
 
 class luxrender_mat_compositing(declarative_property_group):
 	'''
@@ -358,6 +390,7 @@ class luxrender_mat_compositing(declarative_property_group):
 		
 		return compo_params
 
+
 def texture_append_visibility(vis_main, textureparam_object, vis_append):
 	for prop in textureparam_object.properties:
 		if 'attr' in prop.keys():
@@ -366,6 +399,180 @@ def texture_append_visibility(vis_main, textureparam_object, vis_append):
 			for vk, vi in vis_append.items():
 				vis_main[prop['attr']][vk] = vi
 	return vis_main
+
+class TransparencyFloatTextureParameter(FloatTextureParameter):
+	def texture_slot_set_attr(self):
+		# Looks in a different location than other ColorTextureParameters
+		return lambda s,c: c.luxrender_transparency
+
+TF_alpha = TransparencyFloatTextureParameter('alpha', 'Alpha', add_float_value=False, default=1.0, min=0.0, max=1.0 )
+
+def transparency_visibility():
+	t_vis = dict_merge(
+		{
+			'alpha_source': { 'transparent': True },
+			'alpha_value': { 'transparent': True, 'alpha_source': 'constant' },
+			'inverse': { 'transparent': True, 'alpha_source': 'texture' },
+		},
+		TF_alpha.visibility
+	)
+	
+	t_vis = texture_append_visibility(t_vis, TF_alpha, { 'transparent': True, 'alpha_source': 'texture' })
+	
+	return t_vis
+	
+class luxrender_transparency(declarative_property_group):
+	'''
+	Storage class for LuxRender Material alpha transparency settings.
+	This class will be instantiated within a Blender Object.
+	'''
+	
+	controls = [
+		'transparent', 
+		'alpha_source',
+		'alpha_value',
+	] + \
+		TF_alpha.controls + \
+	[
+		'inverse',
+	]
+
+
+	
+	visibility = transparency_visibility()
+
+	
+	properties = [
+		{
+			'type': 'bool',
+			'attr': 'transparent',
+			'name': 'Transparent',
+			'description': 'Enable alpha transparency',
+			'default': False,
+			'save_in_preset': True
+		},
+		{
+			'type': 'enum',
+			'attr': 'alpha_source',
+			'name': 'Alpha source',
+			'default': 'diffusealpha',
+			'items': [
+				('texture', 'texture', 'texture'),
+				('diffuseintensity', 'diffuse/reflection intensity', 'diffuseintensity'),
+				('diffusemean', 'diffuse/reflection mean', 'diffusemean'),
+				('diffusealpha', 'diffuse/reflection alpha', 'diffusealpha'),
+				('constant', 'constant', 'constant')
+			],
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'alpha_value',
+			'name': 'Alpha value',
+			'default': 0.5,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 1.0,
+			'soft_max': 1.0,
+			'save_in_preset': True
+		},
+		{
+			'type': 'bool',
+			'attr': 'inverse',
+			'name': 'Inverse',
+			'description': 'Use the inverse of the alpha source',
+			'default': False,
+			'save_in_preset': True
+		},
+	] + \
+		TF_alpha.properties
+	
+	sourceMap = {
+		'carpaint': 'Kd',
+		'glass': 'Kr',
+		'glossy': 'Kd',
+		'glossy_lossy': 'Kd',
+		'glossytranslucent': 'Kd',
+		'matte': 'Kd',
+		'mattetranslucent': 'Kr',
+		'mirror': 'Kr',
+		'roughglass': 'Kr',
+		'scatter': 'Kd',
+		'shinymetal': 'Kr',
+		'velvet': 'Kd'
+	}
+	
+	def export(self, lux_context, material):
+		lux_material = getattr(material.luxrender_material, 'luxrender_mat_%s'%material.luxrender_material.type)
+		
+		alpha_type = None
+		
+		if self.alpha_source == 'texture':
+			alpha_type = 'texture'
+			alpha_amount = self.alpha_floattexturename
+			# export texture
+			TF_alpha.get_paramset(self)
+			
+			if self.inverse:
+				params = ParamSet() \
+					.add_float('tex1', 1.0) \
+					.add_float('tex2', 0.0) \
+					.add_texture('amount', alpha_amount)
+				
+				alpha_amount = alpha_amount + '_alpha'
+				
+				ExportedTextures.texture(
+					alpha_amount,
+					'float',
+					'mix',
+					params
+				)
+				ExportedTextures.export_new(lux_context)
+			
+		elif self.alpha_source == 'constant':
+			alpha_type = 'float'
+			alpha_amount = self.alpha_value
+		elif material.luxrender_material.type in self.sourceMap:
+			# grab base texture in case it's not diffuse channel
+			texture_name = getattr(lux_material, '%s_colortexturename' % self.sourceMap[material.luxrender_material.type])
+			if texture_name != '':
+				texture = get_texture_from_scene(LuxManager.CurrentScene, texture_name)
+				lux_texture = texture.luxrender_texture
+				if lux_texture.type == 'imagemap':
+					src_texture = lux_texture.luxrender_tex_imagemap
+					
+					channelMap = {
+						'diffusealpha': 'alpha', 
+						'diffusemean': 'mean',
+						'diffuseintensity': 'colored_mean',
+					}
+					
+					params = ParamSet() \
+						.add_string('filename', efutil.path_relative_to_export(src_texture.get_filename(texture))) \
+						.add_string('channel', channelMap[self.alpha_source]) \
+						.add_integer('discardmipmaps', src_texture.discardmipmaps) \
+						.add_string('filtertype', src_texture.filtertype) \
+						.add_float('maxanisotropy', src_texture.maxanisotropy) \
+						.add_string('wrap', src_texture.wrap)
+					params.update( lux_texture.luxrender_tex_mapping.get_paramset(LuxManager.CurrentScene) )
+					
+					alpha_type = 'texture'
+					alpha_amount = texture_name + '_alpha'
+					
+					ExportedTextures.texture(
+						alpha_amount,
+						'float',
+						'imagemap',
+						params
+					)
+					ExportedTextures.export_new(lux_context)
+		
+		if alpha_type == None:
+			LuxLog('WARNING: Invalid alpha texture for material ''%s'', disabling transparency' % material.name)
+			return None, None
+		
+		return alpha_type, alpha_amount
+
 
 def carpaint_visibility():
 	cp_vis = dict_merge(
@@ -598,6 +805,7 @@ class luxrender_mat_roughglass(declarative_property_group):
 		roughglass_params.update( TF_vroughness.get_paramset(self) )
 		
 		return roughglass_params
+   
 
 def glossy_visibility():
 	g_vis = dict_merge(
@@ -607,11 +815,16 @@ def glossy_visibility():
 		TC_Kd.visibility,
 		TC_Ks.visibility,
 		TF_uroughness.visibility,
-		TF_vroughness.visibility
+		TF_vroughness.visibility,
+		{
+			'alpha_source': { 'transparent': True }
+		},
+		TF_alpha.visibility
 	)
 	
 	g_vis = texture_append_visibility(g_vis, TC_Ks, { 'useior': False })
 	g_vis = texture_append_visibility(g_vis, TF_index, { 'useior': True })
+	g_vis = texture_append_visibility(g_vis, TF_alpha, { 'transparent': True, 'alpha_source': 'separate' })
 	
 	return g_vis
 	
@@ -631,6 +844,7 @@ class luxrender_mat_glossy(declarative_property_group):
 		TF_uroughness.controls + \
 		TF_vroughness.controls
 	
+	
 	visibility = glossy_visibility()
 	
 	properties = [
@@ -649,7 +863,7 @@ class luxrender_mat_glossy(declarative_property_group):
 			'description': 'Use IOR/Reflective index input',
 			'default': False,
 			'save_in_preset': True
-		}
+		},
 	] + \
 		TF_d.properties + \
 		TF_index.properties + \
@@ -657,7 +871,8 @@ class luxrender_mat_glossy(declarative_property_group):
 		TC_Kd.properties + \
 		TC_Ks.properties + \
 		TF_uroughness.properties + \
-		TF_vroughness.properties
+		TF_vroughness.properties + \
+		TF_alpha.properties
 	
 	def get_paramset(self, material):
 		glossy_params = ParamSet()
@@ -1274,8 +1489,9 @@ def volume_types():
 
 def volume_visibility():
 	v_vis = dict_merge({
-		'scattering_scale': { 'type': 'homogeneous' },
+		'scattering_scale': { 'type': 'homogeneous', 'sigma_s_usecolortexture': False },
 		'g': { 'type': 'homogeneous' },
+		'depth': O([ A([{ 'type': 'clear' }, { 'absorption_usecolortexture': False }]), A([{'type': 'homogeneous' }, { 'sigma_a_usecolortexture': False }]) ])
 	},
 	TFR_IOR.visibility,
 	TC_absorption.visibility,
@@ -1477,9 +1693,9 @@ class luxrender_emission(declarative_property_group):
 		'lightgroup': 			{ 'use_emission': True },
 		'L_colorlabel': 		{ 'use_emission': True },
 		'L_color': 				{ 'use_emission': True },
-		'L_usecolorrgc':		{ 'use_emission': True },
 		'L_usecolortexture':	{ 'use_emission': True },
 		'L_colortexture':		{ 'use_emission': True, 'L_usecolortexture': True },
+		'L_multiplycolor':		{ 'use_emission': True, 'L_usecolortexture': True },
 		'gain': 				{ 'use_emission': True },
 		'power': 				{ 'use_emission': True },
 		'efficacy': 			{ 'use_emission': True },
@@ -1509,6 +1725,7 @@ class luxrender_emission(declarative_property_group):
 			'soft_min': 0.0,
 			'max': 1e8,
 			'soft_max': 1e8,
+			'precision': 6,
 			'save_in_preset': True
 		},
 		{

@@ -57,6 +57,9 @@ def attr_light(lux_context, light, name, group, type, params, transform=None, po
 	else:
 		lux_context.attributeBegin(comment=name, file=Files.MAIN)
 	
+	if light.type == 'SPOT' and light.luxrender_lamp.luxrender_lamp_spot.projector:
+		lux_context.rotate(180, 0,1,0)
+	
 	dbo('LIGHT', (type, params))
 	lux_context.lightGroup(group, [])
 	
@@ -88,23 +91,30 @@ def exportLight(lux_context, ob, matrix, portals = []):
 	
 	# Other lamp params from lamp object
 	if light.type == 'SUN':
-		invmatrix = mathutils.Matrix(matrix).invert()
+		invmatrix = matrix.inverted()
 		light_params.add_vector('sundir', (invmatrix[0][2], invmatrix[1][2], invmatrix[2][2]))
 		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, light.luxrender_lamp.luxrender_lamp_sun.sunsky_type, light_params, portals=portals)
 		return True
 	
 	if light.type == 'HEMI':
-		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, 'infinite', light_params, transform=matrix_to_list(matrix, apply_worldscale=True), portals=portals)
+		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, light.luxrender_lamp.luxrender_lamp_hemi.sampling_method, light_params, transform=matrix_to_list(matrix, apply_worldscale=True), portals=portals)
 		return True
 	
 	if light.type == 'SPOT':
 		coneangle = degrees(light.spot_size) * 0.5
 		conedeltaangle = degrees(light.spot_size * 0.5 * light.spot_blend)
-		light_params.add_point('from', (0,0,0))
-		light_params.add_point('to', (0,0,-1))
-		light_params.add_float('coneangle', coneangle)
-		light_params.add_float('conedeltaangle', conedeltaangle)
-		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, 'spot', light_params, transform=matrix_to_list(matrix, apply_worldscale=True))
+		
+		if light.luxrender_lamp.luxrender_lamp_spot.projector:
+			light_type = 'projection'
+			light_params.add_float('fov', coneangle*2)
+		else:
+			light_type = 'spot'
+			light_params.add_point('from', (0,0,0))
+			light_params.add_point('to', (0,0,-1))
+			light_params.add_float('coneangle', coneangle)
+			light_params.add_float('conedeltaangle', conedeltaangle)
+		
+		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, light_type, light_params, transform=matrix_to_list(matrix, apply_worldscale=True))
 		return True
 
 	if light.type == 'POINT':
@@ -162,7 +172,7 @@ def exportLight(lux_context, ob, matrix, portals = []):
 # lights(lux_context, scene)
 # MAIN export function
 #-------------------------------------------------
-def lights(lux_context):
+def lights(lux_context, mesh_names):
 	'''
 	lux_context		pylux.Context
 	Iterate over the given scene's light sources,
@@ -184,8 +194,12 @@ def lights(lux_context):
 		if not ob.is_visible(LuxManager.CurrentScene) or ob.hide_render:
 			continue
 		
+		# match the mesh data name against the combined mesh-mat name exported
+		# by geometry.iterateScene
 		if ob.data.luxrender_mesh.portal:
-			portal_shapes.append(ob.data.name)
+			for mesh_name in mesh_names:
+				if mesh_name.startswith(ob.data.name):
+					portal_shapes.append(mesh_name)
 	
 	# Then iterate for lights
 	for ob in LuxManager.CurrentScene.objects:
@@ -196,29 +210,24 @@ def lights(lux_context):
 		# skip dupli (child) objects when they are not lamps
 		if (ob.parent and ob.parent.is_duplicator) and ob.type != 'LAMP':
 			continue
-
+		
 		# we have to check for duplis before the "LAMP" check 
 		# to support a mesh/object which got lamp as dupli object
 		if ob.is_duplicator and ob.dupli_type in ('GROUP', 'VERTS', 'FACES'):
 			# create dupli objects
 			ob.create_dupli_list(LuxManager.CurrentScene)
-
+			
 			for dupli_ob in ob.dupli_list:
 				if dupli_ob.object.type != 'LAMP':
 					continue
-				have_light |= exportLight(lux_context, dupli_ob.object, dupli_ob.matrix_world, portal_shapes)
-
+				have_light |= exportLight(lux_context, dupli_ob.object, dupli_ob.matrix, portal_shapes)
+			
 			# free object dupli list again. Warning: all dupli objects are INVALID now!
 			if ob.dupli_list: 
 				ob.free_dupli_list()
 		else:
 			if ob.type == 'LAMP':
 				have_light |= exportLight(lux_context, ob, ob.matrix_world, portal_shapes)
-		
-		if ob.type == 'MESH':
-			# now check for emissive materials on ob
-			if hasattr(ob, 'luxrender_emission'):
-				have_light |= ob.luxrender_emission.use_emission 
 	
 	return have_light
 
