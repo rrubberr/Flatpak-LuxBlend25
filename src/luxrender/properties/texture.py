@@ -32,10 +32,11 @@ from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil
 from extensions_framework.validate import Logic_OR as O
 
-from luxrender.properties.lampspectrum_data import lampspectrum_list
-from luxrender.export import ParamSet, get_worldscale
-from luxrender.export.materials import add_texture_parameter
-from luxrender.outputs import LuxManager
+from .. import LuxRenderAddon
+from ..properties.lampspectrum_data import lampspectrum_list
+from ..export import ParamSet, get_worldscale
+from ..export.materials import add_texture_parameter, convert_texture
+from ..outputs import LuxManager
 
 #------------------------------------------------------------------------------ 
 # Texture property group construction helpers
@@ -526,13 +527,13 @@ class FresnelTextureParameter(TextureParameterBase):
 #------------------------------------------------------------------------------
 # The main luxrender_texture property group
 #------------------------------------------------------------------------------ 
-
+@LuxRenderAddon.addon_register_class
 class luxrender_texture(declarative_property_group):
 	'''
 	Storage class for LuxRender Texture settings.
-	This class will be instantiated within a Blender Texture
-	object.
 	'''
+	
+	ef_attach_to = ['Texture']
 	
 	controls = [
 		'type'
@@ -612,7 +613,8 @@ class luxrender_texture(declarative_property_group):
 				
 			return lux_texture.variant, params
 		else:
-			return 'float', ParamSet()
+			variant, lux_tex_name, paramset = convert_texture(scene, texture)
+			return variant, paramset
 
 #------------------------------------------------------------------------------ 
 # Sub property groups of luxrender_texture follow
@@ -635,7 +637,9 @@ TC_mortartex	= ColorTextureParameter('mortartex',	'mortartex',	default=(1.0,1.0,
 TC_tex1			= ColorTextureParameter('tex1',			'tex1',			default=(1.0,1.0,1.0))
 TC_tex2			= ColorTextureParameter('tex2',			'tex2',			default=(0.0,0.0,0.0))
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_bilerp(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'variant',
@@ -757,7 +761,9 @@ class luxrender_tex_bilerp(declarative_property_group):
 				
 		return {'2DMAPPING'}, params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_blackbody(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'temperature'
@@ -783,7 +789,9 @@ class luxrender_tex_blackbody(declarative_property_group):
 	def get_paramset(self, scene, texture):
 		return set(), ParamSet().add_float('temperature', self.temperature)
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_brick(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'variant',
@@ -956,7 +964,9 @@ class luxrender_tex_brick(declarative_property_group):
 		
 		return {'3DMAPPING'}, brick_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_cauchy(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'use_index',
@@ -1030,7 +1040,9 @@ class luxrender_tex_cauchy(declarative_property_group):
 		
 		return set(), cp
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_checkerboard(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'aamode',
@@ -1100,7 +1112,10 @@ class luxrender_tex_checkerboard(declarative_property_group):
 		
 		return features, checkerboard_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_constant(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
+	
 	controls = [
 		'value'
 	]
@@ -1133,7 +1148,9 @@ class luxrender_tex_constant(declarative_property_group):
 		
 		return set(), constant_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_dots(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		# None
@@ -1176,7 +1193,9 @@ class luxrender_tex_dots(declarative_property_group):
 		
 		return {'2DMAPPING'}, dots_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_equalenergy(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'energy'
@@ -1206,7 +1225,9 @@ class luxrender_tex_equalenergy(declarative_property_group):
 	def get_paramset(self, scene, texture):
 		return set(), ParamSet().add_float('energy', self.energy)
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_fbm(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'octaves',
@@ -1251,7 +1272,9 @@ class luxrender_tex_fbm(declarative_property_group):
 		
 		return {'3DMAPPING'}, fbm_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_gaussian(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'energy',
@@ -1307,7 +1330,9 @@ class luxrender_tex_gaussian(declarative_property_group):
 								.add_float('wavelength', self.wavelength) \
 								.add_float('width', self.width)
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_harlequin(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		# None
@@ -1328,7 +1353,9 @@ class luxrender_tex_harlequin(declarative_property_group):
 		
 		return set(), harlequin_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_imagemap(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'variant',
@@ -1456,7 +1483,7 @@ class luxrender_tex_imagemap(declarative_property_group):
 		params = ParamSet()
 		fn = self.get_filename(texture)
 		if scene.luxrender_engine.embed_filedata:
-			from luxrender.util import bencode_file2string
+			from ..util import bencode_file2string
 			params.add_string('filename', os.path.basename(fn))
 			params.add_string('filename_data', bencode_file2string(fn) )
 		else:
@@ -1474,7 +1501,9 @@ class luxrender_tex_imagemap(declarative_property_group):
 		
 		return {'2DMAPPING'}, params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_lampspectrum(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'preset'
@@ -1500,7 +1529,9 @@ class luxrender_tex_lampspectrum(declarative_property_group):
 	def get_paramset(self, scene, texture):
 		return set(), ParamSet().add_string('name', self.preset)
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_mapping(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'type',
@@ -1694,7 +1725,9 @@ class luxrender_tex_mapping(declarative_property_group):
 		
 		return mapping_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_marble(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'octaves',
@@ -1763,7 +1796,9 @@ class luxrender_tex_marble(declarative_property_group):
 										.add_float('scale', self.scale) \
 										.add_float('variation', self.variation)
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_mix(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'variant',
@@ -1838,7 +1873,9 @@ class luxrender_tex_mix(declarative_property_group):
 		
 		return set(), mix_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_sellmeier(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'advanced',
@@ -1910,7 +1947,9 @@ class luxrender_tex_sellmeier(declarative_property_group):
 		
 		return set(), sp
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_scale(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'variant',
@@ -2022,14 +2061,19 @@ class tabulatedfresnel(tabulatedbase):
 		},
 	]
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_tabulateddata(tabulatedcolor):
-	pass
+	ef_attach_to = ['luxrender_texture']
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_luxpop(tabulatedfresnel):
-	pass
+	ef_attach_to = ['luxrender_texture']
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_sopra(tabulatedfresnel):
-	pass
+	ef_attach_to = ['luxrender_texture']
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_transform(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'translate',
@@ -2074,7 +2118,9 @@ class luxrender_tex_transform(declarative_property_group):
 		
 		return transform_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_uv(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		# None
@@ -2095,7 +2141,9 @@ class luxrender_tex_uv(declarative_property_group):
 		
 		return {'2DMAPPING'}, uv_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_windy(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		# None
@@ -2116,7 +2164,9 @@ class luxrender_tex_windy(declarative_property_group):
 		
 		return {'3DMAPPING'}, windy_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_wrinkled(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
 		'octaves',

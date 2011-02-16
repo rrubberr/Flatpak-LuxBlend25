@@ -26,15 +26,17 @@
 #
 from extensions_framework import declarative_property_group
 
-from luxrender.properties import dbo
-from luxrender.export import ParamSet
+from .. import LuxRenderAddon
+from ..properties import dbo
+from ..export import ParamSet
 
+@LuxRenderAddon.addon_register_class
 class luxrender_filter(declarative_property_group):
 	'''
 	Storage class for LuxRender PixelFilter settings.
-	This class will be instantiated within a Blender scene
-	object.
 	'''
+	
+	ef_attach_to = ['Scene']
 	
 	controls = [
 		[ 0.7, 'filter', 'advanced'],

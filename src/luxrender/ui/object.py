@@ -30,7 +30,10 @@ from properties_object import ObjectButtonsPanel
 
 from extensions_framework.ui import property_group_renderer
 
-class transform(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
+from .. import LuxRenderAddon
+
+@LuxRenderAddon.addon_register_class
+class ui_transform(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
 	'''
 	Object Transform Settings
 	'''
@@ -47,6 +50,8 @@ class transform(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
 		( ('object',), 'luxrender_transform' )
 	]
 
+@LuxRenderAddon.addon_register_class
+class ui_lookat(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
 class lookat(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
 	'''
 	Camera LookAt Transform Settings
@@ -64,13 +69,16 @@ class lookat(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
 		( ('object',), 'luxrender_lookat' )
 	]
 
-class object(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
+
+@LuxRenderAddon.addon_register_class
+class ui_object(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
+
 	'''
 	Object settings
 	'''
 	
 	bl_label = 'LuxRender Object Settings'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	@classmethod
 	def poll(cls, context):

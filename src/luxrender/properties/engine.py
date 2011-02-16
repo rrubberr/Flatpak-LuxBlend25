@@ -28,10 +28,11 @@ from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil
 from extensions_framework.validate import Logic_OR as O, Logic_AND as A
 
-from luxrender.export					import ParamSet
-from luxrender.outputs.pure_api			import PYLUX_AVAILABLE
-from luxrender.outputs.pure_api			import LUXRENDER_VERSION
-from luxrender.outputs.luxfire_client	import LUXFIRE_CLIENT_AVAILABLE
+from .. import LuxRenderAddon
+from ..export import ParamSet
+from ..outputs.pure_api import PYLUX_AVAILABLE
+from ..outputs.pure_api import LUXRENDER_VERSION
+from ..outputs.luxfire_client import LUXFIRE_CLIENT_AVAILABLE
 
 def find_apis():
 	apis = [
@@ -67,12 +68,13 @@ def engine_controls():
 	
 	return ectl
 
+@LuxRenderAddon.addon_register_class
 class luxrender_engine(declarative_property_group):
 	'''
 	Storage class for LuxRender Engine settings.
-	This class will be instantiated within a Blender scene
-	object.
 	'''
+	
+	ef_attach_to = ['Scene']
 	
 	controls = engine_controls()
 	
@@ -82,6 +84,7 @@ class luxrender_engine(declarative_property_group):
 		'write_lxs':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'write_lxm':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'write_lxo':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
+		'mesh_type':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'binary_name':				{ 'export_type': 'EXT' },
 		'render':					O([{'write_files': True}, {'export_type': 'EXT'}]),
 		'install_path':				{ 'render': True, 'export_type': 'EXT' },
@@ -243,10 +246,13 @@ class luxrender_engine(declarative_property_group):
 		
 		return self.renderer, renderer_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_networking(declarative_property_group):
 	
+	ef_attach_to = ['Scene']
+	
 	controls = [
-		'use_network_servers',
+		# 'use_network_servers', # drawn in panel header
 		'servers',
 		'serverinterval'
 	]

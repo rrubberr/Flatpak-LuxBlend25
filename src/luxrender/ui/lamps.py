@@ -29,11 +29,14 @@ from properties_data_lamp import DataButtonsPanel
 
 from extensions_framework.ui import property_group_renderer
 
+from .. import LuxRenderAddon
+
 narrowui = 180
 
+@LuxRenderAddon.addon_register_class
 class ui_luxrender_lamps(DataButtonsPanel, property_group_renderer, bpy.types.Panel):
 	bl_label = 'LuxRender Lamps'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	display_property_groups = [
 		( ('lamp',), 'luxrender_lamp' )
@@ -53,9 +56,10 @@ class ui_luxrender_lamps(DataButtonsPanel, property_group_renderer, bpy.types.Pa
 			
 			super().draw(context)
 
+@LuxRenderAddon.addon_register_class
 class ui_luxrender_lamp_point(DataButtonsPanel, property_group_renderer, bpy.types.Panel):
 	bl_label = 'LuxRender Point Lamp'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	display_property_groups = [
 		( ('lamp','luxrender_lamp'), 'luxrender_lamp_point' )
@@ -65,9 +69,10 @@ class ui_luxrender_lamp_point(DataButtonsPanel, property_group_renderer, bpy.typ
 	def poll(cls, context):
 		return super().poll(context) and context.lamp.type == 'POINT'
 
+@LuxRenderAddon.addon_register_class
 class ui_luxrender_lamp_spot(DataButtonsPanel, property_group_renderer, bpy.types.Panel):
 	bl_label = 'LuxRender Spot Lamp'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	display_property_groups = [
 		( ('lamp','luxrender_lamp'), 'luxrender_lamp_spot' )
@@ -96,9 +101,10 @@ class ui_luxrender_lamp_spot(DataButtonsPanel, property_group_renderer, bpy.type
 				if not projector:
 					col.prop(context.lamp, "spot_blend", text="Blend", slider=True)
 
+@LuxRenderAddon.addon_register_class
 class ui_luxrender_lamp_sun(DataButtonsPanel, property_group_renderer, bpy.types.Panel):
 	bl_label = 'LuxRender Sun + Sky'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	display_property_groups = [
 		( ('lamp','luxrender_lamp'), 'luxrender_lamp_sun' )
@@ -108,9 +114,10 @@ class ui_luxrender_lamp_sun(DataButtonsPanel, property_group_renderer, bpy.types
 	def poll(cls, context):
 		return super().poll(context) and context.lamp.type == 'SUN'
 
+@LuxRenderAddon.addon_register_class
 class ui_luxrender_lamp_hemi(DataButtonsPanel, property_group_renderer, bpy.types.Panel):
 	bl_label = 'LuxRender Infinite Lamp'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	display_property_groups = [
 		( ('lamp','luxrender_lamp'), 'luxrender_lamp_hemi' )
@@ -120,9 +127,10 @@ class ui_luxrender_lamp_hemi(DataButtonsPanel, property_group_renderer, bpy.type
 	def poll(cls, context):
 		return super().poll(context) and context.lamp.type == 'HEMI'
 
+@LuxRenderAddon.addon_register_class
 class ui_luxrender_lamp_area(DataButtonsPanel, property_group_renderer, bpy.types.Panel):
 	bl_label = 'LuxRender Area Lamp'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	display_property_groups = [
 		( ('lamp','luxrender_lamp'), 'luxrender_lamp_area' )

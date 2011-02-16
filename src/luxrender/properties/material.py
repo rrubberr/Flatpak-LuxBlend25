@@ -23,21 +23,19 @@
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
 # ***** END GPL LICENCE BLOCK *****
-import math
-
 import bpy
 
 from copy import deepcopy
 
 from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil
-from extensions_framework.validate import Logic_OR as O, Logic_AND as A, Logic_Operator as LO
 
-from luxrender.properties.texture import FresnelTextureParameter, FloatTextureParameter, ColorTextureParameter
-from luxrender.export import ParamSet
-from luxrender.export.materials import ExportedMaterials, ExportedTextures, get_texture_from_scene
-from luxrender.outputs import LuxManager, LuxLog
-from luxrender.outputs.pure_api import LUXRENDER_VERSION
+from .. import LuxRenderAddon
+from ..properties.texture import FloatTextureParameter, ColorTextureParameter
+from ..export import ParamSet
+from ..export.materials import ExportedMaterials, ExportedTextures, get_texture_from_scene
+from ..outputs import LuxManager, LuxLog
+from ..outputs.pure_api import LUXRENDER_VERSION
 
 def MaterialParameter(attr, name, property_group):
 	return [
@@ -79,41 +77,7 @@ def VolumeParameter(attr, name):
 		},
 	]
 
-class VolumeDataColorTextureParameter(ColorTextureParameter):
-	#texture_collection = 'textures'
-	def texture_collection_finder(self):
-		def func(s,c):
-			return s
-		return func
-	
-	def texture_slot_set_attr(self):
-		def func2(s,c):
-			return c
-		return func2
 
-class VolumeDataFloatTextureParameter(FloatTextureParameter):
-	#texture_collection = 'textures'
-	def texture_collection_finder(self):
-		def func(s,c):
-			return s
-		return func
-	
-	def texture_slot_set_attr(self):
-		def func2(s,c):
-			return c
-		return func2
-
-class VolumeDataFresnelTextureParameter(FresnelTextureParameter):
-	#texture_collection = 'textures'
-	def texture_collection_finder(self):
-		def func(s,c):
-			return s
-		return func
-	
-	def texture_slot_set_attr(self):
-		def func2(s,c):
-			return c
-		return func2
 
 # TODO: add override props to *TextureParameter instead of using these sub-types
 
@@ -121,6 +85,7 @@ class SubGroupFloatTextureParameter(FloatTextureParameter):
 	def texture_slot_set_attr(self):
 		# Looks in a different location than other FloatTextureParameters
 		return lambda s,c: c.luxrender_material
+
 
 class SubGroupColorTextureParameter(ColorTextureParameter):
 	def texture_slot_set_attr(self):
@@ -133,43 +98,36 @@ TF_amount				= FloatTextureParameter('amount', 'Mix Amount',						add_float_valu
 TF_cauchyb				= FloatTextureParameter('cauchyb', 'Cauchy B',						add_float_value=True, default=0.0, min=0.0, max=1.0 ) # default 0.0 for OFF
 TF_d					= FloatTextureParameter('d', 'Absorption Depth',					add_float_value=True, default=0.0, min=0.0, max=15.0 ) # default 0.0 for OFF
 TF_film					= FloatTextureParameter('film', 'Thin Film Thickness (nm)',			add_float_value=True, min=0.0, default=0.0, max=1500.0 ) # default 0.0 for OFF
-TF_filmindex			= FloatTextureParameter('filmindex', 'Film IOR',					add_float_value=True, default=1.5, min=1.0, max=6.0 )
-TF_index				= FloatTextureParameter('index', 'IOR',								add_float_value=True, min=0.0, max=25.0, default=1.0)
-TF_M1					= FloatTextureParameter('M1', 'M1',									add_float_value=True, default=1.0, min=0.0, max=1.0 )
-TF_M2					= FloatTextureParameter('M2', 'M2',									add_float_value=True, default=1.0, min=0.0, max=1.0 )
-TF_M3					= FloatTextureParameter('M3', 'M3',									add_float_value=True, default=1.0, min=0.0, max=1.0 )
-TF_R1					= FloatTextureParameter('R1', 'R1',									add_float_value=True, min=0.00001, max=1.0, default=0.0002 )
-TF_R2					= FloatTextureParameter('R2', 'R2',									add_float_value=True, min=0.00001, max=1.0, default=0.0002 )
-TF_R3					= FloatTextureParameter('R3', 'R3',									add_float_value=True, min=0.00001, max=1.0, default=0.0002 )
+TF_filmindex			= FloatTextureParameter('filmindex', 'Film IOR',					add_float_value=True, default=1.3333, min=1.0, max=6.0 ) # default 1.3333 for a coating of a water-based solution
+TF_index				= FloatTextureParameter('index', 'IOR',								add_float_value=True, min=0.0, max=25.0, default=1.519) #default of something other than 1.0 so glass and roughglass render propery with defaults
+TF_M1					= FloatTextureParameter('M1', 'M1',									add_float_value=True, default=0.033, min=0.0001, max=1.0 ) #carpaint defaults set for a basic gray clearcoat paint job, as a "setting suggestion"
+TF_M2					= FloatTextureParameter('M2', 'M2',									add_float_value=True, default=0.055, min=0.0001, max=1.0 ) #set m1-3 min to .0001, carpaint will take 0.0 as being max (1.0)
+TF_M3					= FloatTextureParameter('M3', 'M3',									add_float_value=True, default=0.100, min=0.0001, max=1.0 )
+TF_R1					= FloatTextureParameter('R1', 'R1',									add_float_value=True, min=0.00001, max=1.0, default=0.08 )
+TF_R2					= FloatTextureParameter('R2', 'R2',									add_float_value=True, min=0.00001, max=1.0, default=0.03 )
+TF_R3					= FloatTextureParameter('R3', 'R3',									add_float_value=True, min=0.00001, max=1.0, default=0.06 )
 TF_sigma				= FloatTextureParameter('sigma', 'Sigma',							add_float_value=True, min=0.0, max=100.0 )
-TF_uroughness			= FloatTextureParameter('uroughness', 'uroughness',					add_float_value=True, min=0.00001, max=1.0, default=0.0002 )
-TF_vroughness			= FloatTextureParameter('vroughness', 'vroughness',					add_float_value=True, min=0.00001, max=1.0, default=0.0002 )
+TF_uroughness			= FloatTextureParameter('uroughness', 'uroughness',					add_float_value=True, min=0.00001, max=1.0, default=0.075 )
+TF_vroughness			= FloatTextureParameter('vroughness', 'vroughness',					add_float_value=True, min=0.00001, max=1.0, default=0.075 )
 TF_backface_d			= FloatTextureParameter('bf_d', 'Backface Absorption Depth',		real_attr='backface_d', add_float_value=True, default=0.0, min=0.0, max=15.0 ) # default 0.0 for OFF
 TF_backface_index		= FloatTextureParameter('bf_index', 'Backface IOR',					real_attr='backface_index', add_float_value=True, min=0.0, max=25.0, default=1.0)
-TF_backface_uroughness	= FloatTextureParameter('bf_uroughness', 'Backface uroughness',		real_attr='backface_uroughness', add_float_value=True, min=0.00001, max=1.0, default=0.0002 )
-TF_backface_vroughness	= FloatTextureParameter('bf_vroughness', 'Backface vroughness',		real_attr='backface_vroughness', add_float_value=True, min=0.00001, max=1.0, default=0.0002 )
+TF_backface_uroughness	= FloatTextureParameter('bf_uroughness', 'Backface uroughness',		real_attr='backface_uroughness', add_float_value=True, min=0.00001, max=1.0, default=0.25 ) #backface roughness is high than front by default, will usually be for backs of leaves or cloth
+TF_backface_vroughness	= FloatTextureParameter('bf_vroughness', 'Backface vroughness',		real_attr='backface_vroughness', add_float_value=True, min=0.00001, max=1.0, default=0.25 )
 TF_g					= FloatTextureParameter('g', 'Scattering asymmetry',				add_float_value=True, default=0.0, min=-1.0, max=1.0 ) # default 0.0 for Uniform
 
 # Color Textures
 TC_Sc					= SubGroupColorTextureParameter('Sc', 'Background color',				default=(0.9,0.9,0.9) )
 TC_Ka					= ColorTextureParameter('Ka', 'Absorption color',					default=(0.0,0.0,0.0) )
 TC_Kd					= ColorTextureParameter('Kd', 'Diffuse color',						default=(0.64,0.64,0.64) )
-TC_Kr					= ColorTextureParameter('Kr', 'Reflection color',					default=(1.0,1.0,1.0) )
+TC_Kr					= ColorTextureParameter('Kr', 'Reflection color',					default=(0.7,0.7,0.7) ) # 1.0 reflection color is not sane for mirror or shinymetal, 0.7 does not signifcantly affect glass or roughglass
 TC_Ks					= ColorTextureParameter('Ks', 'Specular color',						default=(0.25,0.25,0.25) )
-TC_Ks1					= ColorTextureParameter('Ks1', 'Specular color 1',					default=(1.0,1.0,1.0) )
-TC_Ks2					= ColorTextureParameter('Ks2', 'Specular color 2',					default=(1.0,1.0,1.0) )
-TC_Ks3					= ColorTextureParameter('Ks3', 'Specular color 3',					default=(1.0,1.0,1.0) )
+TC_Ks1					= ColorTextureParameter('Ks1', 'Specular color 1',					default=(0.8,0.8,0.8) )
+TC_Ks2					= ColorTextureParameter('Ks2', 'Specular color 2',					default=(0.5,0.5,0.5) )
+TC_Ks3					= ColorTextureParameter('Ks3', 'Specular color 3',					default=(0.5,0.5,0.5) )
 TC_Kt					= ColorTextureParameter('Kt', 'Transmission color',					default=(1.0,1.0,1.0) )
 TC_backface_Ka			= ColorTextureParameter('backface_Ka', 'Backface Absorption color',	default=(0.0,0.0,0.0) )
 TC_backface_Kd			= ColorTextureParameter('backface_Kd', 'Backface Diffuse color',	default=(0.64,0.64,0.64) )
 TC_backface_Ks			= ColorTextureParameter('backface_Ks', 'Backface Specular color',	default=(0.25,0.25,0.25) )
-
-# Volume related Textures
-TFR_IOR					= VolumeDataFresnelTextureParameter('fresnel', 'IOR',		add_float_value = True, min=0.0, max=25.0, default=1.0)
-
-TC_absorption			= VolumeDataColorTextureParameter('absorption', 'Absorption',		default=(1.0,1.0,1.0))
-TC_sigma_a				= VolumeDataColorTextureParameter('sigma_a', 'Absorption',			default=(1.0,1.0,1.0))
-TC_sigma_s				= VolumeDataColorTextureParameter('sigma_s', 'Scattering',			default=(0.0,0.0,0.0))
 
 def dict_merge(*args):
 	vis = {}
@@ -198,19 +156,20 @@ def mat_list():
 		mat_list += [
 			('velvet', 'Velvet', 'velvet'),
 			('glossytranslucent', 'Glossy Translucent', 'glossytranslucent'),
-			('scatter', 'Scatterer', 'scatter'),
+			('scatter', 'Scatter', 'scatter'),
 		]
 	
 	mat_list.sort()
 	
 	return mat_list
 
+@LuxRenderAddon.addon_register_class
 class luxrender_material(declarative_property_group):
 	'''
 	Storage class for LuxRender Material settings.
-	This class will be instantiated within a Blender Material
-	object.
 	'''
+	
+	ef_attach_to = ['Material']
 	
 	controls = [
 		'type',
@@ -295,11 +254,14 @@ class luxrender_material(declarative_property_group):
 		
 		return material.luxrender_emission.use_emission
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_compositing(declarative_property_group):
 	'''
 	Storage class for LuxRender Material compositing settings
 	for DistributedPath integrator.
 	'''
+	
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'enabled',
@@ -420,15 +382,17 @@ def transparency_visibility():
 	t_vis = texture_append_visibility(t_vis, TF_alpha, { 'transparent': True, 'alpha_source': 'texture' })
 	
 	return t_vis
-	
+
+@LuxRenderAddon.addon_register_class
 class luxrender_transparency(declarative_property_group):
 	'''
 	Storage class for LuxRender Material alpha transparency settings.
-	This class will be instantiated within a Blender Object.
 	'''
 	
+	ef_attach_to = ['Material']
+	
 	controls = [
-		'transparent', 
+		# 'transparent', # drawn in header 
 		'alpha_source',
 		'alpha_value',
 	] + \
@@ -605,7 +569,9 @@ def carpaint_visibility():
 	
 	return cp_vis
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_carpaint(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'name'
@@ -680,7 +646,9 @@ class luxrender_mat_carpaint(declarative_property_group):
 		
 		return carpaint_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_glass(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'architectural',
@@ -731,7 +699,9 @@ class luxrender_mat_glass(declarative_property_group):
 		
 		return glass_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_glass2(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'architectural',
@@ -765,7 +735,9 @@ class luxrender_mat_glass2(declarative_property_group):
 		
 		return glass2_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_roughglass(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 	] + \
@@ -827,8 +799,10 @@ def glossy_visibility():
 	g_vis = texture_append_visibility(g_vis, TF_alpha, { 'transparent': True, 'alpha_source': 'separate' })
 	
 	return g_vis
-	
+
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_glossy(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'multibounce'
@@ -913,7 +887,9 @@ def glossy_lossy_visibility():
 	
 	return gl_vis
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_glossy_lossy(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 	] + \
@@ -969,7 +945,9 @@ class luxrender_mat_glossy_lossy(declarative_property_group):
 		
 		return glossy_lossy_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_matte(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 	] + \
@@ -993,8 +971,10 @@ class luxrender_mat_matte(declarative_property_group):
 		matte_params.update( TF_sigma.get_paramset(self) )
 		
 		return matte_params
-	
+
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_mattetranslucent(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'energyconserving'
@@ -1071,7 +1051,9 @@ def glossytranslucent_visibility():
 	
 	return gt_vis
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_glossytranslucent(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'multibounce',
@@ -1202,7 +1184,9 @@ class luxrender_mat_glossytranslucent(declarative_property_group):
 		
 		return glossytranslucent_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_metal(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'name',
@@ -1261,7 +1245,10 @@ class luxrender_mat_metal(declarative_property_group):
 		
 		return metal_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_scatter(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
+	
 	controls = [
 	] + \
 		TC_Kd.controls + \
@@ -1285,7 +1272,9 @@ class luxrender_mat_scatter(declarative_property_group):
 		
 		return scatter_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_shinymetal(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 	] + \
@@ -1326,7 +1315,9 @@ class luxrender_mat_shinymetal(declarative_property_group):
 		
 		return shinymetal_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_mirror(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 	] + \
@@ -1355,7 +1346,9 @@ class luxrender_mat_mirror(declarative_property_group):
 		
 		return mirror_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_mix(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 		'namedmaterial1',
@@ -1380,7 +1373,9 @@ class luxrender_mat_mix(declarative_property_group):
 		
 		return mix_params
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_null(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = [
 	]
@@ -1394,7 +1389,9 @@ class luxrender_mat_null(declarative_property_group):
 	def get_paramset(self, material):
 		return ParamSet()
 
+@LuxRenderAddon.addon_register_class
 class luxrender_mat_velvet(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
 	
 	controls = TC_Kd.controls + [
 		'thickness',
@@ -1475,196 +1472,6 @@ class luxrender_mat_velvet(declarative_property_group):
 		
 		return velvet_params
 
-def volume_types():
-	v_types =  [
-		('clear', 'Clear', 'clear')
-	]
-	
-	if LUXRENDER_VERSION >= '0.8':
-		v_types.extend([
-			('homogeneous', 'Homogeneous', 'homogeneous')
-		])
-	
-	return v_types
-
-def volume_visibility():
-	v_vis = dict_merge({
-		'scattering_scale': { 'type': 'homogeneous', 'sigma_s_usecolortexture': False },
-		'g': { 'type': 'homogeneous' },
-		'depth': O([ A([{ 'type': 'clear' }, { 'absorption_usecolortexture': False }]), A([{'type': 'homogeneous' }, { 'sigma_a_usecolortexture': False }]) ])
-	},
-	TFR_IOR.visibility,
-	TC_absorption.visibility,
-	TC_sigma_a.visibility,
-	TC_sigma_s.visibility
-	)
-	
-	vis_append = { 'type': 'clear' }
-	v_vis = texture_append_visibility(v_vis, TC_absorption, vis_append)
-	
-	vis_append = { 'type': 'homogeneous' }
-	v_vis = texture_append_visibility(v_vis, TC_sigma_a, vis_append)
-	v_vis = texture_append_visibility(v_vis, TC_sigma_s, vis_append)
-	
-	return v_vis
-
-class luxrender_volume_data(declarative_property_group):
-	'''
-	Storage class for LuxRender volume data. The
-	luxrender_volumes object will store 1 or more of
-	these in its CollectionProperty 'volumes'.
-	'''
-	
-	controls = [
-		'type',
-	] + \
-	TFR_IOR.controls + \
-	TC_absorption.controls + \
-	TC_sigma_a.controls + \
-	[
-		'depth',
-	] + \
-	TC_sigma_s.controls + \
-	[
-		'scattering_scale',
-		'g',
-	]
-	
-	visibility = volume_visibility()
-	
-	properties = [
-		{
-			'type': 'enum',
-			'attr': 'type',
-			'name': 'Type',
-			'items': volume_types(),
-			'save_in_preset': True
-		},
-	] + \
-	TFR_IOR.properties + \
-	TC_absorption.properties + \
-	TC_sigma_a.properties + \
-	TC_sigma_s.properties + \
-	[
-		{
-			'type': 'float',
-			'attr': 'depth',
-			'name': 'Abs. at depth',
-			'description': 'Object will match absorption color at this depth in metres',
-			'default': 1.0,
-			'min': 0.00001,
-			'soft_min': 0.00001,
-			'max': 1000.0,
-			'soft_max': 1000.0,
-			'precision': 6,
-			'save_in_preset': True
-		},
-		{
-			'type': 'float',
-			'attr': 'scattering_scale',
-			'name': 'Scattering scale factor',
-			'description': 'Scattering colour will be multiplied by this value',
-			'default': 1.0,
-			'min': 0.00001,
-			'soft_min': 0.00001,
-			'max': 10000.0,
-			'soft_max': 10000.0,
-			'precision': 6,
-			'save_in_preset': True
-		},
-		{
-			'type': 'float_vector',
-			'attr': 'g',
-			'name': 'Asymmetry',
-			'description': 'Scattering asymmetry RGB. -1 means backscatter, 0 is isotropic, 1 is forwards scattering.',
-			'default': (0.0, 0.0, 0.0),
-			'min': -1.0,
-			'soft_min': -1.0,
-			'max': 1.0,
-			'soft_max': 1.0,
-			'precision': 4,
-			'save_in_preset': True
-		},
-	]
-	
-	def api_output(self, lux_context):
-		vp = ParamSet()
-		
-		scale = 1
-		def absorption_at_depth(i):
-			# This is copied from the old LuxBlend, I don't pretend to understand it, DH
-			depthed = (-math.log(max([(float(i)),1e-30]))/(self.depth*scale)) * ((float(i))==1.0 and -1 or 1)
-			#print('abs xform: %f -> %f' % (i,depthed))
-			return depthed
-		
-		if self.type == 'clear':
-			vp.update( TFR_IOR.get_paramset(self) )
-			vp.update( TC_absorption.get_paramset(self, value_transform_function=absorption_at_depth) )
-		
-		if self.type == 'homogeneous':
-			def scattering_scale(i):
-				return i * self.scattering_scale
-			vp.update( TFR_IOR.get_paramset(self) )
-			vp.add_color('g', self.g)
-			vp.update( TC_sigma_a.get_paramset(self, value_transform_function=absorption_at_depth) )
-			vp.update( TC_sigma_s.get_paramset(self, value_transform_function=scattering_scale) )
-		
-		return self.type, vp
-
-class luxrender_volumes(declarative_property_group):
-	'''
-	Storage class for LuxRender Material volumes.
-	This class will be instantiated within a Blender scene
-	object.
-	'''
-	
-	controls = [
-		'volumes_select',
-		['op_vol_add', 'op_vol_rem']
-	]
-	
-	visibility = {}
-	
-	properties = [
-		{
-			'type': 'collection',
-			'ptype': luxrender_volume_data,
-			'name': 'volumes',
-			'attr': 'volumes',
-			'items': [
-				
-			]
-		},
-		{
-			'type': 'int',
-			'name': 'volumes_index',
-			'attr': 'volumes_index',
-		},
-		{
-			'type': 'template_list',
-			'name': 'volumes_select',
-			'attr': 'volumes_select',
-			'trg': lambda sc,c: c.luxrender_volumes,
-			'trg_attr': 'volumes_index',
-			'src': lambda sc,c: c.luxrender_volumes,
-			'src_attr': 'volumes',
-		},
-		{
-			'type': 'operator',
-			'attr': 'op_vol_add',
-			'operator': 'luxrender.volume_add',
-			'text': 'Add',
-			'icon': 'ZOOMIN',
-		},
-		{
-			'type': 'operator',
-			'attr': 'op_vol_rem',
-			'operator': 'luxrender.volume_remove',
-			'text': 'Remove',
-			'icon': 'ZOOMOUT',
-		},
-	]
-
 class EmissionColorTextureParameter(ColorTextureParameter):
 	def texture_slot_set_attr(self):
 		# Looks in a different location than other ColorTextureParameters
@@ -1672,14 +1479,16 @@ class EmissionColorTextureParameter(ColorTextureParameter):
 
 TC_L = EmissionColorTextureParameter('L', 'Emission color', default=(1.0,1.0,1.0) )
 
+@LuxRenderAddon.addon_register_class
 class luxrender_emission(declarative_property_group):
 	'''
 	Storage class for LuxRender Material emission settings.
-	This class will be instantiated within a Blender Object.
 	'''
 	
+	ef_attach_to = ['Material']
+	
 	controls = [
-		'use_emission',
+		#'use_emission', # drawn in header
 		'lightgroup',
 	] + \
 	TC_L.controls + \

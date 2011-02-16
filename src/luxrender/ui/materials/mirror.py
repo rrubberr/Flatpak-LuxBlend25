@@ -26,8 +26,10 @@
 #
 import bpy
 
-from luxrender.ui.materials import luxrender_material_sub
+from ... import LuxRenderAddon
+from ...ui.materials import luxrender_material_sub
 
+@LuxRenderAddon.addon_register_class
 class ui_material_mirror(luxrender_material_sub, bpy.types.Panel):
 	bl_label = 'LuxRender Mirror Material'
 	
