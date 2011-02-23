@@ -163,7 +163,7 @@ class luxrender_volume_data(declarative_property_group):
 	TC_absorption.controls + \
 	TC_sigma_a.controls + \
 	[
-		'depth',
+		'depth','absorption_scale'
 	] + \
 	TC_sigma_s.controls + \
 	[
@@ -192,6 +192,19 @@ class luxrender_volume_data(declarative_property_group):
 			'attr': 'depth',
 			'name': 'Abs. at depth',
 			'description': 'Object will match absorption color at this depth in metres',
+			'default': 1.0,
+			'min': 0.00001,
+			'soft_min': 0.00001,
+			'max': 1000.0,
+			'soft_max': 1000.0,
+			'precision': 6,
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'absorption_scale',
+			'name': 'Abs. scale',
+			'description': 'Scale the absorption by this value',
 			'default': 1.0,
 			'min': 0.00001,
 			'soft_min': 0.00001,
@@ -231,23 +244,22 @@ class luxrender_volume_data(declarative_property_group):
 	def api_output(self, lux_context):
 		vp = ParamSet()
 		
-		scale = 1
-		def absorption_at_depth(i):
+		def absorption_at_depth_scaled(i):
 			# This is copied from the old LuxBlend, I don't pretend to understand it, DH
-			depthed = (-math.log(max([(float(i)),1e-30]))/(self.depth*scale)) * ((float(i))==1.0 and -1 or 1)
-			#print('abs xform: %f -> %f' % (i,depthed))
+			depthed = (-math.log(max([(float(i)),1e-30]))/(self.depth*self.absorption_scale)) * ((float(i))==1.0 and -1 or 1)
+			print('abs xform: %f -> %f' % (i,depthed))
 			return depthed
 		
 		if self.type == 'clear':
 			vp.update( TFR_IOR.get_paramset(self) )
-			vp.update( TC_absorption.get_paramset(self, value_transform_function=absorption_at_depth) )
+			vp.update( TC_absorption.get_paramset(self, value_transform_function=absorption_at_depth_scaled) )
 		
 		if self.type == 'homogeneous':
 			def scattering_scale(i):
 				return i * self.scattering_scale
 			vp.update( TFR_IOR.get_paramset(self) )
 			vp.add_color('g', self.g)
-			vp.update( TC_sigma_a.get_paramset(self, value_transform_function=absorption_at_depth) )
+			vp.update( TC_sigma_a.get_paramset(self, value_transform_function=absorption_at_depth_scaled) )
 			vp.update( TC_sigma_s.get_paramset(self, value_transform_function=scattering_scale) )
 		
 		return self.type, vp

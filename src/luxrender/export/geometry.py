@@ -79,9 +79,9 @@ class GeometryExporter(object):
 #	
 #	exporting_duplis = False
 	
-	def __init__(self, lux_context, scene):
+	def __init__(self, lux_context, visibility_scene):
 		self.lux_context = lux_context
-		self.scene = scene
+		self.visibility_scene = visibility_scene
 		
 		self.ExportedMeshes = ExportCache('ExportedMeshes')
 		self.ExportedObjects = ExportCache('ExportedObjects')
@@ -104,6 +104,7 @@ class GeometryExporter(object):
 			'objects': {
 				'MESH': self.handler_MESH,
 				'SURFACE': self.handler_MESH,
+				'CURVE': self.handler_MESH,
 				'FONT': self.handler_MESH
 			}
 		}
@@ -119,12 +120,15 @@ class GeometryExporter(object):
 		"""
 		
 		# Using a cache on object massively speeds up dupli instance export
-		if self.ExportedObjects.have(obj): return self.ExportedObjects.get(obj)
+		obj_cache_key = (self.geometry_scene, obj)
+		if self.ExportedObjects.have(obj_cache_key): return self.ExportedObjects.get(obj_cache_key)
 		
 		mesh_definitions = []
 		
 		export_original = True
-		ply_mesh_name = '%s_ply' % obj.data.name
+		# mesh data name first for portal reasons
+		# TODO: replace with proper object references
+		ply_mesh_name = '%s_%s_ply' % (obj.data.name, self.geometry_scene.name)
 		if obj.luxrender_object.append_external_mesh:
 			if obj.luxrender_object.hide_proxy_mesh:
 				export_original = False
@@ -148,14 +152,14 @@ class GeometryExporter(object):
 			# Choose the mesh export type, if set, or use the default
 			mesh_type = obj.data.luxrender_mesh.mesh_type
 			# If the rendering is INT and not writing to disk, we must use native mesh format
-			internal_nofiles = self.scene.luxrender_engine.export_type=='INT' and not self.scene.luxrender_engine.write_files
-			global_type = 'native' if internal_nofiles else self.scene.luxrender_engine.mesh_type
+			internal_nofiles = self.visibility_scene.luxrender_engine.export_type=='INT' and not self.visibility_scene.luxrender_engine.write_files
+			global_type = 'native' if internal_nofiles else self.visibility_scene.luxrender_engine.mesh_type
 			if mesh_type == 'native' or (mesh_type == 'global' and global_type == 'native'):
 				mesh_definitions.extend( self.buildNativeMesh(obj) )
 			if mesh_type == 'binary_ply' or (mesh_type == 'global' and global_type == 'binary_ply'):
 				mesh_definitions.extend( self.buildBinaryPLYMesh(obj) )
 		
-		self.ExportedObjects.add(obj, mesh_definitions)
+		self.ExportedObjects.add(obj_cache_key, mesh_definitions)
 		return mesh_definitions
 	
 	@time_export
@@ -171,7 +175,7 @@ class GeometryExporter(object):
 		
 		try:
 			mesh_definitions = []
-			mesh = obj.create_mesh(self.scene, True, 'RENDER')
+			mesh = obj.create_mesh(self.geometry_scene, True, 'RENDER')
 			if mesh is None:
 				raise UnexportableObjectException('Cannot create render/export mesh')
 			
@@ -181,6 +185,7 @@ class GeometryExporter(object):
 				mi = f.material_index
 				if mi not in ffaces_mats.keys(): ffaces_mats[mi] = []
 				ffaces_mats[mi].append( f )
+			material_indices = ffaces_mats.keys()
 			
 			number_of_mats = len(mesh.materials)
 			if number_of_mats > 0:
@@ -190,31 +195,37 @@ class GeometryExporter(object):
 			
 			for i in iterator_range:
 				try:
-					if i not in ffaces_mats.keys(): continue
-					
-					mesh_name = ('%s_m%03d' % (obj.data.name, i)).replace(' ','_')
+					if i not in material_indices: continue
 					
 					# If this mesh/mat combo has already been processed, get it from the cache
-					if self.allow_instancing(obj) and self.ExportedMeshes.have(mesh_name):
-						mesh_definitions.append( self.ExportedMeshes.get(mesh_name) )
+					mesh_cache_key = (self.geometry_scene, obj.data, i)
+					if self.allow_instancing(obj) and self.ExportedMeshes.have(mesh_cache_key):
+						mesh_definitions.append( self.ExportedMeshes.get(mesh_cache_key) )
 						continue
 					
 					# Put PLY files in frame-numbered subfolders to avoid
 					# clobbering when rendering animations
-					sc_fr = '%05d' % self.scene.frame_current
+					sc_fr = '%05d' % self.visibility_scene.frame_current
 					if not os.path.exists( os.path.join(os.getcwd(), sc_fr) ):
 						os.mkdir(sc_fr)
 					
-					ply_filename = '/'.join([sc_fr, bpy.path.clean_name(mesh_name) + '.%04d.ply'%self.ExportedPLYs.serial(mesh_name)])
+					ply_serial = self.ExportedPLYs.serial(mesh_cache_key)
+					# mesh_name mush start with mesh data name for matching with portals
+					# TODO: replace with proper object references
+					mesh_name = '%s-%s_%04d_m%03d' % (obj.data.name, self.geometry_scene.name, ply_serial, i)
+					ply_filename = '/'.join([sc_fr, bpy.path.clean_name(mesh_name) + '.ply'])
 					
 					# Ensure that all PLY files have unique names
 					while self.ExportedPLYs.have(ply_filename):
-						ply_filename = '/'.join([sc_fr, bpy.path.clean_name(mesh_name) + '.%04d.ply'%self.ExportedPLYs.serial(mesh_name)])
+						ply_serial = self.ExportedPLYs.serial(mesh_cache_key)
+						# mesh_name mush start with mesh data name for matching with portals
+						mesh_name = '%s-%s_%04d_m%03d' % (obj.data.name, self.geometry_scene.name, ply_serial, i)
+						ply_filename = '/'.join([sc_fr, bpy.path.clean_name(mesh_name) + '.ply'])
 					
 					self.ExportedPLYs.add(ply_filename, None)
 					
 					# skip writing the PLY file if the box is checked
-					if not (os.path.exists(ply_filename) and self.scene.luxrender_engine.partial_ply):
+					if not (os.path.exists(ply_filename) and self.visibility_scene.luxrender_engine.partial_ply):
 						if len(mesh.uv_textures) > 0:
 							if mesh.uv_textures.active and mesh.uv_textures.active.data:
 								uv_layer = mesh.uv_textures.active.data
@@ -341,7 +352,7 @@ class GeometryExporter(object):
 					# Only export objectBegin..objectEnd and cache this mesh_definition if we plan to use instancing
 					if self.allow_instancing(obj):
 						self.exportShapeDefinition(obj, mesh_definition)
-						self.ExportedMeshes.add(mesh_name, mesh_definition)
+						self.ExportedMeshes.add(mesh_cache_key, mesh_definition)
 					
 					#LuxLog('Binary PLY Mesh Exported: %s' % mesh_name)
 				
@@ -367,7 +378,7 @@ class GeometryExporter(object):
 		
 		try:
 			mesh_definitions = []
-			mesh = obj.create_mesh(self.scene, True, 'RENDER')
+			mesh = obj.create_mesh(self.geometry_scene, True, 'RENDER')
 			if mesh is None:
 				raise UnexportableObjectException('Cannot create render/export mesh')
 			
@@ -377,6 +388,7 @@ class GeometryExporter(object):
 				mi = f.material_index
 				if mi not in ffaces_mats.keys(): ffaces_mats[mi] = []
 				ffaces_mats[mi].append( f )
+			material_indices = ffaces_mats.keys()
 			
 			number_of_mats = len(mesh.materials)
 			if number_of_mats > 0:
@@ -386,19 +398,21 @@ class GeometryExporter(object):
 			
 			for i in iterator_range:
 				try:
-					if i not in ffaces_mats.keys(): continue
-					
-					mesh_name = ('%s_%03d' % (obj.data.name, i)).replace(' ','_')
+					if i not in material_indices: continue
 					
 					# If this mesh/mat-index combo has already been processed, get it from the cache
-					if self.allow_instancing(obj) and self.ExportedMeshes.have(mesh_name):
-						mesh_definitions.append( self.ExportedMeshes.get(mesh_name) )
+					mesh_cache_key = (self.geometry_scene, obj.data, i)
+					if self.allow_instancing(obj) and self.ExportedMeshes.have(mesh_cache_key):
+						mesh_definitions.append( self.ExportedMeshes.get(mesh_cache_key) )
 						continue
+					
+					# mesh_name must start with mesh data name to match with portals
+					# TODO: replace with proper object references
+					mesh_name = '%s-%s_m%03d' % (obj.data.name, self.geometry_scene.name, i)
 					
 					if OBJECT_ANALYSIS: print(' -> NativeMesh:')
 					if OBJECT_ANALYSIS: print('  -> Material index: %d' % i)
 					if OBJECT_ANALYSIS: print('  -> derived mesh name: %s' % mesh_name)
-					
 					
 					if len(mesh.uv_textures) > 0:
 						if mesh.uv_textures.active and mesh.uv_textures.active.data:
@@ -503,7 +517,7 @@ class GeometryExporter(object):
 					# Only export objectBegin..objectEnd and cache this mesh_definition if we plan to use instancing
 					if self.allow_instancing(obj):
 						self.exportShapeDefinition(obj, mesh_definition)
-						self.ExportedMeshes.add(mesh_name, mesh_definition)
+						self.ExportedMeshes.add(mesh_cache_key, mesh_definition)
 					
 					#LuxLog('LuxRender Mesh Exported: %s' % mesh_name)
 					
@@ -519,7 +533,7 @@ class GeometryExporter(object):
 	
 	def allow_instancing(self, obj):
 		# Some situations require full geometry export
-		if self.scene.luxrender_engine.renderer == 'hybrid':
+		if self.visibility_scene.luxrender_engine.renderer == 'hybrid':
 			return False
 		
 		# If the mesh is only used once, instancing is a waste of memory
@@ -549,7 +563,8 @@ class GeometryExporter(object):
 		an objectBegin..objectEnd block containing the Shape definition.
 		"""
 		
-		me_name, me_mat_index, me_shape_type, me_shape_params = mesh_definition
+		me_name = mesh_definition[0]
+		me_shape_type, me_shape_params = mesh_definition[2:4]
 		
 		if len(me_shape_params) == 0: return
 		
@@ -571,6 +586,9 @@ class GeometryExporter(object):
 		
 		# Don't export instances of portal meshes
 		if obj.type == 'MESH' and obj.data.luxrender_mesh.portal: return
+		# or empty definitions
+		if len(mesh_definitions) < 1: return
+		
 		
 		self.lux_context.attributeBegin(comment=obj.name, file=Files.GEOM)
 		
@@ -582,7 +600,7 @@ class GeometryExporter(object):
 		
 		# object motion blur
 		is_object_animated = False
-		if self.scene.camera.data.luxrender_camera.usemblur and self.scene.camera.data.luxrender_camera.objectmblur:
+		if self.visibility_scene.camera.data.luxrender_camera.usemblur and self.visibility_scene.camera.data.luxrender_camera.objectmblur:
 			if matrix is not None and matrix[1] is not None:
 				next_matrices = [matrix[1]]
 				is_object_animated = True
@@ -593,7 +611,7 @@ class GeometryExporter(object):
 				# several motionInstances for non-linear motion blur
 				STEPS = 1
 				for i in range(STEPS,0,-1):
-					fcurve_matrix = object_anim_matrix(self.scene, obj, frame_offset=i/float(STEPS))
+					fcurve_matrix = object_anim_matrix(self.geometry_scene, obj, frame_offset=i/float(STEPS))
 					if fcurve_matrix == False:
 						break
 					
@@ -609,8 +627,9 @@ class GeometryExporter(object):
 				self.lux_context.coordinateSystem('%s_motion_%i' % (obj.name, i))
 				self.lux_context.transformEnd()
 		
+		use_inner_scope = len(mesh_definitions) > 1
 		for me_name, me_mat_index, me_shape_type, me_shape_params in mesh_definitions:
-			self.lux_context.attributeBegin()
+			if use_inner_scope: self.lux_context.attributeBegin()
 			
 			if parent != None:
 				mat_object = parent
@@ -641,12 +660,12 @@ class GeometryExporter(object):
 				int_v, ext_v = get_material_volume_defs(ob_mat)
 				if int_v != '':
 					self.lux_context.interior(int_v)
-				elif self.scene.luxrender_world.default_interior_volume != '':
-					self.lux_context.interior(self.scene.luxrender_world.default_interior_volume)
+				elif self.geometry_scene.luxrender_world.default_interior_volume != '':
+					self.lux_context.interior(self.geometry_scene.luxrender_world.default_interior_volume)
 				if ext_v != '':
 					self.lux_context.exterior(ext_v)
-				elif self.scene.luxrender_world.default_exterior_volume != '':
-					self.lux_context.exterior(self.scene.luxrender_world.default_exterior_volume)
+				elif self.geometry_scene.luxrender_world.default_exterior_volume != '':
+					self.lux_context.exterior(self.geometry_scene.luxrender_world.default_exterior_volume)
 				
 			else:
 				object_is_emitter = False
@@ -660,13 +679,13 @@ class GeometryExporter(object):
 			elif is_object_animated:
 				num_instances = len(next_matrices)
 				for i in range(num_instances):
-					fni = float(num_instances) * self.scene.render.fps
+					fni = float(num_instances) * self.visibility_scene.render.fps
 					self.lux_context.motionInstance(me_name, i/fni, (i+1)/fni, '%s_motion_%i' % (obj.name, i))
 			# ordinary mesh instance
 			else:
 				self.lux_context.objectInstance(me_name)
 			
-			self.lux_context.attributeEnd()
+			if use_inner_scope: self.lux_context.attributeEnd()
 		
 		self.lux_context.attributeEnd()
 	
@@ -681,7 +700,23 @@ class GeometryExporter(object):
 			#			'Set the DISPLAY percentage to 100%% before exporting' % (prev_display_pc, kwargs['particle_system'].name)
 			#		)
 			
-			obj.create_dupli_list(self.scene)
+			# Prepare dupli'd object group layers outside of create_dupli_list
+			# BUG: http://projects.blender.org/tracker/index.php?func=detail&aid=26170&group_id=9&atid=498
+			obs_d = []
+			obs_l = {}
+			obs_l_keys = set()
+			obj.create_dupli_list(self.visibility_scene)
+			if obj.dupli_list:
+				for dupli_ob in obj.dupli_list:
+					obs_d.append( dupli_ob.object )
+				obj.free_dupli_list()
+			
+			for obj_n in obs_d:
+				if obj_n not in obs_l_keys:
+					obs_l[obj_n] = obj_n.layers[:]
+					obs_l_keys.add(obj_n)
+			
+			obj.create_dupli_list(self.visibility_scene)
 			
 			if obj.dupli_list:
 				LuxLog('Exporting Duplis...')
@@ -695,10 +730,19 @@ class GeometryExporter(object):
 					
 					det.exported_objects += 1
 					
-					if not dupli_ob.object.is_visible(self.scene) or dupli_ob.object.hide_render:
+					if	not dupli_ob.object.is_visible(self.visibility_scene) or \
+						dupli_ob.object.hide_render:
 						continue
 					
-					if dupli_ob.object.type not in ['MESH', 'SURFACE', 'FONT']:
+					if dupli_ob.object.type not in ['MESH', 'SURFACE', 'FONT', 'CURVE']:
+						continue
+					
+					# TEMP BLENDER BUG WORKAROUND
+					# Check for group layer visibility
+					gviz = False
+					for grp in dupli_ob.object.users_group:
+						gviz |= True in [a&b for a,b in zip(obs_l[dupli_ob.object], grp.layers)]
+					if not gviz:
 						continue
 					
 					self.exportShapeInstances(
@@ -718,6 +762,10 @@ class GeometryExporter(object):
 			# free object dupli list again. Warning: all dupli objects are INVALID now!
 			obj.free_dupli_list()
 			
+			del obs_d
+			del obs_l
+			del obs_l_keys
+			
 		except SystemError as err:
 			LuxLog('Error with handler_Duplis_GENERIC and object %s: %s' % (obj, err))
 	
@@ -735,70 +783,69 @@ class GeometryExporter(object):
 				obj,
 				self.buildMesh(obj)
 			)
+	
+	def iterateScene(self, geometry_scene):
+		self.geometry_scene = geometry_scene
+		self.have_emitting_object = False
+		
+		progress_thread = MeshExportProgressThread()
+		tot_objects = len(geometry_scene.objects)
+		progress_thread.start(tot_objects)
+		
+		for obj in geometry_scene.objects:
+			progress_thread.exported_objects += 1
+			
+			if OBJECT_ANALYSIS: print('Analysing object %s : %s' % (obj, obj.type))
+			
+			try:
+				# Export only objects which are enabled for render (in the outliner) and visible on a render layer
+				
+				if not obj.is_visible(self.visibility_scene) or obj.hide_render:
+					raise UnexportableObjectException(' -> not visible: %s / %s' % (obj.is_visible(self.visibility_scene), obj.hide_render))
+				
+				if obj.parent and obj.parent.is_duplicator:
+					raise UnexportableObjectException(' -> parent is duplicator')
 
-def iterateScene(lux_context, scene):
-	
-	geometry_exporter = GeometryExporter(lux_context, scene)
-	
-	progress_thread = MeshExportProgressThread()
-	progress_thread.start(len(scene.objects))
-	
-	for obj in scene.objects:
-		if OBJECT_ANALYSIS: print('Analysing object %s : %s' % (obj, obj.type))
+				for mod in obj.modifiers:
+					if mod.name == 'Smoke':
+						if mod.smoke_type == 'DOMAIN':
+							raise UnexportableObjectException(' -> Smoke domain')
+
+				number_psystems = len(obj.particle_systems)
+				
+				if obj.is_duplicator and number_psystems < 1:
+					if OBJECT_ANALYSIS: print(' -> is duplicator without particle systems')
+					if obj.dupli_type in self.valid_duplis_callbacks:
+						self.callbacks['duplis'][obj.dupli_type](obj)
+					elif OBJECT_ANALYSIS: print(' -> Unsupported Dupli type: %s' % obj.dupli_type)
+				
+				# Some dupli types should hide the original
+				if obj.is_duplicator and obj.dupli_type in ('VERTS', 'FACES', 'GROUP'):
+					export_original_object = False
+				else:
+					export_original_object = True
+				
+				if number_psystems > 0:
+					export_original_object = False
+					if OBJECT_ANALYSIS: print(' -> has %i particle systems' % number_psystems)
+					for psys in obj.particle_systems:
+						export_original_object = export_original_object or psys.settings.use_render_emitter
+						if psys.settings.render_type in self.valid_particles_callbacks:
+							self.callbacks['particles'][psys.settings.render_type](obj, particle_system=psys)
+						elif OBJECT_ANALYSIS: print(' -> Unsupported Particle system type: %s' % psys.settings.render_type)
+				
+				if not export_original_object:
+					raise UnexportableObjectException('export_original_object=False')
+				
+				if not obj.type in self.valid_objects_callbacks:
+					raise UnexportableObjectException('Unsupported object type')
+				
+				self.callbacks['objects'][obj.type](obj)			
 			
-		try:
-			# Export only objects which are enabled for render (in the outliner) and visible on a render layer
-			if not obj.is_visible(scene) or obj.hide_render:
-				raise UnexportableObjectException(' -> not visible: %s / %s' % (obj.is_visible(scene), obj.hide_render))
-			
-			if obj.parent and obj.parent.is_duplicator:
-				raise UnexportableObjectException(' -> parent is duplicator')
-			
-			for mod in obj.modifiers:
-				if mod.name == 'Smoke':
-					if mod.smoke_type == 'DOMAIN':
-						raise UnexportableObjectException(' -> Smoke domain')
-			
-			number_psystems = len(obj.particle_systems)
-			
-			if obj.is_duplicator and number_psystems < 1:
-				if OBJECT_ANALYSIS: print(' -> is duplicator without particle systems')
-				if obj.dupli_type in geometry_exporter.valid_duplis_callbacks:
-					geometry_exporter.callbacks['duplis'][obj.dupli_type](obj)
-				elif OBJECT_ANALYSIS: print(' -> Unsupported Dupli type: %s' % obj.dupli_type)
-			
-			# Some dupli types should hide the original
-			if obj.is_duplicator and obj.dupli_type in ('VERTS', 'FACES'):
-				export_original_object = False
-			else:
-				export_original_object = True
-			
-			if number_psystems > 0:
-				export_original_object = False
-				if OBJECT_ANALYSIS: print(' -> has %i particle systems' % number_psystems)
-				for psys in obj.particle_systems:
-					export_original_object = export_original_object or psys.settings.use_render_emitter
-					if psys.settings.render_type in geometry_exporter.valid_particles_callbacks:
-						geometry_exporter.callbacks['particles'][psys.settings.render_type](obj, particle_system=psys)
-					elif OBJECT_ANALYSIS: print(' -> Unsupported Particle system type: %s' % psys.settings.render_type)
-			
-			if not export_original_object:
-				raise UnexportableObjectException('export_original_object=False')
-			
-			if not obj.type in geometry_exporter.valid_objects_callbacks:
-				raise UnexportableObjectException('Unsupported object type')
-			
-			geometry_exporter.callbacks['objects'][obj.type](obj)
+			except UnexportableObjectException as err:
+				if OBJECT_ANALYSIS: print(' -> Unexportable object: %s : %s : %s' % (obj, obj.type, err))
 		
-		except UnexportableObjectException as err:
-			if OBJECT_ANALYSIS: print(' -> Unexportable object: %s : %s : %s' % (obj, obj.type, err))
+		progress_thread.stop()
+		progress_thread.join()
 		
-		progress_thread.exported_objects += 1
-	
-	progress_thread.stop()
-	progress_thread.join()
-	
-	# we keep a copy of the mesh_names exported for use as portalInstances when we export the lights
-	mesh_names = geometry_exporter.ExportedMeshes.cache_keys.copy()
-	
-	return mesh_names, geometry_exporter.have_emitting_object
+		return self.have_emitting_object
