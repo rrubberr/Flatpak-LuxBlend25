@@ -700,71 +700,63 @@ class GeometryExporter(object):
 			#			'Set the DISPLAY percentage to 100%% before exporting' % (prev_display_pc, kwargs['particle_system'].name)
 			#		)
 			
-			# Prepare dupli'd object group layers outside of create_dupli_list
-			# BUG: http://projects.blender.org/tracker/index.php?func=detail&aid=26170&group_id=9&atid=498
-			obs_d = []
-			obs_l = {}
-			obs_l_keys = set()
-			obj.create_dupli_list(self.visibility_scene)
-			if obj.dupli_list:
-				for dupli_ob in obj.dupli_list:
-					obs_d.append( dupli_ob.object )
-				obj.free_dupli_list()
-			
-			for obj_n in obs_d:
-				if obj_n not in obs_l_keys:
-					obs_l[obj_n] = obj_n.layers[:]
-					obs_l_keys.add(obj_n)
+			LuxLog('Exporting Duplis...')
 			
 			obj.create_dupli_list(self.visibility_scene)
+			if not obj.dupli_list:
+				LuxLog('ERROR: cannot create dupli list for object %s' % obj.name)
+				return
 			
-			if obj.dupli_list:
-				LuxLog('Exporting Duplis...')
+			# Create our own DupliOb proxy to work around incorrect layers
+			# attribute when inside create_dupli_list()..free_dupli_list()
+			duplis = []
+			for dupli_ob in obj.dupli_list:
+				if dupli_ob.object.type not in ['MESH', 'SURFACE', 'FONT', 'CURVE']:
+					continue
+				if not dupli_ob.object.is_visible(self.visibility_scene) or dupli_ob.object.hide_render:
+					continue
 				
-				det = DupliExportProgressThread()
-				det.start(len(obj.dupli_list))
-				
-				self.exporting_duplis = True
-				
-				for dupli_ob in obj.dupli_list:
-					
-					det.exported_objects += 1
-					
-					if	not dupli_ob.object.is_visible(self.visibility_scene) or \
-						dupli_ob.object.hide_render:
-						continue
-					
-					if dupli_ob.object.type not in ['MESH', 'SURFACE', 'FONT', 'CURVE']:
-						continue
-					
-					# TEMP BLENDER BUG WORKAROUND
-					# Check for group layer visibility
-					gviz = False
-					for grp in dupli_ob.object.users_group:
-						gviz |= True in [a&b for a,b in zip(obs_l[dupli_ob.object], grp.layers)]
-					if not gviz:
-						continue
-					
-					self.exportShapeInstances(
-						obj,
-						self.buildMesh(dupli_ob.object),
-						matrix=[dupli_ob.matrix,None],
-						parent=dupli_ob.object
+				duplis.append(
+					(
+						dupli_ob.object,
+						dupli_ob.matrix.copy()
 					)
-				
-				self.exporting_duplis = False
-				
-				det.stop()
-				det.join()
-				
-				LuxLog('... done, exported %s duplis' % det.exported_objects)
+				)
 			
-			# free object dupli list again. Warning: all dupli objects are INVALID now!
 			obj.free_dupli_list()
 			
-			del obs_d
-			del obs_l
-			del obs_l_keys
+			det = DupliExportProgressThread()
+			det.start(len(duplis))
+			
+			self.exporting_duplis = True
+			
+			# dupli object, dupli matrix
+			for do, dm in duplis:
+				
+				det.exported_objects += 1
+				
+				# Check for group layer visibility
+				gviz = False
+				for grp in do.users_group:
+					gviz |= True in [a&b for a,b in zip(do.layers, grp.layers)]
+				if not gviz:
+					continue
+				
+				self.exportShapeInstances(
+					obj,
+					self.buildMesh(do),
+					matrix=[dm,None],
+					parent=do
+				)
+			
+			del duplis
+			
+			self.exporting_duplis = False
+			
+			det.stop()
+			det.join()
+			
+			LuxLog('... done, exported %s duplis' % det.exported_objects)
 			
 		except SystemError as err:
 			LuxLog('Error with handler_Duplis_GENERIC and object %s: %s' % (obj, err))
