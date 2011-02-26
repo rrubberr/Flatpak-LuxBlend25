@@ -65,6 +65,9 @@ def attr_light(lux_context, light, name, group, type, params, transform=None, po
 	dbo('LIGHT', (type, params))
 	lux_context.lightGroup(group, [])
 	
+	if light.type == 'HEMI':
+		lux_context.scale(-1, 1, 1) # correct worldmap orientation
+	
 	if light.luxrender_lamp.Exterior_volume != '':
 		lux_context.exterior(light.luxrender_lamp.Exterior_volume)
 	elif LuxManager.CurrentScene.luxrender_world.default_exterior_volume != '':
@@ -185,7 +188,7 @@ def exportLight(lux_context, ob, matrix, portals = []):
 # lights(lux_context, scene)
 # MAIN export function
 #-------------------------------------------------
-def lights(lux_context, geometry_scene, visibility_scene, mesh_names):
+def lights(lux_context, geometry_scene, visibility_scene, mesh_definitions):
 	'''
 	lux_context		pylux.Context
 	Iterate over the given scene's light sources,
@@ -210,9 +213,9 @@ def lights(lux_context, geometry_scene, visibility_scene, mesh_names):
 		# match the mesh data name against the combined mesh-mat name exported
 		# by geometry.iterateScene
 		if ob.data.luxrender_mesh.portal:
-			for mesh_name in mesh_names:
-				if mesh_name.startswith(ob.data.name):
-					portal_shapes.append(mesh_name)
+			if mesh_definitions.have(ob.data):
+				mi, mn, ms, mp = mesh_definitions.get(ob.data)
+				portal_shapes.append(mn)
 	
 	# Then iterate for lights
 	for ob in geometry_scene.objects:
