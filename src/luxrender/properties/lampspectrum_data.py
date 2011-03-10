@@ -24,6 +24,9 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
+import bpy
+
+from .. import LuxRenderAddon
 
 lampspectrum_tree = [
 		("Natural", [
@@ -148,11 +151,54 @@ lampspectrum_names  = {
 	69:"RedGlass", 70:"OliveOil"
 }
 
-def lampspectrum_list():
-	ls = []
-	for cat, items in lampspectrum_tree:
-		#ls.append( ('', cat, '') )
-		for name, idx in items:
-			pname = lampspectrum_names[idx]
-			ls.append( (pname, pname, name) )
-	return ls
+@LuxRenderAddon.addon_register_class
+class TEXTURE_OT_set_lampspectrum_preset(bpy.types.Operator):
+	bl_idname = 'texture.set_lampspectrum_preset'
+	bl_label = 'Apply lampspectrum preset'
+	
+	index = bpy.props.IntProperty()
+	l_name = bpy.props.StringProperty()
+	
+	@classmethod
+	def poll(cls, context):
+		return	context.texture and \
+				context.texture.luxrender_texture and \
+				context.texture.luxrender_texture.luxrender_tex_lampspectrum
+	
+	def execute(self, context):
+		context.texture.luxrender_texture.luxrender_tex_lampspectrum.preset = lampspectrum_names[self.properties.index]
+		context.texture.luxrender_texture.luxrender_tex_lampspectrum.label = self.properties.l_name
+		return {'FINISHED'}
+
+def draw_generator(operator, m_names):
+	def draw(self, context):
+		sl = self.layout
+		for m_name, m_index in m_names:
+			op = sl.operator(operator, text=m_name)
+			op.index = m_index
+			op.l_name = m_name
+	return draw
+
+@LuxRenderAddon.addon_register_class
+class TEXTURE_MT_lampspectrum_presets(bpy.types.Menu):
+	bl_label = 'Lampspectrum presets'
+	submenus = []
+	
+	def draw(self, context):
+		sl = self.layout
+		for sm in self.submenus:
+			sl.menu(sm.bl_idname)
+	
+	for label, spectra in lampspectrum_tree:
+		submenu_idname = 'TEXTURE_MT_lampspectrum_cat%d'%len(submenus)
+		submenus.append(
+			LuxRenderAddon.addon_register_class(type(
+				submenu_idname,
+				(bpy.types.Menu,),
+				{
+					'bl_idname': submenu_idname,
+					'bl_label': label,
+					'draw': draw_generator('TEXTURE_OT_set_lampspectrum_preset',spectra)
+				}
+			))
+		)

@@ -36,3 +36,19 @@ class ui_material_glossy(luxrender_material_sub):
 	display_property_groups = [
 		( ('material', 'luxrender_material'), 'luxrender_mat_glossy' )
 	]
+
+	def draw_ior_menu(self, context):
+		"""
+		This is a draw callback from property_group_renderer, due
+		to ef_callback item in luxrender_mat_<mat>.properties
+		"""
+		
+		lmg = context.material.luxrender_material.luxrender_mat_glossy
+		
+		if lmg.index_floatvalue == lmg.index_presetvalue:
+			menu_text = lmg.index_presetstring
+		else:
+			menu_text = '-- Choose preset --'
+		
+		cl=self.layout.column(align=True)
+		cl.menu('LUXRENDER_MT_ior_presets', text=menu_text)

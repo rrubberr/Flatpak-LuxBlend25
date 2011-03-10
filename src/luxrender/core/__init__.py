@@ -47,13 +47,11 @@ from ..outputs import LuxManager, LuxFilmDisplay
 from ..outputs import LuxLog
 from ..outputs.pure_api import LUXRENDER_VERSION
 
-
 # Exporter Property Groups need to be imported to ensure initialisation
 from ..properties import (
-	accelerator, camera, engine, filter, integrator, lamp, material,
-	mesh, object as prop_object, sampler, texture, world
+	accelerator, camera, engine, filter, integrator, ior_data, lamp, lampspectrum_data,
+	material, mesh, object as prop_object, sampler, texture, world
 )
-
 
 # Exporter Interface Panels need to be imported to ensure initialisation
 from ..ui import (
@@ -68,9 +66,9 @@ from ..ui.materials import (
 
 from ..ui.textures import (
 	main, band, bilerp, blackbody, brick, cauchy, constant, checkerboard, dots,
-	equalenergy, fbm, gaussian, harlequin, imagemap, lampspectrum, luxpop,
-	marble, mix, multimix, sellmeier, scale, sopra, uv, uvmask, windy, wrinkled,
-	mapping, tabulateddata, transform
+	equalenergy, fbm, gaussian, harlequin, imagemap, lampspectrum,
+	luxpop, marble, mix, multimix, sellmeier, scale, sopra, uv, uvmask, windy,
+	wrinkled, mapping, tabulateddata, transform
 )
 
 # Exporter Operators need to be imported to ensure initialisation
@@ -257,7 +255,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			# Dump to file in temp dir for debugging
 			from ..outputs.file_api import Custom_Context as lxs_writer
 			preview_context = lxs_writer(scene.name)
-			preview_context.set_filename(scene, 'luxblend25-preview', LXS=True, LXM=False, LXO=False)
+			preview_context.set_filename(scene, 'luxblend25-preview', LXS=True, LXM=False, LXO=False, LXV=False)
 			LM.lux_context = preview_context
 		else:
 			preview_context = LM.lux_context

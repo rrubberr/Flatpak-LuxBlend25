@@ -36,3 +36,19 @@ class ui_texture_cauchy(luxrender_texture_base):
 	display_property_groups = [
 		( ('texture', 'luxrender_texture'), 'luxrender_tex_cauchy' )
 	]
+
+	def draw_ior_menu(self, context):
+		"""
+		This is a draw callback from property_group_renderer, due
+		to ef_callback item in luxrender_tex_<tex>.properties
+		"""
+		
+		lmg = context.texture.luxrender_texture.luxrender_tex_cauchy
+		
+		if lmg.ior == lmg.ior_presetvalue:
+			menu_text = lmg.ior_presetstring
+		else:
+			menu_text = '-- Choose preset --'
+		
+		cl=self.layout.column(align=True)
+		cl.menu('LUXRENDER_MT_ior_presets', text=menu_text)

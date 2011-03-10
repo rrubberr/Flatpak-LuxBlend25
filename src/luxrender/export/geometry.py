@@ -548,6 +548,8 @@ class GeometryExporter(object):
 		
 		return mesh_definitions
 	
+	is_preview = False
+	
 	def allow_instancing(self, obj):
 		# Some situations require full geometry export
 		if self.visibility_scene.luxrender_engine.renderer == 'hybrid':
@@ -572,7 +574,7 @@ class GeometryExporter(object):
 			#if OBJECT_ANALYSIS: print(' -> INSTANCING == %s'%instance)
 			return instance
 		else:
-			return True
+			return not self.is_preview
 	
 	def exportShapeDefinition(self, obj, mesh_definition):
 		"""

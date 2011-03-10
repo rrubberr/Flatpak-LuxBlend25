@@ -134,34 +134,101 @@ TC_backface_Ka			= ColorTextureParameter('backface_Ka', 'Backface Absorption col
 TC_backface_Kd			= ColorTextureParameter('backface_Kd', 'Backface Diffuse color',	default=(0.64,0.64,0.64) )
 TC_backface_Ks			= ColorTextureParameter('backface_Ks', 'Backface Specular color',	default=(0.25,0.25,0.25) )
 
-def mat_list():
-	mat_list = [
-		('carpaint', 'Car Paint', 'carpaint'),
-		('glass', 'Glass', 'glass'),
-		('glass2', 'Glass2', 'glass2'),
-		('roughglass','Rough Glass','roughglass'),
-		('glossy','Glossy','glossy'),
-		('glossy_lossy','Glossy (Lossy)','glossy_lossy'),
-		('matte','Matte','matte'),
-		('mattetranslucent','Matte Translucent','mattetranslucent'),
-		('metal','Metal','metal'),
-		('mirror','Mirror','mirror'),
-		('mix','Mix','mix'),
-		('null','Null','null'),
-		('shinymetal','Shiny Metal','shinymetal'),
-	]
+mat_names = [
 	
-	if LUXRENDER_VERSION >= '0.7.1':
-		mat_list += [
-			('velvet', 'Velvet', 'velvet'),
-			('glossytranslucent', 'Glossy Translucent', 'glossytranslucent'),
-			('scatter', 'Scatter', 'scatter'),
-		]
+	# Categories are disabled for now, doesn't seem worth it
+	# and there's no agreeable correct way to do it
+	#('Matte', (
+		('matte','Matte'),
+		('mattetranslucent','Matte Translucent'),
+	#)),
 	
-	mat_list.sort()
+	#('Glossy', (
+		('glossy','Glossy'),
+		('glossy_lossy','Glossy (Lossy)'),
+		('glossytranslucent', 'Glossy Translucent'),
+	#)),
 	
-	return mat_list
+	#('Glass', (
+		('glass', 'Glass'),
+		('glass2', 'Glass2'),
+		('roughglass','Rough Glass'),
+		('mirror','Mirror'),
+	#)),
+	
+	#('Metal', (
+		('carpaint', 'Car Paint'),
+		('metal','Metal'),
+		('shinymetal','Shiny Metal'),
+	#)),
+	
+	#('Other', (
+		('velvet', 'Velvet'),
+		('scatter', 'Scatter'),
+		('mix','Mix'),
+		('null','Null'),
+	#))
+]
 
+@LuxRenderAddon.addon_register_class
+class MATERIAL_OT_set_luxrender_type(bpy.types.Operator):
+	bl_idname = 'material.set_luxrender_type'
+	bl_label = 'Set LuxRender material type'
+	
+	mat_name = bpy.props.StringProperty()
+	mat_label = bpy.props.StringProperty()
+	
+	@classmethod
+	def poll(cls, context):
+		return	context.material and \
+				context.material.luxrender_material
+	
+	def execute(self, context):
+		context.material.luxrender_material.type = self.properties.mat_name
+		context.material.luxrender_material.type_label = self.properties.mat_label
+		return {'FINISHED'}
+
+#def draw_generator(operator, m_names):
+#	def draw(self, context):
+#		sl = self.layout
+#		for m_name, m_label in sorted(m_names):
+#			op = sl.operator(operator, text=m_label)
+#			op.mat_name = m_name
+#			op.mat_label = m_label
+#	return draw
+
+@LuxRenderAddon.addon_register_class
+class MATERIAL_MT_luxrender_type(bpy.types.Menu):
+	bl_label = 'Material Type'
+	
+#	NESTED MENU SYSTEM, perhaps for future use
+#	submenus = []
+#	for mat_cat, mat_cat_list in sorted(mat_names):
+#		submenu_idname = 'MATERIAL_MT_luxrender_mat_cat%d'%len(submenus)
+#		submenus.append(
+#			LuxRenderAddon.addon_register_class(type(
+#				submenu_idname,
+#				(bpy.types.Menu,),
+#				{
+#					'bl_idname': submenu_idname,
+#					'bl_label': mat_cat,
+#					'draw': draw_generator('MATERIAL_OT_set_luxrender_type', mat_cat_list)
+#				}
+#			))
+#		)
+#	def draw(self, context):
+#		sl = self.layout
+#		for sm in self.submenus:
+#			sl.menu(sm.bl_idname)
+	
+	# Flat-list menu system
+	def draw(self, context):
+		sl = self.layout
+		for m_name, m_label in sorted(mat_names):
+			op = sl.operator('MATERIAL_OT_set_luxrender_type', text=m_label)
+			op.mat_name = m_name
+			op.mat_label = m_label
+	
 @LuxRenderAddon.addon_register_class
 class luxrender_material(declarative_property_group):
 	'''
@@ -171,7 +238,7 @@ class luxrender_material(declarative_property_group):
 	ef_attach_to = ['Material']
 	
 	controls = [
-		'type',
+		# Type select Menu is drawn manually
 		'Interior',
 		'Exterior'
 	] + \
@@ -181,14 +248,19 @@ class luxrender_material(declarative_property_group):
 	visibility = dict_merge({}, TF_bumpmap.visibility, TC_Sc.visibility)
 	
 	properties = [
-		# Material Type Select
+		# The following two items are set by the preset menu and operator.
 		{
-			'type': 'enum',
+			'attr': 'type_label',
+			'name': 'LuxRender Type',
+			'type': 'string',
+			'default': 'Matte',
+			'save_in_preset': True
+		},
+		{
+			'type': 'string',
 			'attr': 'type',
 			'name': 'Type',
-			'description': 'LuxRender material type',
 			'default': 'matte',
-			'items': mat_list(),
 			'save_in_preset': True
 		},
 	] + \
@@ -215,7 +287,7 @@ class luxrender_material(declarative_property_group):
 	def reset(self):
 		super().reset()
 		# Also reset sub-property groups
-		for a,b,c in mat_list():
+		for a,b in mat_names:
 			getattr(self, 'luxrender_mat_%s'%a).reset()
 	
 	def set_master_color(self, blender_material):
@@ -664,6 +736,9 @@ class luxrender_mat_glass(declarative_property_group):
 		TF_cauchyb.controls + \
 		TF_film.controls + \
 		TF_filmindex.controls + \
+	[
+		'draw_ior_menu'
+	] + \
 		TF_index.controls + \
 		TC_Kr.controls + \
 		TC_Kt.controls
@@ -678,6 +753,11 @@ class luxrender_mat_glass(declarative_property_group):
 	)
 	
 	properties = [
+		{
+			'type': 'ef_callback',
+			'attr': 'draw_ior_menu',
+			'method': 'draw_ior_menu',
+		},
 		{
 			'type': 'bool',
 			'attr': 'architectural',
@@ -750,6 +830,9 @@ class luxrender_mat_roughglass(declarative_property_group):
 	controls = [
 	] + \
 		TF_cauchyb.controls + \
+	[
+		'draw_ior_menu',
+	] + \
 		TF_index.controls + \
 		TC_Kr.controls + \
 		TC_Kt.controls + \
@@ -766,6 +849,12 @@ class luxrender_mat_roughglass(declarative_property_group):
 	)
 	
 	properties = [
+		{
+			'type': 'ef_callback',
+			'attr': 'draw_ior_menu',
+			'method': 'draw_ior_menu',
+		},
+		
 	] + \
 		TF_cauchyb.properties + \
 		TF_index.properties + \
@@ -797,7 +886,8 @@ class luxrender_mat_glossy(declarative_property_group):
 		TF_d.controls + \
 		TC_Ka.controls + \
 	[
-		'useior'
+		'useior',
+		'draw_ior_menu',
 	] + \
 		TF_index.controls + \
 		TC_Ks.controls + \
@@ -806,6 +896,9 @@ class luxrender_mat_glossy(declarative_property_group):
 	
 	
 	visibility = dict_merge(
+		{
+			'draw_ior_menu': { 'useior': True }
+		},
 		TF_d.visibility,
 		TF_index.visibility,
 		TC_Ka.visibility,
@@ -824,6 +917,11 @@ class luxrender_mat_glossy(declarative_property_group):
 	visibility = texture_append_visibility(visibility, TF_alpha, { 'transparent': True, 'alpha_source': 'separate' })
 	
 	properties = [
+		{
+			'type': 'ef_callback',
+			'attr': 'draw_ior_menu',
+			'method': 'draw_ior_menu',
+		},
 		{
 			'type': 'bool',
 			'attr': 'multibounce',
@@ -883,7 +981,8 @@ class luxrender_mat_glossy_lossy(declarative_property_group):
 		TF_d.controls + \
 		TC_Ka.controls + \
 	[
-		'useior'
+		'useior',
+		'draw_ior_menu',
 	] + \
 		TF_index.controls + \
 		TC_Ks.controls + \
@@ -891,6 +990,9 @@ class luxrender_mat_glossy_lossy(declarative_property_group):
 		TF_vroughness.controls
 	
 	visibility = dict_merge(
+		{
+			'draw_ior_menu': { 'useior': True }
+		},
 		TF_d.visibility,
 		TF_index.visibility,
 		TC_Ka.visibility,
@@ -904,6 +1006,11 @@ class luxrender_mat_glossy_lossy(declarative_property_group):
 	visibility = texture_append_visibility(visibility, TF_index, { 'useior': True })
 	
 	properties = [
+		{
+			'type': 'ef_callback',
+			'attr': 'draw_ior_menu',
+			'method': 'draw_ior_menu',
+		},
 		{
 			'type': 'bool',
 			'attr': 'useior',
@@ -1022,7 +1129,8 @@ class luxrender_mat_glossytranslucent(declarative_property_group):
 		TF_d.controls + \
 		TC_Ka.controls + \
 	[
-		'useior'
+		'useior',
+		'draw_ior_menu',
 	] + \
 		TF_index.controls + \
 		TC_Ks.controls + \
@@ -1060,6 +1168,7 @@ class luxrender_mat_glossytranslucent(declarative_property_group):
 		TF_backface_uroughness.visibility,
 		TF_backface_vroughness.visibility,
 		{
+			'draw_ior_menu':			{ 'useior': True },
 			'backface_multibounce':	{ 'two_sided': True },
 			'bf_useior': 			{ 'two_sided': True }
 		}
@@ -1076,6 +1185,11 @@ class luxrender_mat_glossytranslucent(declarative_property_group):
 	visibility = texture_append_visibility(visibility, TF_backface_index,		{ 'two_sided': True, 'bf_useior': True  })
 	
 	properties = [
+		{
+			'type': 'ef_callback',
+			'attr': 'draw_ior_menu',
+			'method': 'draw_ior_menu',
+		},
 		{
 			'type': 'bool',
 			'attr': 'multibounce',

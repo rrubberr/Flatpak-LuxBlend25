@@ -33,7 +33,6 @@ from extensions_framework import util as efutil
 from extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 
 from .. import LuxRenderAddon
-from ..properties.lampspectrum_data import lampspectrum_list
 from ..export import ParamSet, get_worldscale
 from ..export.materials import add_texture_parameter, convert_texture
 from ..outputs import LuxManager
@@ -336,6 +335,20 @@ class FloatTextureParameter(TextureParameterBase):
 				'save_in_preset': True
 			},
 			{
+				'attr': '%s_presetvalue' % self.attr,
+				'type': 'float',
+				'subtype': self.sub_type,
+				'default': self.default,
+				'save_in_preset': True
+			},
+			{
+				'attr': '%s_presetstring' % self.attr,
+				'type': 'string',
+				'default': '-- Choose preset --',
+				'save_in_preset': True
+			},
+			
+			{
 				'attr': '%s_floattexturename' % self.attr,
 				'type': 'string',
 				'name': '%s_floattexturename' % self.attr,
@@ -463,6 +476,18 @@ class FresnelTextureParameter(TextureParameterBase):
 				'save_in_preset': True
 			},
 			{
+				'attr': '%s_presetvalue' % self.attr,
+				'type': 'float',
+				'default': self.default,
+				'save_in_preset': True
+			},
+			{
+				'attr': '%s_presetstring' % self.attr,
+				'type': 'string',
+				'default': '-- Choose preset --',
+				'save_in_preset': True
+			},
+			{
 				'attr': '%s_fresneltexturename' % self.attr,
 				'type': 'string',
 				'name': '%s_fresneltexturename' % self.attr,
@@ -498,6 +523,103 @@ class FresnelTextureParameter(TextureParameterBase):
 #------------------------------------------------------------------------------
 # The main luxrender_texture property group
 #------------------------------------------------------------------------------ 
+
+tex_names = (
+	('Blender Textures',
+	(
+		('BLENDER', 'Use Blender Texture'),
+	)),
+	
+	('Lux Textures',
+	(
+		('band', 'Band'),
+		('bilerp', 'Bilerp'),
+		('brick', 'Brick'),
+		('checkerboard', 'Checkerboard'),
+		('dots', 'Dots'),
+		('fbm', 'FBM'),
+		('harlequin', 'Harlequin'),
+		('imagemap', 'Image Map'),
+		('marble', 'Marble'),
+		('mix', 'Mix'),
+		('multimix', 'Multi mix'),
+		('scale', 'Scale'),
+		('uv', 'UV'),
+		('uvmask', 'UV mask'),
+		('windy', 'Windy'),
+		('wrinkled', 'Wrinkled'),
+	)),
+	
+	('Emission & Spectrum Textures',
+	(
+		('blackbody','Blackbody'),
+		('equalenergy', 'Equalenergy'),
+		('lampspectrum', 'Lamp spectrum'),
+		('gaussian', 'Gaussian'),
+		('tabulateddata', 'Tabulated data'),
+	)),
+	
+	('Fresnel Textures',
+	(
+		('constant', 'Constant'),
+		('cauchy', 'Cauchy'),
+		('sellmeier', 'Sellmeier'),
+		('sopra', 'Sopra'),
+		('luxpop', 'Luxpop'),
+	)),
+)
+
+@LuxRenderAddon.addon_register_class
+class TEXTURE_OT_set_luxrender_type(bpy.types.Operator):
+	bl_idname = 'texture.set_luxrender_type'
+	bl_label = 'Set LuxRender texture type'
+	
+	tex_name = bpy.props.StringProperty()
+	tex_label = bpy.props.StringProperty()
+	
+	@classmethod
+	def poll(cls, context):
+		return	context.texture and \
+				context.texture.luxrender_texture
+	
+	def execute(self, context):
+		context.texture.luxrender_texture.type = self.properties.tex_name
+		context.texture.luxrender_texture.type_label = self.properties.tex_label
+		return {'FINISHED'}
+
+def draw_generator(operator, m_names):
+	def draw(self, context):
+		sl = self.layout
+		for m_name, m_label in m_names:
+			op = sl.operator(operator, text=m_label)
+			op.tex_name = m_name
+			op.tex_label = m_label
+	return draw
+
+@LuxRenderAddon.addon_register_class
+class TEXTURE_MT_luxrender_type(bpy.types.Menu):
+	bl_label = 'Texture Type'
+	submenus = []
+	
+	def draw(self, context):
+		sl = self.layout
+		for sm in self.submenus:
+			sl.menu(sm.bl_idname)
+	
+	for tex_cat, tex_cat_list in tex_names:
+		submenu_idname = 'TEXTURE_MT_luxrender_tex_cat%d'%len(submenus)
+		submenus.append(
+			LuxRenderAddon.addon_register_class(type(
+				submenu_idname,
+				(bpy.types.Menu,),
+				{
+					'bl_idname': submenu_idname,
+					'bl_label': tex_cat,
+					'draw': draw_generator('TEXTURE_OT_set_luxrender_type', tex_cat_list)
+				}
+			))
+		)
+
 @LuxRenderAddon.addon_register_class
 class luxrender_texture(declarative_property_group):
 	'''
@@ -507,7 +629,7 @@ class luxrender_texture(declarative_property_group):
 	ef_attach_to = ['Texture']
 	
 	controls = [
-		'type'
+		# Preset menu is drawn manually in the ui class
 	]
 	
 	visibility = {}
@@ -518,44 +640,20 @@ class luxrender_texture(declarative_property_group):
 			'type': 'bool',
 			'default': False,
 		},
+		
+		# The following two items are set by the preset menu and operator.
+		{
+			'attr': 'type_label',
+			'name': 'LuxRender Type',
+			'type': 'string',
+			'default': 'Use Blender Texture',
+			'save_in_preset': True
+		},
 		{
 			'attr': 'type',
 			'name': 'LuxRender Type',
-			'type': 'enum',
-			'items': (
-				('', 'Blender Textures', ''),
-				('BLENDER', 'Use Blender Texture', 'BLENDER'),
-				('', 'Lux Textures', ''),
-				('band', 'band', 'band'),
-				('bilerp', 'bilerp', 'bilerp'),
-				('brick', 'brick', 'brick'),
-				('checkerboard', 'checkerboard', 'checkerboard'),
-				('dots', 'dots', 'dots'),
-				('fbm', 'fbm', 'fbm'),
-				#('harlequin', 'harlequin', 'harlequin'),
-				('imagemap', 'imagemap', 'imagemap'),
-				('marble', 'marble', 'marble'),
-				('mix', 'mix', 'mix'),
-				('multimix', 'multimix', 'multimix'),
-				('scale', 'scale', 'scale'),
-				('uv', 'uv', 'uv'),
-				('uvmask', 'uvmask', 'uvmask'),
-				('windy', 'windy', 'windy'),
-				('wrinkled', 'wrinkled', 'wrinkled'),
-				('', 'Emission & Spectrum Textures', ''),
-				('blackbody','blackbody','blackbody'),
-				('equalenergy', 'equalenergy', 'equalenergy'),
-				('lampspectrum', 'lampspectrum', 'lampspectrum'),
-				('gaussian', 'gaussian', 'gaussian'),
-				('tabulateddata', 'tabulateddata', 'tabulateddata'),
-				('', 'Fresnel Textures', ''),
-				('constant', 'constant', 'constant'),
-				('cauchy', 'cauchy', 'cauchy'),
-				('sellmeier', 'sellmeier', 'sellmeier'),
-				('sopra', 'sopra', 'sopra'),
-				('luxpop', 'luxpop', 'luxpop'),
-			),
-			#'use_menu': True,
+			'type': 'string',
+			'default': 'BLENDER',
 			'save_in_preset': True
 		},
 	]
@@ -807,7 +905,6 @@ class luxrender_tex_bilerp(declarative_property_group):
 			'default': 1.0,
 			'save_in_preset': True
 		},
-		
 		{
 			'attr': 'v00_c',
 			'type': 'float_vector',
@@ -1075,16 +1172,23 @@ class luxrender_tex_cauchy(declarative_property_group):
 	
 	controls = [
 		'use_index',
+		'draw_ior_menu',
 		'a', 'ior',
 		'b'
 	]
 	
 	visibility = {
 		'a':	{ 'use_index': False },
+		'draw_ior_menu': { 'use_index': True },
 		'ior':	{ 'use_index': True },
 	}
 	
 	properties = [
+		{
+			'type': 'ef_callback',
+			'attr': 'draw_ior_menu',
+			'method': 'draw_ior_menu',
+		},
 		{
 			'type': 'string',
 			'attr': 'variant',
@@ -1095,6 +1199,18 @@ class luxrender_tex_cauchy(declarative_property_group):
 			'attr': 'use_index',
 			'name': 'Use IOR',
 			'default': True,
+			'save_in_preset': True
+		},
+		{
+			'attr': 'ior_presetvalue',
+			'type': 'float',
+#			'default': self.default,
+			'save_in_preset': True
+		},
+		{
+			'attr': 'ior_presetstring',
+			'type': 'string',
+			'default': '-- Choose preset --',
 			'save_in_preset': True
 		},
 		{
@@ -1611,7 +1727,7 @@ class luxrender_tex_lampspectrum(declarative_property_group):
 	ef_attach_to = ['luxrender_texture']
 	
 	controls = [
-		'preset'
+		# Preset menu is drawn manually in the ui class
 	]
 	
 	visibility = {}
@@ -1622,12 +1738,20 @@ class luxrender_tex_lampspectrum(declarative_property_group):
 			'attr': 'variant',
 			'default': 'color'
 		},
+		
+		# The following two items are set by the preset menu and operator.
 		{
-			'type': 'enum',
+			'type': 'string',
 			'attr': 'preset',
 			'name': 'Name',
-			'items': lampspectrum_list(),
-			'save_in_preset': True
+			'save_in_preset': True,
+		},
+		{
+			'type': 'string',
+			'attr': 'label',
+			'name': 'Name',
+			'default': '-- Choose preset --',
+			'save_in_preset': True,
 		}
 	]
 	

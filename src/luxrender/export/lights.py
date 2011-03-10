@@ -63,7 +63,7 @@ def attr_light(lux_context, light, name, group, type, params, transform=None, po
 	
 	lux_context.lightGroup(group, [])
 	
-	if light.type == 'HEMI':
+	if light.type == 'HEMI' and light.luxrender_lamp.luxrender_lamp_hemi.type == 'infinite':
 		lux_context.scale(-1, 1, 1) # correct worldmap orientation
 	
 	if light.luxrender_lamp.Exterior_volume != '':
@@ -108,7 +108,13 @@ def exportLight(lux_context, ob, matrix, portals = []):
 		return True
 	
 	if light.type == 'HEMI':
-		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, light.luxrender_lamp.luxrender_lamp_hemi.sampling_method, light_params, transform=matrix_to_list(matrix, apply_worldscale=True), portals=portals)
+		hemi_type = light.luxrender_lamp.luxrender_lamp_hemi.type
+		if hemi_type == 'distant':
+			light_params.add_point('from', (0,0,0))
+			light_params.add_point('to', (0,0,-1))
+		else:
+			hemi_type = light.luxrender_lamp.luxrender_lamp_hemi.sampling_method
+		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, hemi_type, light_params, transform=matrix_to_list(matrix, apply_worldscale=True), portals=portals)
 		return True
 	
 	if light.type == 'SPOT':
@@ -197,23 +203,21 @@ def lights(lux_context, geometry_scene, visibility_scene, mesh_definitions):
 	'''
 	
 	have_light = False
-	portal_shapes = []
+	
 	
 	# First gather info about portals
-	for ob in geometry_scene.objects:
-		if ob.type != 'MESH':
-			continue
-		
-		# Export only objects which are enabled for render (in the outliner) and visible on a render layer
-		if not ob.is_visible(visibility_scene) or ob.hide_render:
-			continue
-		
-		# match the mesh data name against the combined mesh-mat name exported
-		# by geometry.iterateScene
-		if ob.data.luxrender_mesh.portal:
-			if mesh_definitions.have(ob.data):
-				mi, mn, ms, mp = mesh_definitions.get(ob.data)
-				portal_shapes.append(mn)
+	portal_shapes = []
+	mesh_def_keys = {}
+	for k in mesh_definitions.cache_items.keys():
+		if not k[1] in mesh_def_keys.keys():
+			mesh_def_keys[k[1]] = []
+		mesh_def_keys[k[1]].append(k)
+	mesh_def_keys_keys = mesh_def_keys.keys()
+	for obdata in mesh_def_keys_keys:
+		# match the mesh data against the keys in mesh_definitions
+		if obdata.luxrender_mesh.portal:
+			for mesh_def_key in mesh_def_keys[obdata]:
+				portal_shapes.append(mesh_definitions.get(mesh_def_key)[0])
 	
 	# Then iterate for lights
 	for ob in geometry_scene.objects:

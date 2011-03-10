@@ -75,7 +75,7 @@ class VolumeDataColorTextureParameter(ColorTextureParameter):
 	#texture_collection = 'textures'
 	def texture_collection_finder(self):
 		def func(s,c):
-			return s
+			return s.world	# Look in the current world object for fresnel textures
 		return func
 	
 	def texture_slot_set_attr(self):
@@ -87,7 +87,7 @@ class VolumeDataFloatTextureParameter(FloatTextureParameter):
 	#texture_collection = 'textures'
 	def texture_collection_finder(self):
 		def func(s,c):
-			return s
+			return s.world	# Look in the current world object for fresnel textures
 		return func
 	
 	def texture_slot_set_attr(self):
@@ -99,7 +99,7 @@ class VolumeDataFresnelTextureParameter(FresnelTextureParameter):
 	#texture_collection = 'textures'
 	def texture_collection_finder(self):
 		def func(s,c):
-			return s
+			return s.world	# Look in the current world object for fresnel textures
 		return func
 	
 	def texture_slot_set_attr(self):
@@ -108,11 +108,11 @@ class VolumeDataFresnelTextureParameter(FresnelTextureParameter):
 		return func2
 
 # Volume related Textures
-TFR_IOR					= VolumeDataFresnelTextureParameter('fresnel', 'IOR',		add_float_value = True, min=0.0, max=25.0, default=1.0)
+TFR_IOR			= VolumeDataFresnelTextureParameter('fresnel', 'IOR',			add_float_value = True, min=0.0, max=25.0, default=1.0)
 
-TC_absorption			= VolumeDataColorTextureParameter('absorption', 'Absorption',		default=(1.0,1.0,1.0))
-TC_sigma_a				= VolumeDataColorTextureParameter('sigma_a', 'Absorption',			default=(1.0,1.0,1.0))
-TC_sigma_s				= VolumeDataColorTextureParameter('sigma_s', 'Scattering',			default=(0.0,0.0,0.0))
+TC_absorption	= VolumeDataColorTextureParameter('absorption', 'Absorption',	default=(1.0,1.0,1.0))
+TC_sigma_a		= VolumeDataColorTextureParameter('sigma_a', 'Absorption',		default=(1.0,1.0,1.0))
+TC_sigma_s		= VolumeDataColorTextureParameter('sigma_s', 'Scattering',		default=(0.0,0.0,0.0))
 
 def volume_types():
 	v_types =  [
@@ -138,6 +138,9 @@ class luxrender_volume_data(declarative_property_group):
 	
 	controls = [
 		'type',
+	] + \
+	[
+		'draw_ior_menu',
 	] + \
 	TFR_IOR.controls + \
 	TC_absorption.controls + \
@@ -168,6 +171,11 @@ class luxrender_volume_data(declarative_property_group):
 	visibility = texture_append_visibility(visibility, TC_sigma_s, { 'type': 'homogeneous' })
 	
 	properties = [
+		{
+			'type': 'ef_callback',
+			'attr': 'draw_ior_menu',
+			'method': 'draw_ior_menu',
+		},
 		{
 			'type': 'enum',
 			'attr': 'type',
@@ -213,8 +221,8 @@ class luxrender_volume_data(declarative_property_group):
 			'name': 'Scattering scale factor',
 			'description': 'Scattering colour will be multiplied by this value',
 			'default': 1.0,
-			'min': 0.00001,
-			'soft_min': 0.00001,
+			'min': 0.0,
+			'soft_min': 0.0,
 			'max': 10000.0,
 			'soft_max': 10000.0,
 			'precision': 6,
