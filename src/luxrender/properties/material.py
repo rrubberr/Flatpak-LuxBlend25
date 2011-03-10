@@ -25,8 +25,6 @@
 # ***** END GPL LICENCE BLOCK *****
 import bpy
 
-from copy import deepcopy
-
 from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil
 
@@ -36,6 +34,7 @@ from ..export import ParamSet
 from ..export.materials import ExportedMaterials, ExportedTextures, get_texture_from_scene
 from ..outputs import LuxManager, LuxLog
 from ..outputs.pure_api import LUXRENDER_VERSION
+from ..util import dict_merge
 
 def MaterialParameter(attr, name, property_group):
 	return [
@@ -77,8 +76,6 @@ def VolumeParameter(attr, name):
 		},
 	]
 
-
-
 # TODO: add override props to *TextureParameter instead of using these sub-types
 
 class SubGroupFloatTextureParameter(FloatTextureParameter):
@@ -86,6 +83,14 @@ class SubGroupFloatTextureParameter(FloatTextureParameter):
 		# Looks in a different location than other FloatTextureParameters
 		return lambda s,c: c.luxrender_material
 
+def texture_append_visibility(vis_main, textureparam_object, vis_append):
+	for prop in textureparam_object.properties:
+		if 'attr' in prop.keys():
+			if not prop['attr'] in vis_main.keys():
+				vis_main[prop['attr']] = {}
+			for vk, vi in vis_append.items():
+				vis_main[prop['attr']][vk] = vi
+	return vis_main
 
 class SubGroupColorTextureParameter(ColorTextureParameter):
 	def texture_slot_set_attr(self):
@@ -128,12 +133,6 @@ TC_Kt					= ColorTextureParameter('Kt', 'Transmission color',					default=(1.0,1
 TC_backface_Ka			= ColorTextureParameter('backface_Ka', 'Backface Absorption color',	default=(0.0,0.0,0.0) )
 TC_backface_Kd			= ColorTextureParameter('backface_Kd', 'Backface Diffuse color',	default=(0.64,0.64,0.64) )
 TC_backface_Ks			= ColorTextureParameter('backface_Ks', 'Backface Specular color',	default=(0.25,0.25,0.25) )
-
-def dict_merge(*args):
-	vis = {}
-	for vis_dict in args:
-		vis.update(deepcopy(vis_dict))	# need a deepcopy since nested dicts return references!
-	return vis
 
 def mat_list():
 	mat_list = [
@@ -198,6 +197,40 @@ class luxrender_material(declarative_property_group):
 		VolumeParameter('Interior', 'Interior') + \
 		VolumeParameter('Exterior', 'Exterior')
 	
+	# Decide which material property sets the viewport object
+	# colour for each material type. If the property name is
+	# not set, then the color won't be changed.
+	master_color_map = {
+		'carpaint': 'Kd',
+		'glass': 'Kt',
+		'roughglass': 'Kt',
+		'glossy': 'Kd',
+		'glossy_lossy': 'Kd',
+		'matte': 'Kd',
+		'mattetranslucent': 'Kt',
+		'shinymetal': 'Ks',
+		'mirror': 'Kr',
+	}
+	
+	def reset(self):
+		super().reset()
+		# Also reset sub-property groups
+		for a,b,c in mat_list():
+			getattr(self, 'luxrender_mat_%s'%a).reset()
+	
+	def set_master_color(self, blender_material):
+		'''
+		This little function will set the blender material colour to the value
+		given in the material panel.
+		CAVEAT: you can only call this method in an operator context.
+		'''
+		
+		if self.type in self.master_color_map.keys():
+			submat = getattr(self, 'luxrender_mat_%s'%self.type)
+			submat_col = getattr(submat, '%s_color' % self.master_color_map[self.type])
+			if blender_material.diffuse_color != submat_col:
+				blender_material.diffuse_color = submat_col
+	
 	def export(self, lux_context, material, mode='indirect'):
 		if not (mode=='indirect' and material.name in ExportedMaterials.exported_material_names):
 			if self.type == 'mix':
@@ -231,8 +264,8 @@ class luxrender_material(declarative_property_group):
 				mat_type = self.type
 			else: # export mix for transparency
 				material_params.add_string('type', self.type)
-				ExportedMaterials.makeNamedMaterial(material.name + '_null', ParamSet().add_string('type', 'null'))
-				ExportedMaterials.makeNamedMaterial(material.name + '_base', material_params)
+				ExportedMaterials.makeNamedMaterial(lux_context, material.name + '_null', ParamSet().add_string('type', 'null'))
+				ExportedMaterials.makeNamedMaterial(lux_context, material.name + '_base', material_params)
 				ExportedMaterials.export_new_named(lux_context)
 				
 				# replace material params with mix
@@ -247,7 +280,7 @@ class luxrender_material(declarative_property_group):
 				
 			if mode == 'indirect':
 				material_params.add_string('type', mat_type)
-				ExportedMaterials.makeNamedMaterial(material.name, material_params)
+				ExportedMaterials.makeNamedMaterial(lux_context, material.name, material_params)
 				ExportedMaterials.export_new_named(lux_context)
 			elif mode == 'direct':
 				lux_context.material(mat_type, material_params)
@@ -352,36 +385,12 @@ class luxrender_mat_compositing(declarative_property_group):
 		
 		return compo_params
 
-
-def texture_append_visibility(vis_main, textureparam_object, vis_append):
-	for prop in textureparam_object.properties:
-		if 'attr' in prop.keys():
-			if not prop['attr'] in vis_main.keys():
-				vis_main[prop['attr']] = {}
-			for vk, vi in vis_append.items():
-				vis_main[prop['attr']][vk] = vi
-	return vis_main
-
 class TransparencyFloatTextureParameter(FloatTextureParameter):
 	def texture_slot_set_attr(self):
 		# Looks in a different location than other ColorTextureParameters
 		return lambda s,c: c.luxrender_transparency
 
 TF_alpha = TransparencyFloatTextureParameter('alpha', 'Alpha', add_float_value=False, default=1.0, min=0.0, max=1.0 )
-
-def transparency_visibility():
-	t_vis = dict_merge(
-		{
-			'alpha_source': { 'transparent': True },
-			'alpha_value': { 'transparent': True, 'alpha_source': 'constant' },
-			'inverse': { 'transparent': True, 'alpha_source': 'texture' },
-		},
-		TF_alpha.visibility
-	)
-	
-	t_vis = texture_append_visibility(t_vis, TF_alpha, { 'transparent': True, 'alpha_source': 'texture' })
-	
-	return t_vis
 
 @LuxRenderAddon.addon_register_class
 class luxrender_transparency(declarative_property_group):
@@ -400,11 +409,16 @@ class luxrender_transparency(declarative_property_group):
 	[
 		'inverse',
 	]
-
-
 	
-	visibility = transparency_visibility()
-
+	visibility = dict_merge(
+		{
+			'alpha_source': { 'transparent': True },
+			'alpha_value': { 'transparent': True, 'alpha_source': 'constant' },
+			'inverse': { 'transparent': True, 'alpha_source': 'texture' },
+		},
+		TF_alpha.visibility
+	)
+	visibility = texture_append_visibility(visibility, TF_alpha, { 'transparent': True, 'alpha_source': 'texture' })
 	
 	properties = [
 		{
@@ -486,6 +500,7 @@ class luxrender_transparency(declarative_property_group):
 				alpha_amount = alpha_amount + '_alpha'
 				
 				ExportedTextures.texture(
+					lux_context,
 					alpha_amount,
 					'float',
 					'mix',
@@ -524,6 +539,7 @@ class luxrender_transparency(declarative_property_group):
 					alpha_amount = texture_name + '_alpha'
 					
 					ExportedTextures.texture(
+						lux_context,
 						alpha_amount,
 						'float',
 						'imagemap',
@@ -536,38 +552,6 @@ class luxrender_transparency(declarative_property_group):
 			return None, None
 		
 		return alpha_type, alpha_amount
-
-
-def carpaint_visibility():
-	cp_vis = dict_merge(
-		TF_d.visibility,
-		TC_Ka.visibility,
-		TC_Kd.visibility,
-		TC_Ks1.visibility,
-		TC_Ks2.visibility,
-		TC_Ks3.visibility,
-		TF_M1.visibility,
-		TF_M2.visibility,
-		TF_M3.visibility,
-		TF_R1.visibility,
-		TF_R2.visibility,
-		TF_R3.visibility
-	)
-	
-	vis_append = { 'name': '-' }
-	cp_vis = texture_append_visibility(cp_vis, TC_Kd, vis_append)
-	cp_vis = texture_append_visibility(cp_vis, TC_Ks1, vis_append)
-	cp_vis = texture_append_visibility(cp_vis, TC_Ks2, vis_append)
-	cp_vis = texture_append_visibility(cp_vis, TC_Ks3, vis_append)
-	
-	cp_vis = texture_append_visibility(cp_vis, TF_M1, vis_append)
-	cp_vis = texture_append_visibility(cp_vis, TF_M2, vis_append)
-	cp_vis = texture_append_visibility(cp_vis, TF_M3, vis_append)
-	cp_vis = texture_append_visibility(cp_vis, TF_R1, vis_append)
-	cp_vis = texture_append_visibility(cp_vis, TF_R2, vis_append)
-	cp_vis = texture_append_visibility(cp_vis, TF_R3, vis_append)
-	
-	return cp_vis
 
 @LuxRenderAddon.addon_register_class
 class luxrender_mat_carpaint(declarative_property_group):
@@ -589,7 +573,31 @@ class luxrender_mat_carpaint(declarative_property_group):
 		TF_R2.controls + \
 		TF_R3.controls
 	
-	visibility = carpaint_visibility()
+	visibility = dict_merge(
+		TF_d.visibility,
+		TC_Ka.visibility,
+		TC_Kd.visibility,
+		TC_Ks1.visibility,
+		TC_Ks2.visibility,
+		TC_Ks3.visibility,
+		TF_M1.visibility,
+		TF_M2.visibility,
+		TF_M3.visibility,
+		TF_R1.visibility,
+		TF_R2.visibility,
+		TF_R3.visibility
+	)
+	
+	visibility = texture_append_visibility(visibility, TC_Kd, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TC_Ks1, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TC_Ks2, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TC_Ks3, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TF_M1, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TF_M2, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TF_M3, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TF_R1, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TF_R2, { 'name': '-' })
+	visibility = texture_append_visibility(visibility, TF_R3, { 'name': '-' })
 	
 	properties = [
 		{
@@ -777,28 +785,6 @@ class luxrender_mat_roughglass(declarative_property_group):
 		roughglass_params.update( TF_vroughness.get_paramset(self) )
 		
 		return roughglass_params
-   
-
-def glossy_visibility():
-	g_vis = dict_merge(
-		TF_d.visibility,
-		TF_index.visibility,
-		TC_Ka.visibility,
-		TC_Kd.visibility,
-		TC_Ks.visibility,
-		TF_uroughness.visibility,
-		TF_vroughness.visibility,
-		{
-			'alpha_source': { 'transparent': True }
-		},
-		TF_alpha.visibility
-	)
-	
-	g_vis = texture_append_visibility(g_vis, TC_Ks, { 'useior': False })
-	g_vis = texture_append_visibility(g_vis, TF_index, { 'useior': True })
-	g_vis = texture_append_visibility(g_vis, TF_alpha, { 'transparent': True, 'alpha_source': 'separate' })
-	
-	return g_vis
 
 @LuxRenderAddon.addon_register_class
 class luxrender_mat_glossy(declarative_property_group):
@@ -819,7 +805,23 @@ class luxrender_mat_glossy(declarative_property_group):
 		TF_vroughness.controls
 	
 	
-	visibility = glossy_visibility()
+	visibility = dict_merge(
+		TF_d.visibility,
+		TF_index.visibility,
+		TC_Ka.visibility,
+		TC_Kd.visibility,
+		TC_Ks.visibility,
+		TF_uroughness.visibility,
+		TF_vroughness.visibility,
+		{
+			'alpha_source': { 'transparent': True }
+		},
+		TF_alpha.visibility
+	)
+	
+	visibility = texture_append_visibility(visibility, TC_Ks, { 'useior': False })
+	visibility = texture_append_visibility(visibility, TF_index, { 'useior': True })
+	visibility = texture_append_visibility(visibility, TF_alpha, { 'transparent': True, 'alpha_source': 'separate' })
 	
 	properties = [
 		{
@@ -871,22 +873,6 @@ class luxrender_mat_glossy(declarative_property_group):
 		
 		return glossy_params
 
-def glossy_lossy_visibility():
-	gl_vis = dict_merge(
-		TF_d.visibility,
-		TF_index.visibility,
-		TC_Ka.visibility,
-		TC_Kd.visibility,
-		TC_Ks.visibility,
-		TF_uroughness.visibility,
-		TF_vroughness.visibility
-	)
-	
-	gl_vis = texture_append_visibility(gl_vis, TC_Ks, { 'useior': False })
-	gl_vis = texture_append_visibility(gl_vis, TF_index, { 'useior': True })
-	
-	return gl_vis
-
 @LuxRenderAddon.addon_register_class
 class luxrender_mat_glossy_lossy(declarative_property_group):
 	ef_attach_to = ['luxrender_material']
@@ -904,7 +890,18 @@ class luxrender_mat_glossy_lossy(declarative_property_group):
 		TF_uroughness.controls + \
 		TF_vroughness.controls
 	
-	visibility = glossy_lossy_visibility()
+	visibility = dict_merge(
+		TF_d.visibility,
+		TF_index.visibility,
+		TC_Ka.visibility,
+		TC_Kd.visibility,
+		TC_Ks.visibility,
+		TF_uroughness.visibility,
+		TF_vroughness.visibility
+	)
+	
+	visibility = texture_append_visibility(visibility, TC_Ks, { 'useior': False })
+	visibility = texture_append_visibility(visibility, TF_index, { 'useior': True })
 	
 	properties = [
 		{
@@ -1013,44 +1010,6 @@ class luxrender_mat_mattetranslucent(declarative_property_group):
 		
 		return mattetranslucent_params
 
-def glossytranslucent_visibility():
-	gt_vis = dict_merge(
-		TC_Kt.visibility,
-		TC_Kd.visibility,
-		TF_d.visibility,
-		TC_Ka.visibility,
-		TF_index.visibility,
-		TC_Ks.visibility,
-		TF_uroughness.visibility,
-		TF_vroughness.visibility,
-		
-		TF_backface_d.visibility,
-		TC_backface_Ka.visibility,
-		TC_backface_Kd.visibility,
-		TF_backface_index.visibility,
-		TC_backface_Ks.visibility,
-		TF_backface_uroughness.visibility,
-		TF_backface_vroughness.visibility,
-		{
-			'backface_multibounce':	{ 'two_sided': True },
-			'bf_useior': 			{ 'two_sided': True }
-		}
-	)
-	
-	gt_vis = texture_append_visibility(gt_vis, TC_Ks,					{ 'useior': False })
-	gt_vis = texture_append_visibility(gt_vis, TF_index,				{ 'useior': True  })
-	
-	gt_vis = texture_append_visibility(gt_vis, TC_backface_Ka,			{ 'two_sided': True })
-	gt_vis = texture_append_visibility(gt_vis, TC_backface_Kd,			{ 'two_sided': True })
-	gt_vis = texture_append_visibility(gt_vis, TF_backface_d,			{ 'two_sided': True })
-	gt_vis = texture_append_visibility(gt_vis, TF_backface_uroughness,	{ 'two_sided': True })
-	gt_vis = texture_append_visibility(gt_vis, TF_backface_vroughness,	{ 'two_sided': True })
-
-	gt_vis = texture_append_visibility(gt_vis, TC_backface_Ks,			{ 'two_sided': True, 'bf_useior': False })
-	gt_vis = texture_append_visibility(gt_vis, TF_backface_index,		{ 'two_sided': True, 'bf_useior': True  })
-	
-	return gt_vis
-
 @LuxRenderAddon.addon_register_class
 class luxrender_mat_glossytranslucent(declarative_property_group):
 	ef_attach_to = ['luxrender_material']
@@ -1083,7 +1042,38 @@ class luxrender_mat_glossytranslucent(declarative_property_group):
 		TF_backface_uroughness.controls + \
 		TF_backface_vroughness.controls
 	
-	visibility = glossytranslucent_visibility()
+	visibility = dict_merge(
+		TC_Kt.visibility,
+		TC_Kd.visibility,
+		TF_d.visibility,
+		TC_Ka.visibility,
+		TF_index.visibility,
+		TC_Ks.visibility,
+		TF_uroughness.visibility,
+		TF_vroughness.visibility,
+		
+		TF_backface_d.visibility,
+		TC_backface_Ka.visibility,
+		TC_backface_Kd.visibility,
+		TF_backface_index.visibility,
+		TC_backface_Ks.visibility,
+		TF_backface_uroughness.visibility,
+		TF_backface_vroughness.visibility,
+		{
+			'backface_multibounce':	{ 'two_sided': True },
+			'bf_useior': 			{ 'two_sided': True }
+		}
+	)
+	
+	visibility = texture_append_visibility(visibility, TC_Ks,					{ 'useior': False })
+	visibility = texture_append_visibility(visibility, TF_index,				{ 'useior': True  })
+	visibility = texture_append_visibility(visibility, TC_backface_Ka,			{ 'two_sided': True })
+	visibility = texture_append_visibility(visibility, TC_backface_Kd,			{ 'two_sided': True })
+	visibility = texture_append_visibility(visibility, TF_backface_d,			{ 'two_sided': True })
+	visibility = texture_append_visibility(visibility, TF_backface_uroughness,	{ 'two_sided': True })
+	visibility = texture_append_visibility(visibility, TF_backface_vroughness,	{ 'two_sided': True })
+	visibility = texture_append_visibility(visibility, TC_backface_Ks,			{ 'two_sided': True, 'bf_useior': False })
+	visibility = texture_append_visibility(visibility, TF_backface_index,		{ 'two_sided': True, 'bf_useior': True  })
 	
 	properties = [
 		{
@@ -1377,14 +1367,9 @@ class luxrender_mat_mix(declarative_property_group):
 class luxrender_mat_null(declarative_property_group):
 	ef_attach_to = ['luxrender_material']
 	
-	controls = [
-	]
-	
-	visibility = {
-	}
-	
-	properties = [
-	]
+	controls = []
+	visibility = {}
+	properties = []
 	
 	def get_paramset(self, material):
 		return ParamSet()

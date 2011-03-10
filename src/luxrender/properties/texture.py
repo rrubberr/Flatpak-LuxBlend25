@@ -30,13 +30,14 @@ import bpy
 
 from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil
-from extensions_framework.validate import Logic_OR as O
+from extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 
 from .. import LuxRenderAddon
 from ..properties.lampspectrum_data import lampspectrum_list
 from ..export import ParamSet, get_worldscale
 from ..export.materials import add_texture_parameter, convert_texture
 from ..outputs import LuxManager
+from ..util import dict_merge
 
 #------------------------------------------------------------------------------ 
 # Texture property group construction helpers
@@ -151,35 +152,6 @@ class ColorTextureParameter(TextureParameterBase):
 		vis.update(self.get_extra_visibility())
 		return vis
 	
-	# Decide which material property sets the viewport object
-	# colour for each material type. If the property name is
-	# not set, then the color won't be changed.
-	master_color_map = {
-		'carpaint': 'Kd',
-		'glass': 'Kt',
-		'roughglass': 'Kt',
-		'glossy': 'Kd',
-		'glossy_lossy': 'Kd',
-		'matte': 'Kd',
-		'mattetranslucent': 'Kt',
-		'shinymetal': 'Ks',
-		'mirror': 'Kr',
-	}
-	
-	def set_master_colour(self, s, c):
-		'''
-		This neat little hack will set the blender material colour to the value
-		given in the material panel via the property's 'draw' lambda function.
-		'''
-		
-		return # Disabled due to forbidden RNA write in UI draw methods
-		
-		if c.type in self.master_color_map.keys() and self.attr == self.master_color_map[c.type]:
-			submat = getattr(c, 'luxrender_mat_%s'%c.type)
-			submat_col = getattr(submat, self.attr+'_color')
-			if s.material.diffuse_color != submat_col:
-				s.material.diffuse_color = submat_col
-	
 	def get_properties(self):
 		return [
 			{
@@ -221,7 +193,6 @@ class ColorTextureParameter(TextureParameterBase):
 				'max': self.max,
 				'soft_max': self.max,
 				'subtype': 'COLOR',
-				'draw': lambda s,c: self.set_master_colour(s, c),
 				'save_in_preset': True
 			},
 			{
@@ -538,12 +509,12 @@ class luxrender_texture(declarative_property_group):
 	controls = [
 		'type'
 	]
-	visibility = {
-		#'type': { 'use_lux_texture': True }
-	}
+	
+	visibility = {}
+	
 	properties = [
 		{
-			'attr': 'use_lux_texture',
+			'attr': 'auto_generated',
 			'type': 'bool',
 			'default': False,
 		},
@@ -551,22 +522,24 @@ class luxrender_texture(declarative_property_group):
 			'attr': 'type',
 			'name': 'LuxRender Type',
 			'type': 'enum',
-			'items': [
-				#('none', 'none', 'none'),
+			'items': (
 				('', 'Blender Textures', ''),
 				('BLENDER', 'Use Blender Texture', 'BLENDER'),
 				('', 'Lux Textures', ''),
+				('band', 'band', 'band'),
 				('bilerp', 'bilerp', 'bilerp'),
 				('brick', 'brick', 'brick'),
 				('checkerboard', 'checkerboard', 'checkerboard'),
 				('dots', 'dots', 'dots'),
 				('fbm', 'fbm', 'fbm'),
-				('harlequin', 'harlequin', 'harlequin'),
+				#('harlequin', 'harlequin', 'harlequin'),
 				('imagemap', 'imagemap', 'imagemap'),
 				('marble', 'marble', 'marble'),
 				('mix', 'mix', 'mix'),
+				('multimix', 'multimix', 'multimix'),
 				('scale', 'scale', 'scale'),
 				('uv', 'uv', 'uv'),
+				('uvmask', 'uvmask', 'uvmask'),
 				('windy', 'windy', 'windy'),
 				('wrinkled', 'wrinkled', 'wrinkled'),
 				('', 'Emission & Spectrum Textures', ''),
@@ -581,7 +554,8 @@ class luxrender_texture(declarative_property_group):
 				('sellmeier', 'sellmeier', 'sellmeier'),
 				('sopra', 'sopra', 'sopra'),
 				('luxpop', 'luxpop', 'luxpop'),
-			],
+			),
+			#'use_menu': True,
 			'save_in_preset': True
 		},
 	]
@@ -629,6 +603,8 @@ TF_tex2			= FloatTextureParameter('tex2',			'tex2',			default=0.0, min=-1e6, max
 TF_amount		= FloatTextureParameter('amount',		'amount',		default=0.5, min=0.0, max=1.0)
 TF_inside		= FloatTextureParameter('inside',		'inside',		default=1.0, min=0.0, max=100.0)
 TF_outside		= FloatTextureParameter('outside',		'outside',		default=0.0, min=0.0, max=100.0)
+TF_innertex		= FloatTextureParameter('innertex',		'innertex',		default=1.0, min=0.0, max=100.0)
+TF_outertex		= FloatTextureParameter('outertex',		'outertex',		default=0.0, min=0.0, max=100.0)
 
 # Color Texture Parameters
 TC_brickmodtex	= ColorTextureParameter('brickmodtex',	'brickmodtex',	default=(1.0,1.0,1.0))
@@ -636,6 +612,135 @@ TC_bricktex		= ColorTextureParameter('bricktex',		'bricktex',		default=(1.0,1.0,
 TC_mortartex	= ColorTextureParameter('mortartex',	'mortartex',	default=(1.0,1.0,1.0))
 TC_tex1			= ColorTextureParameter('tex1',			'tex1',			default=(1.0,1.0,1.0))
 TC_tex2			= ColorTextureParameter('tex2',			'tex2',			default=(0.0,0.0,0.0))
+
+BAND_MAX_TEX = 32
+
+TC_BAND_ARRAY = []
+TF_BAND_ARRAY = []
+for i in range(1, BAND_MAX_TEX+1):
+	TF_BAND_ARRAY.append(
+		FloatTextureParameter('tex%d'%i, 'tex%d'%i, default=0.0, min=-1e6, max=1e6)
+	)
+	TC_BAND_ARRAY.append(
+		ColorTextureParameter('tex%d'%i, 'tex%d'%i, default=(0.0,0.0,0.0))
+	)
+
+@LuxRenderAddon.addon_register_class
+class luxrender_tex_band(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
+	
+	controls = [
+		'variant',
+		'noffsets',
+		[0.9, 'amount_floatvalue', 'amount_usefloattexture'],
+		[0.9, 'amount_floattexture', 'amount_multiplyfloat']
+	]
+	for i in range(1,BAND_MAX_TEX+1):
+		controls.extend([
+			[0.9,['offsetfloat%d'%i,'tex%d_floatvalue'%i],'tex%d_usefloattexture'%i],
+			[0.9,'tex%d_floattexture'%i,'tex%d_multiplyfloat'%i],
+			[0.9,['offsetcolor%d'%i,'tex%d_color'%i],'tex%d_usecolortexture'%i],
+			[0.9,'tex%d_colortexture'%i,'tex%d_multiplycolor'%i],
+		])
+	
+	# Visibility we do manually because of the variant switch
+	visibility = {
+		'amount_floattexture':			{ 'amount_usefloattexture': True },
+		'amount_multiplyfloat':			{ 'amount_usefloattexture': True },
+	}
+	
+	for i in range(1, BAND_MAX_TEX+1):
+		visibility.update({
+			'offsetcolor%d'%i:			{ 'variant': 'color','noffsets': LO({'>=':i}) },
+			'tex%d_color'%i: 			{ 'variant': 'color','noffsets': LO({'>=':i}) },
+			'tex%d_usecolortexture'%i:	{ 'variant': 'color','noffsets': LO({'>=':i}) },
+			'tex%d_colortexture'%i:		{ 'variant': 'color', 'tex%d_usecolortexture'%i: True,'noffsets': LO({'>=':i}) },
+			'tex%d_multiplycolor'%i:	{ 'variant': 'color', 'tex%d_usecolortexture'%i: True,'noffsets': LO({'>=':i}) },
+			
+			'offsetfloat%d'%i:			{ 'variant': 'float','noffsets': LO({'>=':i}) },
+			'tex%d_usefloattexture'%i:	{ 'variant': 'float','noffsets': LO({'>=':i}) },
+			'tex%d_floatvalue'%i:		{ 'variant': 'float','noffsets': LO({'>=':i}) },
+			'tex%d_floattexture'%i:		{ 'variant': 'float', 'tex%d_usefloattexture'%i: True,'noffsets': LO({'>=':i}) },
+			'tex%d_multiplyfloat'%i:	{ 'variant': 'float', 'tex%d_usefloattexture'%i: True,'noffsets': LO({'>=':i}) },
+		})
+	
+	properties = [
+		{
+			'attr': 'variant',
+			'type': 'enum',
+			'name': 'Variant',
+			'items': [
+				('float', 'Float', 'float'),
+				('color', 'Color', 'color'),
+			],
+			'expand': True,
+			'save_in_preset': True
+		},
+		{
+			'attr': 'noffsets',
+			'type': 'int',
+			'name': 'NOffsets',
+			'default': 2,
+			'min': 2,
+			'max': BAND_MAX_TEX,
+			'save_in_preset': True
+		},
+	] + TF_amount.properties
+	
+	for i in range(1, BAND_MAX_TEX+1):
+		properties.extend([
+			{
+					'attr': 'offsetfloat%d'%i,
+					'type': 'float',
+					'name': 'offset%d'%i,
+					'default': 0.0,
+					'precision': 3,
+					'min': 0.0,
+					'max': 1.0,
+					'save_in_preset': True
+				},
+				{
+					'attr': 'offsetcolor%d'%i,
+					'type': 'float',
+					'name': 'offset%d'%i,
+					'default': 0.0,
+					'precision': 3,
+					'min': 0.0,
+					'max': 1.0,
+					'save_in_preset': True
+			}
+		])
+	
+	for prop in TC_BAND_ARRAY:
+		properties.extend( prop.properties )
+	for prop in TF_BAND_ARRAY:
+		properties.extend( prop.properties )
+	del i, prop
+	
+	def get_paramset(self, scene, texture):
+		band_params = ParamSet()
+		
+		if LuxManager.ActiveManager is not None:
+			
+			band_params.update(
+				add_texture_parameter(LuxManager.ActiveManager.lux_context, 'amount', 'float', self)
+			)
+			
+			offsets = []
+			for i in range(1,self.noffsets+1):
+				offsets.append(getattr(self, 'offset%s%d'%(self.variant, i)))
+				
+				band_params.update(
+					add_texture_parameter(LuxManager.ActiveManager.lux_context, 'tex%d'%i, self.variant, self)
+				)
+			
+			# In API mode need to tell Lux how many slots explicity
+			if LuxManager.ActiveManager.lux_context.API_TYPE == 'PURE':
+				band_params.add_integer('noffsets', self.noffsets)
+			
+			band_params.add_float('offsets', offsets)
+		
+		return set(), band_params
 
 @LuxRenderAddon.addon_register_class
 class luxrender_tex_bilerp(declarative_property_group):
@@ -1874,6 +1979,111 @@ class luxrender_tex_mix(declarative_property_group):
 		return set(), mix_params
 
 @LuxRenderAddon.addon_register_class
+class luxrender_tex_multimix(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
+	
+	controls = [
+		'variant',
+		'nslots',
+	]
+	for i in range(1,BAND_MAX_TEX+1):
+		controls.extend([
+			[0.9,['weightfloat%d'%i,'tex%d_floatvalue'%i],'tex%d_usefloattexture'%i],
+			[0.9,'tex%d_floattexture'%i,'tex%d_multiplyfloat'%i],
+			[0.9,['weightcolor%d'%i,'tex%d_color'%i],'tex%d_usecolortexture'%i],
+			[0.9,'tex%d_colortexture'%i,'tex%d_multiplycolor'%i],
+		])
+	
+	# Visibility we do manually because of the variant switch
+	visibility = {}
+	
+	for i in range(1, BAND_MAX_TEX+1):
+		visibility.update({
+			'weightcolor%d'%i:			{ 'variant': 'color','nslots': LO({'>=':i}) },
+			'tex%d_color'%i: 			{ 'variant': 'color','nslots': LO({'>=':i}) },
+			'tex%d_usecolortexture'%i:	{ 'variant': 'color','nslots': LO({'>=':i}) },
+			'tex%d_colortexture'%i:		{ 'variant': 'color','nslots': LO({'>=':i}), 'tex%d_usecolortexture'%i: True },
+			'tex%d_multiplycolor'%i:	{ 'variant': 'color','nslots': LO({'>=':i}), 'tex%d_usecolortexture'%i: True },
+			
+			'weightfloat%d'%i:			{ 'variant': 'float','nslots': LO({'>=':i}) },
+			'tex%d_usefloattexture'%i:	{ 'variant': 'float','nslots': LO({'>=':i}) },
+			'tex%d_floatvalue'%i:		{ 'variant': 'float','nslots': LO({'>=':i}) },
+			'tex%d_floattexture'%i:		{ 'variant': 'float','nslots': LO({'>=':i}), 'tex%d_usefloattexture'%i: True },
+			'tex%d_multiplyfloat'%i:	{ 'variant': 'float','nslots': LO({'>=':i}), 'tex%d_usefloattexture'%i: True },
+		})
+	
+	properties = [
+		{
+			'attr': 'variant',
+			'type': 'enum',
+			'name': 'Variant',
+			'items': [
+				('float', 'Float', 'float'),
+				('color', 'Color', 'color'),
+			],
+			'expand': True,
+			'save_in_preset': True
+		},
+		{
+			'attr': 'nslots',
+			'type': 'int',
+			'name': 'Texture count',
+			'default': 2,
+			'min': 2,
+			'max': BAND_MAX_TEX,
+			'save_in_preset': True
+		},
+	]
+	for i in range(1, BAND_MAX_TEX+1):
+		properties.extend([
+			{
+					'attr': 'weightfloat%d'%i,
+					'type': 'float',
+					'name': 'weight%d'%i,
+					'default': 0.0,
+					'precision': 3,
+					'min': 0.0,
+					'max': 1.0,
+					'save_in_preset': True
+				},
+				{
+					'attr': 'weightcolor%d'%i,
+					'type': 'float',
+					'name': 'weight%d'%i,
+					'default': 0.0,
+					'precision': 3,
+					'min': 0.0,
+					'max': 1.0,
+					'save_in_preset': True
+			}
+		])
+	
+	for prop in TC_BAND_ARRAY:
+		properties.extend( prop.properties )
+	for prop in TF_BAND_ARRAY:
+		properties.extend( prop.properties )
+	
+	def get_paramset(self, scene, texture):
+		mm_params = ParamSet()
+		
+		if LuxManager.ActiveManager is not None:
+			
+			weights = []
+			for i in range(1,self.nslots+1):
+				weights.append(getattr(self, 'weight%s%d'%(self.variant, i)))
+				mm_params.update(
+					add_texture_parameter(LuxManager.ActiveManager.lux_context, 'tex%d'%i, self.variant, self)
+				)
+			
+			# In API mode need to tell Lux how many slots explicity
+			if LuxManager.ActiveManager.lux_context.API_TYPE == 'PURE':
+				mm_params.add_integer('nweights', self.nslots)
+			
+			mm_params.add_float('weights', weights)
+		
+		return set(), mm_params
+
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_sellmeier(declarative_property_group):
 	ef_attach_to = ['luxrender_texture']
 	
@@ -2122,9 +2332,7 @@ class luxrender_tex_transform(declarative_property_group):
 class luxrender_tex_uv(declarative_property_group):
 	ef_attach_to = ['luxrender_texture']
 	
-	controls = [
-		# None
-	]
+	controls = []
 	
 	visibility = {} 
 	
@@ -2142,14 +2350,48 @@ class luxrender_tex_uv(declarative_property_group):
 		return {'2DMAPPING'}, uv_params
 
 @LuxRenderAddon.addon_register_class
+class luxrender_tex_uvmask(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
+	
+	controls = \
+	TF_innertex.controls + \
+	TF_outertex.controls
+	
+	visibility = dict_merge(
+		TF_innertex.visibility,
+		TF_outertex.visibility,
+	)
+	
+	properties = [
+		{
+			'type': 'string',
+			'attr': 'variant',
+			'default': 'float'
+		},
+	] + \
+	TF_innertex.properties + \
+	TF_outertex.properties
+	
+	def get_paramset(self, scene, texture):
+		uvmask_params = ParamSet()
+		
+		if LuxManager.ActiveManager is not None:
+			uvmask_params.update(
+				add_texture_parameter(LuxManager.ActiveManager.lux_context, 'innertex', self.variant, self)
+			)
+			uvmask_params.update(
+				add_texture_parameter(LuxManager.ActiveManager.lux_context, 'outertex', self.variant, self)
+			)
+		
+		return {'2DMAPPING'}, uvmask_params
+
+@LuxRenderAddon.addon_register_class
 class luxrender_tex_windy(declarative_property_group):
 	ef_attach_to = ['luxrender_texture']
 	
-	controls = [
-		# None
-	]
+	controls = []
 	
-	visibility = {} 
+	visibility = {}
 	
 	properties = [
 		{
@@ -2210,4 +2452,3 @@ class luxrender_tex_wrinkled(declarative_property_group):
 									.add_float('roughness', self.roughness)
 		
 		return {'3DMAPPING'}, wrinkled_params
-

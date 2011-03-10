@@ -31,9 +31,9 @@ import extensions_framework.util as efutil
 from extensions_framework.validate import Logic_Operator as LO
 
 from .. import LuxRenderAddon
-from ..properties.material import dict_merge
-from ..properties.texture import ColorTextureParameter
 from ..export import ParamSet
+from ..properties.texture import ColorTextureParameter
+from ..util import dict_merge
 
 def LampVolumeParameter(attr, name):
 	return [
@@ -91,7 +91,6 @@ class luxrender_lamp(declarative_property_group):
 			'description': 'Name of group to put this light in',
 			'default': 'default'
 		},
-		
 		{
 			'type': 'float',
 			'attr': 'importance',
@@ -102,6 +101,13 @@ class luxrender_lamp(declarative_property_group):
 			'soft_min': 0.0,
 			'max': 1e3,
 			'soft_max': 1e3,
+		},
+		{
+			'type': 'string',
+			'subtype': 'FILE_PATH',
+			'attr': 'iesname',
+			'name': 'IES Data',
+			'description': 'Use IES data for this light\'s distribution'
 		},
 	] + \
 		LampVolumeParameter('Exterior', 'Exterior')

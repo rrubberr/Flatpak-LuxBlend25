@@ -24,8 +24,6 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
-import bpy
-
 from properties_object import ObjectButtonsPanel
 
 from extensions_framework.ui import property_group_renderer
@@ -33,13 +31,13 @@ from extensions_framework.ui import property_group_renderer
 from .. import LuxRenderAddon
 
 @LuxRenderAddon.addon_register_class
-class ui_transform(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
+class ui_transform(ObjectButtonsPanel, property_group_renderer):
 	'''
 	Object Transform Settings
 	'''
 	
 	bl_label = 'LuxRender Transform Settings'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	@classmethod
 	def poll(cls, context):
@@ -51,14 +49,13 @@ class ui_transform(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel)
 	]
 
 @LuxRenderAddon.addon_register_class
-class ui_lookat(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
-class lookat(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
+class ui_lookat(ObjectButtonsPanel, property_group_renderer):
 	'''
 	Camera LookAt Transform Settings
 	'''
 	
 	bl_label = 'LuxRender Camera LookAt Settings'
-	COMPAT_ENGINES = {'luxrender'}
+	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	@classmethod
 	def poll(cls, context):
@@ -71,8 +68,7 @@ class lookat(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
 
 
 @LuxRenderAddon.addon_register_class
-class ui_object(ObjectButtonsPanel, property_group_renderer, bpy.types.Panel):
-
+class ui_object(ObjectButtonsPanel, property_group_renderer):
 	'''
 	Object settings
 	'''

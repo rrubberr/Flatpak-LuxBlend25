@@ -28,9 +28,22 @@ from extensions_framework import declarative_property_group
 from extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 
 from .. import LuxRenderAddon
-from ..properties import dbo
 from ..export import ParamSet
-from ..outputs import LuxLog 
+from ..outputs import LuxLog
+from ..outputs.pure_api import LUXRENDER_VERSION
+
+def volumeintegrator_types():
+	items = [
+		('emission', 'Emission', 'emission'),
+		('single', 'Single', 'single'),
+	]
+	
+	if LUXRENDER_VERSION >= '0.8':
+		items.append(
+			('multi', 'Multi', 'multi'),
+		)
+		
+	return items
 
 @LuxRenderAddon.addon_register_class
 class luxrender_volumeintegrator(declarative_property_group):
@@ -50,11 +63,8 @@ class luxrender_volumeintegrator(declarative_property_group):
 			'attr': 'volumeintegrator',
 			'name': 'Volume Integrator',
 			'description': 'Volume Integrator',
-			'default': 'single',
-			'items': [
-				('emission', 'Emission', 'emission'),
-				('single', 'Single', 'single'),
-			],
+			'default': 'single' if LUXRENDER_VERSION < '0.8' else 'multi',
+			'items': volumeintegrator_types(),
 			'save_in_preset': True
 		},
 		{
@@ -82,9 +92,7 @@ class luxrender_volumeintegrator(declarative_property_group):
 		
 		params.add_float('stepsize', self.stepsize)
 		
-		out = self.volumeintegrator, params
-		dbo('VOLUME INTEGRATOR', out)
-		return out
+		return self.volumeintegrator, params
 
 @LuxRenderAddon.addon_register_class
 class luxrender_integrator(declarative_property_group):
@@ -838,6 +846,4 @@ class luxrender_integrator(declarative_property_group):
 		if self.advanced and self.surfaceintegrator != 'bidirectional':
 			params.add_string('lightstrategy', self.lightstrategy)
 		
-		out = self.surfaceintegrator, params
-		dbo('SURFACE INTEGRATOR', out)
-		return out
+		return self.surfaceintegrator, params

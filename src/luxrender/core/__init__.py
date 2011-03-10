@@ -67,14 +67,15 @@ from ..ui.materials import (
 )
 
 from ..ui.textures import (
-	main, bilerp, blackbody, brick, cauchy, constant, checkerboard, dots,
+	main, band, bilerp, blackbody, brick, cauchy, constant, checkerboard, dots,
 	equalenergy, fbm, gaussian, harlequin, imagemap, lampspectrum, luxpop,
-	marble, mix, sellmeier, scale, sopra, uv, windy, wrinkled, mapping,
-	tabulateddata, transform
+	marble, mix, multimix, sellmeier, scale, sopra, uv, uvmask, windy, wrinkled,
+	mapping, tabulateddata, transform
 )
 
 # Exporter Operators need to be imported to ensure initialisation
 from .. import operators
+from ..operators import lrmdb
 
 # Add standard Blender Interface elements
 import properties_render
@@ -151,12 +152,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 	bl_label			= 'LuxRender'
 	bl_use_preview		= True
 	
-	LuxManager			= None
-	render_update_timer	= None
-	output_dir			= './'
-	output_file			= 'default.png'
-	
-
 	render_lock = threading.Lock()
 	
 	def render(self, scene):
@@ -169,7 +164,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		Returns None
 		'''
 		
-		with self.render_lock:	# just render one thing at a time
+		with RENDERENGINE_luxrender.render_lock:	# just render one thing at a time
+			
+			self.LuxManager				= None
+			self.render_update_timer	= None
+			self.output_dir				= efutil.temp_directory()
+			self.output_file			= 'default.png'
+			
 			prev_dir = os.getcwd()
 			
 			if scene is None:
@@ -190,7 +191,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			os.chdir(prev_dir)
 	
 	def render_preview(self, scene):
-		self.output_dir = efutil.filesystem_path( bpy.app.tempdir )
+		if sys.platform == 'darwin':
+			self.output_dir = efutil.filesystem_path( bpy.app.tempdir )
+		else:
+			self.output_dir = efutil.temp_directory()
 		
 		if self.output_dir[-1] != '/':
 			self.output_dir += '/'
@@ -253,7 +257,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			# Dump to file in temp dir for debugging
 			from ..outputs.file_api import Custom_Context as lxs_writer
 			preview_context = lxs_writer(scene.name)
-			preview_context.set_filename('luxblend25-preview', LXS=True, LXM=False, LXO=False)
+			preview_context.set_filename(scene, 'luxblend25-preview', LXS=True, LXM=False, LXO=False)
 			LM.lux_context = preview_context
 		else:
 			preview_context = LM.lux_context
@@ -322,6 +326,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		
 		preview_context.exit()
 		preview_context.wait()
+		
+		# cleanup() destroys the pylux Context
 		preview_context.cleanup()
 		
 		LM.reset()
@@ -336,22 +342,27 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		if self.output_dir[-1] != '/':
 			self.output_dir += '/'
 		
-		efutil.export_path = self.output_dir
-		#print('(1) export_path is %s' % efutil.export_path)
-		os.chdir(self.output_dir)
-		
 		if scene.luxrender_engine.export_type == 'INT': # and not scene.luxrender_engine.write_files:
 			write_files = scene.luxrender_engine.write_files
 			if write_files:
 				api_type = 'FILE'
 			else:
 				api_type = 'API'
+				if sys.platform == 'darwin':
+					self.output_dir = efutil.filesystem_path( bpy.app.tempdir )
+				else:
+					self.output_dir = efutil.temp_directory()
+		
 		elif scene.luxrender_engine.export_type == 'LFC':
 			api_type = 'LUXFIRE_CLIENT'
 			write_files = False
 		else:
 			api_type = 'FILE'
 			write_files = True
+		
+		efutil.export_path = self.output_dir
+		#print('(1) export_path is %s' % efutil.export_path)
+		os.chdir(self.output_dir)
 		
 		# Pre-allocate the LuxManager so that we can set up the network servers before export
 		LM = LuxManager(
@@ -367,7 +378,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				for server in scene.luxrender_networking.servers.split(','):
 					LM.lux_context.addServer(server.strip())
 		
-		output_filename = efutil.scene_filename() + '.%s.%05i' % (scene.name, scene.frame_current)
+		output_filename = '%s.%s.%05i' % (efutil.scene_filename(), scene.name, scene.frame_current)
 		
 		scene_exporter = SceneExporter()
 		scene_exporter.properties.directory = self.output_dir

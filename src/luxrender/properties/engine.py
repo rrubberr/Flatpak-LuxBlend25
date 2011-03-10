@@ -32,7 +32,8 @@ from .. import LuxRenderAddon
 from ..export import ParamSet
 from ..outputs.pure_api import PYLUX_AVAILABLE
 from ..outputs.pure_api import LUXRENDER_VERSION
-from ..outputs.luxfire_client import LUXFIRE_CLIENT_AVAILABLE
+
+#from ..outputs.luxfire_client import LUXFIRE_CLIENT_AVAILABLE
 
 def find_apis():
 	apis = [
@@ -40,33 +41,11 @@ def find_apis():
 	]
 	if PYLUX_AVAILABLE:
 		apis.append( ('INT', 'Internal', 'INT') )
-	if LUXFIRE_CLIENT_AVAILABLE:
-		apis.append( ('LFC', 'LuxFire Client', 'LFC') )
+	
+	#if LUXFIRE_CLIENT_AVAILABLE:
+	#	apis.append( ('LFC', 'LuxFire Client', 'LFC') )
 	
 	return apis
-
-def engine_controls():
-	ectl = [
-		'export_type',
-		'binary_name',
-		'write_files',
-		['write_lxs', 'write_lxm', 'write_lxo'],
-		
-		# 'embed_filedata', # Disabled pending acceptance into LuxRender core
-		
-		'mesh_type',
-		'render',
-		'install_path',
-		['threads_auto', 'threads'],
-	]
-	
-	if LUXRENDER_VERSION >= '0.8':
-		# Insert 'renderer' before 'binary_name'
-		ectl.insert(ectl.index('binary_name'), 'renderer')
-		ectl.insert(ectl.index('binary_name'), 'opencl_platform_index')
-		ectl.append('log_verbosity')
-	
-	return ectl
 
 @LuxRenderAddon.addon_register_class
 class luxrender_engine(declarative_property_group):
@@ -76,7 +55,26 @@ class luxrender_engine(declarative_property_group):
 	
 	ef_attach_to = ['Scene']
 	
-	controls = engine_controls()
+	controls = [
+		'export_type',
+		'binary_name',
+		'write_files',
+		['write_lxs', 'write_lxm', 'write_lxo', 'write_lxv'],
+		
+		# 'embed_filedata', # Disabled pending acceptance into LuxRender core
+		
+		'mesh_type',
+		'partial_ply',
+		'render',
+		'install_path',
+		['threads_auto', 'threads'],
+	]
+	
+	if LUXRENDER_VERSION >= '0.8':
+		# Insert 'renderer' before 'binary_name'
+		controls.insert(controls.index('binary_name'), 'renderer')
+		controls.insert(controls.index('binary_name'), 'opencl_platform_index')
+		controls.append('log_verbosity')
 	
 	visibility = {
 		'opencl_platform_index':	{ 'renderer': 'hybrid' },
@@ -84,9 +82,11 @@ class luxrender_engine(declarative_property_group):
 		'write_lxs':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'write_lxm':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'write_lxo':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
+		'write_lxv':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'mesh_type':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'binary_name':				{ 'export_type': 'EXT' },
 		'render':					O([{'write_files': True}, {'export_type': 'EXT'}]),
+		'partial_ply':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'install_path':				{ 'render': True, 'export_type': 'EXT' },
 		'threads_auto':				A([O([{'write_files': True}, {'export_type': 'EXT'}]), { 'render': True }]),
 		'threads':					A([O([{'write_files': True}, {'export_type': 'EXT'}]), { 'render': True }, { 'threads_auto': False }]),
@@ -126,6 +126,14 @@ class luxrender_engine(declarative_property_group):
 			'name': 'Run Renderer',
 			'description': 'Run Renderer after export',
 			'default': efutil.find_config_value('luxrender', 'defaults', 'auto_start', False),
+		},
+		{
+			'type': 'bool',
+			'attr': 'partial_ply',
+			'name': 'Partial PLY Export',
+			'description': 'Skip PLY file write',
+			'default': False,
+			'save_in_preset': True
 		},
 		{
 			'type': 'enum',
@@ -200,6 +208,14 @@ class luxrender_engine(declarative_property_group):
 			'attr': 'write_lxo',
 			'name': 'LXO',
 			'description': 'Write objects file',
+			'default': True,
+			'save_in_preset': True
+		},
+		{
+			'type': 'bool',
+			'attr': 'write_lxv',
+			'name': 'LXV',
+			'description': 'Write volumes file',
 			'default': True,
 			'save_in_preset': True
 		},

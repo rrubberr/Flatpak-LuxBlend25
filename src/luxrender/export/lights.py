@@ -26,9 +26,12 @@
 #
 from math import degrees
 
+import bpy
+
+from extensions_framework import util as efutil
+
 from ..outputs import LuxManager
 from ..outputs.file_api import Files
-from ..properties import dbo
 from ..export import ParamSet, get_worldscale, matrix_to_list
 
 def attr_light(lux_context, light, name, group, type, params, transform=None, portals=[]):
@@ -58,8 +61,10 @@ def attr_light(lux_context, light, name, group, type, params, transform=None, po
 	if light.type == 'SPOT' and light.luxrender_lamp.luxrender_lamp_spot.projector:
 		lux_context.rotate(180, 0,1,0)
 	
-	dbo('LIGHT', (type, params))
 	lux_context.lightGroup(group, [])
+	
+	if light.type == 'HEMI':
+		lux_context.scale(-1, 1, 1) # correct worldmap orientation
 	
 	if light.luxrender_lamp.Exterior_volume != '':
 		lux_context.exterior(light.luxrender_lamp.Exterior_volume)
@@ -84,6 +89,14 @@ def exportLight(lux_context, ob, matrix, portals = []):
 		.add_float('gain', light.energy) \
 		.add_float('importance', light.luxrender_lamp.importance)
 	
+	ies_data = ParamSet()
+	if light.luxrender_lamp.iesname != '':
+		if light.library is not None:
+			iespath = bpy.path.abspath(light.luxrender_lamp.iesname, light.library.filepath)
+		else:
+			iespath = light.luxrender_lamp.iesname
+		ies_data = ParamSet().add_string('iesname', efutil.path_relative_to_export(iespath))
+	
 	# Params from light sub-types
 	light_params.update( getattr(light.luxrender_lamp, 'luxrender_lamp_%s'%light.type.lower() ).get_paramset(ob) )
 	
@@ -99,6 +112,7 @@ def exportLight(lux_context, ob, matrix, portals = []):
 		return True
 	
 	if light.type == 'SPOT':
+		light_params.update( ies_data )
 		coneangle = degrees(light.spot_size) * 0.5
 		conedeltaangle = degrees(light.spot_size * 0.5 * light.spot_blend)
 		
@@ -116,11 +130,13 @@ def exportLight(lux_context, ob, matrix, portals = []):
 		return True
 
 	if light.type == 'POINT':
+		light_params.update( ies_data )
 		light_params.add_point('from', (0,0,0)) # (0,0,0) is correct since there is an active Transform
 		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, 'point', light_params, transform=matrix_to_list(matrix, apply_worldscale=True))
 		return True
 	
 	if light.type == 'AREA':
+		light_params.update( ies_data )
 		# overwrite gain with a gain scaled by ws^2 to account for change in lamp area
 		light_params.add_float('gain', light.energy * (get_worldscale(as_scalematrix=False)**2))
 		lux_context.attributeBegin(ob.name, file=Files.MAIN)
@@ -170,7 +186,7 @@ def exportLight(lux_context, ob, matrix, portals = []):
 # lights(lux_context, scene)
 # MAIN export function
 #-------------------------------------------------
-def lights(lux_context, mesh_names):
+def lights(lux_context, geometry_scene, visibility_scene, mesh_definitions):
 	'''
 	lux_context		pylux.Context
 	Iterate over the given scene's light sources,
@@ -184,25 +200,25 @@ def lights(lux_context, mesh_names):
 	portal_shapes = []
 	
 	# First gather info about portals
-	for ob in LuxManager.CurrentScene.objects:
+	for ob in geometry_scene.objects:
 		if ob.type != 'MESH':
 			continue
 		
 		# Export only objects which are enabled for render (in the outliner) and visible on a render layer
-		if not ob.is_visible(LuxManager.CurrentScene) or ob.hide_render:
+		if not ob.is_visible(visibility_scene) or ob.hide_render:
 			continue
 		
 		# match the mesh data name against the combined mesh-mat name exported
 		# by geometry.iterateScene
 		if ob.data.luxrender_mesh.portal:
-			for mesh_name in mesh_names:
-				if mesh_name.startswith(ob.data.name):
-					portal_shapes.append(mesh_name)
+			if mesh_definitions.have(ob.data):
+				mi, mn, ms, mp = mesh_definitions.get(ob.data)
+				portal_shapes.append(mn)
 	
 	# Then iterate for lights
-	for ob in LuxManager.CurrentScene.objects:
+	for ob in geometry_scene.objects:
 		
-		if not ob.is_visible(LuxManager.CurrentScene) or ob.hide_render:
+		if not ob.is_visible(visibility_scene) or ob.hide_render:
 			continue
 		
 		# skip dupli (child) objects when they are not lamps
@@ -213,7 +229,7 @@ def lights(lux_context, mesh_names):
 		# to support a mesh/object which got lamp as dupli object
 		if ob.is_duplicator and ob.dupli_type in ('GROUP', 'VERTS', 'FACES'):
 			# create dupli objects
-			ob.create_dupli_list(LuxManager.CurrentScene)
+			ob.create_dupli_list(geometry_scene)
 			
 			for dupli_ob in ob.dupli_list:
 				if dupli_ob.object.type != 'LAMP':

@@ -27,7 +27,7 @@
 import os, struct
 OBJECT_ANALYSIS = os.getenv('LB25_OBJECT_ANALYSIS', False)
 
-import bpy
+import bpy, mathutils, math
 
 from extensions_framework import util as efutil
 
@@ -62,27 +62,33 @@ class DupliExportProgressThread(ExportProgressThread):
 	message = '...  %i%% ...'
 
 class GeometryExporter(object):
-	lux_context = None
-	scene = None
 	
-	ExportedMeshes = None
-	ExportedObjects = None
+#	lux_context = None
+#	scene = None
+#	
+#	ExportedMeshes = None
+#	ExportedObjects = None
+#	ExportedPLYs = None
+#	
+#	callbacks = {}
+#	valid_duplis_callbacks = []
+#	valid_particles_callbacks = []
+#	valid_objects_callbacks = []
+#	
+#	have_emitting_object = False
+#	
+#	exporting_duplis = False
 	
-	callbacks = {}
-	valid_duplis_callbacks = []
-	valid_particles_callbacks = []
-	valid_objects_callbacks = []
-	
-	have_emitting_object = False
-	
-	exporting_duplis = False
-	
-	def __init__(self, lux_context, scene):
+	def __init__(self, lux_context, visibility_scene):
 		self.lux_context = lux_context
-		self.scene = scene
+		self.visibility_scene = visibility_scene
 		
 		self.ExportedMeshes = ExportCache('ExportedMeshes')
 		self.ExportedObjects = ExportCache('ExportedObjects')
+		self.ExportedPLYs = ExportCache('ExportedPLYs')
+		
+		self.have_emitting_object = False
+		self.exporting_duplis = False
 		
 		self.callbacks = {
 			'duplis': {
@@ -93,11 +99,12 @@ class GeometryExporter(object):
 			'particles': {
 				'OBJECT': self.handler_Duplis_GENERIC,
 				'GROUP': self.handler_Duplis_GENERIC,
-				#'PATH': handler_Duplis_PATH,
+				'PATH': self.handler_Duplis_PATH,
 			},
 			'objects': {
 				'MESH': self.handler_MESH,
 				'SURFACE': self.handler_MESH,
+				'CURVE': self.handler_MESH,
 				'FONT': self.handler_MESH
 			}
 		}
@@ -113,12 +120,15 @@ class GeometryExporter(object):
 		"""
 		
 		# Using a cache on object massively speeds up dupli instance export
-		if self.ExportedObjects.have(obj): return self.ExportedObjects.get(obj)
+		obj_cache_key = (self.geometry_scene, obj)
+		if self.ExportedObjects.have(obj_cache_key): return self.ExportedObjects.get(obj_cache_key)
 		
 		mesh_definitions = []
 		
 		export_original = True
-		ply_mesh_name = '%s_ply' % obj.data.name
+		# mesh data name first for portal reasons
+		# TODO: replace with proper object references
+		ply_mesh_name = '%s_%s_ply' % (obj.data.name, self.geometry_scene.name)
 		if obj.luxrender_object.append_external_mesh:
 			if obj.luxrender_object.hide_proxy_mesh:
 				export_original = False
@@ -152,14 +162,14 @@ class GeometryExporter(object):
 			# Choose the mesh export type, if set, or use the default
 			mesh_type = obj.data.luxrender_mesh.mesh_type
 			# If the rendering is INT and not writing to disk, we must use native mesh format
-			internal_nofiles = self.scene.luxrender_engine.export_type=='INT' and not self.scene.luxrender_engine.write_files
-			global_type = 'native' if internal_nofiles else self.scene.luxrender_engine.mesh_type
+			internal_nofiles = self.visibility_scene.luxrender_engine.export_type=='INT' and not self.visibility_scene.luxrender_engine.write_files
+			global_type = 'native' if internal_nofiles else self.visibility_scene.luxrender_engine.mesh_type
 			if mesh_type == 'native' or (mesh_type == 'global' and global_type == 'native'):
 				mesh_definitions.extend( self.buildNativeMesh(obj) )
 			if mesh_type == 'binary_ply' or (mesh_type == 'global' and global_type == 'binary_ply'):
 				mesh_definitions.extend( self.buildBinaryPLYMesh(obj) )
 		
-		self.ExportedObjects.add(obj, mesh_definitions)
+		self.ExportedObjects.add(obj_cache_key, mesh_definitions)
 		return mesh_definitions
 	
 	@time_export
@@ -175,7 +185,7 @@ class GeometryExporter(object):
 		
 		try:
 			mesh_definitions = []
-			mesh = obj.create_mesh(self.scene, True, 'RENDER')
+			mesh = obj.create_mesh(self.geometry_scene, True, 'RENDER')
 			if mesh is None:
 				raise UnexportableObjectException('Cannot create render/export mesh')
 			
@@ -185,6 +195,7 @@ class GeometryExporter(object):
 				mi = f.material_index
 				if mi not in ffaces_mats.keys(): ffaces_mats[mi] = []
 				ffaces_mats[mi].append( f )
+			material_indices = ffaces_mats.keys()
 			
 			number_of_mats = len(mesh.materials)
 			if number_of_mats > 0:
@@ -194,125 +205,150 @@ class GeometryExporter(object):
 			
 			for i in iterator_range:
 				try:
-					if i not in ffaces_mats.keys(): continue
-					
-					mesh_name = ('%s_%03d' % (obj.data.name, i)).replace(' ','_')
+					if i not in material_indices: continue
 					
 					# If this mesh/mat combo has already been processed, get it from the cache
-					if self.allow_instancing(obj) and self.ExportedMeshes.have(mesh_name):
-						mesh_definitions.append( self.ExportedMeshes.get(mesh_name) )
+					mesh_cache_key = (self.geometry_scene, obj.data, i)
+					if self.allow_instancing(obj) and self.ExportedMeshes.have(mesh_cache_key):
+						mesh_definitions.append( self.ExportedMeshes.get(mesh_cache_key) )
 						continue
 					
-					ply_filename = bpy.path.clean_name(mesh_name) + '.ply'
+					# Put PLY files in frame-numbered subfolders to avoid
+					# clobbering when rendering animations
+					sc_fr = '%s/%s/%05d' % (efutil.scene_filename(), self.geometry_scene.name, self.visibility_scene.frame_current)
+					if not os.path.exists( os.path.join(os.getcwd(), sc_fr) ):
+						os.makedirs(sc_fr)
 					
-					if len(mesh.uv_textures) > 0:
-						if mesh.uv_textures.active and mesh.uv_textures.active.data:
-							uv_layer = mesh.uv_textures.active.data
-					else:
-						uv_layer = None
+					def make_plyfilename():
+						ply_serial = self.ExportedPLYs.serial(mesh_cache_key)
+						mesh_name = '%s_%04d_m%03d' % (obj.data.name, ply_serial, i)
+						ply_filename = '%s.ply' % bpy.path.clean_name(mesh_name)
+						ply_path = '/'.join([sc_fr, ply_filename])
+						return mesh_name, ply_filename, ply_path
 					
-					# Here we work out exactly which vert+normal combinations
-					# we need to export. This is done first, and the export
-					# combinations cached before writing to file because the
-					# number of verts needed needs to be written in the header
-					# and that number is not known before this is done.
+					mesh_name, ply_filename, ply_path = make_plyfilename()
 					
-					# Export data
-					co_no_cache = []
-					uv_cache = []
-					face_vert_indices = {}		# mapping of face index to list of exported vert indices for that face
+					# Ensure that all PLY files have unique names
+					while self.ExportedPLYs.have(ply_path):
+						mesh_name, ply_filename, ply_path = make_plyfilename()
 					
-					# Caches
-					vert_vno_indices = {}		# mapping of vert index to exported vert index for verts with vert normals
-					vert_use_vno = set()		# Set of vert indices that use vert normals
+					self.ExportedPLYs.add(ply_path, None)
 					
-					vert_index = 0				# exported vert index
-					for face in ffaces_mats[i]:
-						fvi = []
-						for j, vertex in enumerate(face.vertices):
-							v = mesh.vertices[vertex]
-							
-							if face.use_smooth:
+					# skip writing the PLY file if the box is checked
+					if not (os.path.exists(ply_path) and self.visibility_scene.luxrender_engine.partial_ply):
+						if len(mesh.uv_textures) > 0:
+							if mesh.uv_textures.active and mesh.uv_textures.active.data:
+								uv_layer = mesh.uv_textures.active.data
+						else:
+							uv_layer = None
+						
+						# Here we work out exactly which vert+normal combinations
+						# we need to export. This is done first, and the export
+						# combinations cached before writing to file because the
+						# number of verts needed needs to be written in the header
+						# and that number is not known before this is done.
+						
+						# Export data
+						co_no_cache = []
+						uv_cache = []
+						face_vert_indices = {}		# mapping of face index to list of exported vert indices for that face
+						
+						# Caches
+						vert_vno_indices = {}		# mapping of vert index to exported vert index for verts with vert normals
+						vert_use_vno = set()		# Set of vert indices that use vert normals
+						
+						vert_index = 0				# exported vert index
+						for face in ffaces_mats[i]:
+							fvi = []
+							for j, vertex in enumerate(face.vertices):
+								v = mesh.vertices[vertex]
 								
-								if vertex not in vert_use_vno:
-									vert_use_vno.add(vertex)
+								if face.use_smooth:
 									
-									co_no_cache.append( (v.co, v.normal) )
+									if vertex not in vert_use_vno:
+										vert_use_vno.add(vertex)
+										
+										co_no_cache.append( (v.co, v.normal) )
+										if uv_layer:
+											uv_cache.append( uv_layer[face.index].uv[j] )
+										
+										vert_vno_indices[vertex] = vert_index
+										fvi.append(vert_index)
+										
+										vert_index += 1
+									else:
+										fvi.append(vert_vno_indices[vertex])
+									
+								else:
+									# All face-vert-co-no are unique, we cannot
+									# cache them
+									co_no_cache.append( (v.co, face.normal) )
 									if uv_layer:
 										uv_cache.append( uv_layer[face.index].uv[j] )
 									
-									vert_vno_indices[vertex] = vert_index
 									fvi.append(vert_index)
 									
 									vert_index += 1
-								else:
-									fvi.append(vert_vno_indices[vertex])
-								
+							
+							face_vert_indices[face.index] = fvi
+						
+						del vert_vno_indices
+						del vert_use_vno
+						
+						with open(ply_path, 'wb') as ply:
+							ply.write(b'ply\n')
+							ply.write(b'format binary_little_endian 1.0\n')
+							ply.write(b'comment Created by LuxBlend 2.5 exporter for LuxRender - www.luxrender.net\n')
+							
+							# vert_index == the number of actual verts needed
+							ply.write( ('element vertex %d\n' % vert_index).encode() )
+							ply.write(b'property float x\n')
+							ply.write(b'property float y\n')
+							ply.write(b'property float z\n')
+							
+							ply.write(b'property float nx\n')
+							ply.write(b'property float ny\n')
+							ply.write(b'property float nz\n')
+							
+							if uv_layer:
+								ply.write(b'property float s\n')
+								ply.write(b'property float t\n')
+							
+							ply.write( ('element face %d\n' % len(ffaces_mats[i])).encode() )
+							ply.write(b'property list uchar uint vertex_indices\n')
+							
+							ply.write(b'end_header\n')
+							
+							# dump cached co/no/uv
+							if uv_layer:
+								for j, (co,no) in enumerate(co_no_cache):
+									ply.write( struct.pack('<3f', *co) )
+									ply.write( struct.pack('<3f', *no) )
+									ply.write( struct.pack('<2f', *uv_cache[j] ) )
 							else:
-								# All face-vert-co-no are unique, we cannot
-								# cache them
-								co_no_cache.append( (v.co, face.normal) )
-								if uv_layer:
-									uv_cache.append( uv_layer[face.index].uv[j] )
-								
-								fvi.append(vert_index)
-								
-								vert_index += 1
+								for co,no in co_no_cache:
+									ply.write( struct.pack('<3f', *co) )
+									ply.write( struct.pack('<3f', *no) )
+							
+							# dump face vert indices
+							for face in ffaces_mats[i]:
+								lfvi = len(face_vert_indices[face.index])
+								ply.write( struct.pack('<B', lfvi) )
+								ply.write( struct.pack('<%dI'%lfvi, *face_vert_indices[face.index]) )
+							
+							del co_no_cache
+							del uv_cache
+							del face_vert_indices
 						
-						face_vert_indices[face.index] = fvi
+						LuxLog('Binary PLY file written: %s/%s' % (os.getcwd(),ply_path))
 					
-					del vert_vno_indices
-					del vert_use_vno
-					
-					with open(ply_filename, 'wb') as ply:
-						ply.write(b'ply\n')
-						ply.write(b'format binary_little_endian 1.0\n')
-						ply.write(b'comment Created by LuxBlend 2.5 exporter for LuxRender - www.luxrender.net\n')
-						
-						# vert_index == the number of actual verts needed
-						ply.write( ('element vertex %d\n' % vert_index).encode() )
-						ply.write(b'property float x\n')
-						ply.write(b'property float y\n')
-						ply.write(b'property float z\n')
-						
-						ply.write(b'property float nx\n')
-						ply.write(b'property float ny\n')
-						ply.write(b'property float nz\n')
-						
-						if uv_layer:
-							ply.write(b'property float s\n')
-							ply.write(b'property float t\n')
-						
-						ply.write( ('element face %d\n' % len(ffaces_mats[i])).encode() )
-						ply.write(b'property list uchar uint vertex_indices\n')
-						
-						ply.write(b'end_header\n')
-						
-						# dump cached co/no/uv
-						if uv_layer:
-							for j, (co,no) in enumerate(co_no_cache):
-								ply.write( struct.pack('<3f', *co) )
-								ply.write( struct.pack('<3f', *no) )
-								ply.write( struct.pack('<2f', *uv_cache[j] ) )
-						else:
-							for co,no in co_no_cache:
-								ply.write( struct.pack('<3f', *co) )
-								ply.write( struct.pack('<3f', *no) )
-						
-						# dump face vert indices
-						for face in ffaces_mats[i]:
-							lfvi = len(face_vert_indices[face.index])
-							ply.write( struct.pack('<B', lfvi) )
-							ply.write( struct.pack('<%dI'%lfvi, *face_vert_indices[face.index]) )
-						
-						del co_no_cache
-						del uv_cache
-						del face_vert_indices
-						
 					# Export the shape definition to LXO
 					shape_params = ParamSet().add_string(
 						'filename',
-						ply_filename
+						# This really ought to be ply_filename for proper
+						# portability, but Lux doesn't adjust relative paths
+						# in files included from subdirs
+						ply_path
 					)
 					
 					# Add subdiv etc options
@@ -330,13 +366,16 @@ class GeometryExporter(object):
 					# Only export objectBegin..objectEnd and cache this mesh_definition if we plan to use instancing
 					if self.allow_instancing(obj):
 						self.exportShapeDefinition(obj, mesh_definition)
-						self.ExportedMeshes.add(mesh_name, mesh_definition)
+						self.ExportedMeshes.add(mesh_cache_key, mesh_definition)
 					
-					LuxLog('Binary PLY Mesh Exported: %s' % mesh_name)
-					
+					#LuxLog('Binary PLY Mesh Exported: %s' % mesh_name)
+				
 				except InvalidGeometryException as err:
 					LuxLog('Mesh export failed, skipping this mesh: %s' % err)
-		
+			
+			del ffaces_mats
+			bpy.data.meshes.remove(mesh)
+			
 		except UnexportableObjectException as err:
 			LuxLog('Object export failed, skipping this object: %s' % err)
 		
@@ -354,7 +393,7 @@ class GeometryExporter(object):
 		
 		try:
 			mesh_definitions = []
-			mesh = obj.create_mesh(self.scene, True, 'RENDER')
+			mesh = obj.create_mesh(self.geometry_scene, True, 'RENDER')
 			if mesh is None:
 				raise UnexportableObjectException('Cannot create render/export mesh')
 			
@@ -364,6 +403,7 @@ class GeometryExporter(object):
 				mi = f.material_index
 				if mi not in ffaces_mats.keys(): ffaces_mats[mi] = []
 				ffaces_mats[mi].append( f )
+			material_indices = ffaces_mats.keys()
 			
 			number_of_mats = len(mesh.materials)
 			if number_of_mats > 0:
@@ -373,19 +413,21 @@ class GeometryExporter(object):
 			
 			for i in iterator_range:
 				try:
-					if i not in ffaces_mats.keys(): continue
-					
-					mesh_name = ('%s_%03d' % (obj.data.name, i)).replace(' ','_')
+					if i not in material_indices: continue
 					
 					# If this mesh/mat-index combo has already been processed, get it from the cache
-					if self.allow_instancing(obj) and self.ExportedMeshes.have(mesh_name):
-						mesh_definitions.append( self.ExportedMeshes.get(mesh_name) )
+					mesh_cache_key = (self.geometry_scene, obj.data, i)
+					if self.allow_instancing(obj) and self.ExportedMeshes.have(mesh_cache_key):
+						mesh_definitions.append( self.ExportedMeshes.get(mesh_cache_key) )
 						continue
+					
+					# mesh_name must start with mesh data name to match with portals
+					# TODO: replace with proper object references
+					mesh_name = '%s-%s_m%03d' % (obj.data.name, self.geometry_scene.name, i)
 					
 					if OBJECT_ANALYSIS: print(' -> NativeMesh:')
 					if OBJECT_ANALYSIS: print('  -> Material index: %d' % i)
 					if OBJECT_ANALYSIS: print('  -> derived mesh name: %s' % mesh_name)
-					
 					
 					if len(mesh.uv_textures) > 0:
 						if mesh.uv_textures.active and mesh.uv_textures.active.data:
@@ -405,7 +447,7 @@ class GeometryExporter(object):
 					vert_use_vno = set()		# Set of vert indices that use vert normals
 					
 					vert_index = 0				# exported vert index
-					for face in mesh.faces:
+					for face in ffaces_mats[i]:
 						fvi = []
 						for j, vertex in enumerate(face.vertices):
 							v = mesh.vertices[vertex]
@@ -491,13 +533,16 @@ class GeometryExporter(object):
 					# Only export objectBegin..objectEnd and cache this mesh_definition if we plan to use instancing
 					if self.allow_instancing(obj):
 						self.exportShapeDefinition(obj, mesh_definition)
-						self.ExportedMeshes.add(mesh_name, mesh_definition)
+						self.ExportedMeshes.add(mesh_cache_key, mesh_definition)
 					
-					LuxLog('LuxRender Mesh Exported: %s' % mesh_name)
+					#LuxLog('LuxRender Mesh Exported: %s' % mesh_name)
 					
 				except InvalidGeometryException as err:
 					LuxLog('Mesh export failed, skipping this mesh: %s' % err)
-		
+			
+			del ffaces_mats
+			bpy.data.meshes.remove(mesh)
+			
 		except UnexportableObjectException as err:
 			LuxLog('Object export failed, skipping this object: %s' % err)
 		
@@ -505,12 +550,14 @@ class GeometryExporter(object):
 	
 	def allow_instancing(self, obj):
 		# Some situations require full geometry export
-		if self.scene.luxrender_engine.renderer == 'hybrid':
+		if self.visibility_scene.luxrender_engine.renderer == 'hybrid':
 			return False
 		
 		# If the mesh is only used once, instancing is a waste of memory
-		if (not self.exporting_duplis) and obj.data.users == 1:
-			return False
+		# ERROR: this can break dupli export if the dupli'd mesh is exported
+		# before the duplicator
+		#if (not self.exporting_duplis) and obj.data.users == 1:
+		#	return False
 		
 		# Only allow instancing for duplis and particles in non-hybrid mode, or
 		# for normal objects if the object has certain modifiers applied against
@@ -533,8 +580,10 @@ class GeometryExporter(object):
 		an objectBegin..objectEnd block containing the Shape definition.
 		"""
 		
-		me_name, me_mat_index, me_shape_type, me_shape_IsSupport, me_shape_params = mesh_definition
-	
+		# Aldo: Resolve possible problem on [2:5] index
+		me_name = mesh_definition[0]
+		me_shape_type, me_shape_IsSupport, me_shape_params = mesh_definition[2:5]
+
 		if len(me_shape_params) == 0: return
 
 		if me_shape_IsSupport: return			
@@ -549,11 +598,16 @@ class GeometryExporter(object):
 		
 		self.lux_context.shape(me_shape_type, me_shape_params)
 		self.lux_context.objectEnd()
+		
+		LuxLog('Mesh definition exported: %s' % me_name)
 	
 	def exportShapeInstances(self, obj, mesh_definitions, matrix=None, parent=None):
 		
 		# Don't export instances of portal meshes
 		if obj.type == 'MESH' and obj.data.luxrender_mesh.portal: return
+		# or empty definitions
+		if len(mesh_definitions) < 1: return
+		
 		
 		self.lux_context.attributeBegin(comment=obj.name, file=Files.GEOM)
 		
@@ -565,7 +619,7 @@ class GeometryExporter(object):
 		
 		# object motion blur
 		is_object_animated = False
-		if self.scene.camera.data.luxrender_camera.usemblur and self.scene.camera.data.luxrender_camera.objectmblur:
+		if self.visibility_scene.camera.data.luxrender_camera.usemblur and self.visibility_scene.camera.data.luxrender_camera.objectmblur:
 			if matrix is not None and matrix[1] is not None:
 				next_matrices = [matrix[1]]
 				is_object_animated = True
@@ -576,7 +630,7 @@ class GeometryExporter(object):
 				# several motionInstances for non-linear motion blur
 				STEPS = 1
 				for i in range(STEPS,0,-1):
-					fcurve_matrix = object_anim_matrix(self.scene, obj, frame_offset=i/float(STEPS))
+					fcurve_matrix = object_anim_matrix(self.geometry_scene, obj, frame_offset=i/float(STEPS))
 					if fcurve_matrix == False:
 						break
 					
@@ -592,9 +646,9 @@ class GeometryExporter(object):
 				self.lux_context.coordinateSystem('%s_motion_%i' % (obj.name, i))
 				self.lux_context.transformEnd()
 		
+		use_inner_scope = len(mesh_definitions) > 1
 		for me_name, me_mat_index, me_shape_type, me_shape_IsSupport, me_shape_params in mesh_definitions:
-
-			self.lux_context.attributeBegin()
+			if use_inner_scope: self.lux_context.attributeBegin()
 			
 			if parent != None:
 				mat_object = parent
@@ -605,7 +659,7 @@ class GeometryExporter(object):
 				ob_mat = mat_object.material_slots[me_mat_index].material
 			except IndexError:
 				ob_mat = None
-				LuxLog('WARNING: material slot %d on object "%s" is unassigned!' %(me_mat_index+1, obj.name))
+				LuxLog('WARNING: material slot %d on object "%s" is unassigned!' %(me_mat_index+1, mat_object.name))
 			
 			if ob_mat is not None:
 				
@@ -625,12 +679,12 @@ class GeometryExporter(object):
 				int_v, ext_v = get_material_volume_defs(ob_mat)
 				if int_v != '':
 					self.lux_context.interior(int_v)
-				elif self.scene.luxrender_world.default_interior_volume != '':
-					self.lux_context.interior(self.scene.luxrender_world.default_interior_volume)
+				elif self.geometry_scene.luxrender_world.default_interior_volume != '':
+					self.lux_context.interior(self.geometry_scene.luxrender_world.default_interior_volume)
 				if ext_v != '':
 					self.lux_context.exterior(ext_v)
-				elif self.scene.luxrender_world.default_exterior_volume != '':
-					self.lux_context.exterior(self.scene.luxrender_world.default_exterior_volume)
+				elif self.geometry_scene.luxrender_world.default_exterior_volume != '':
+					self.lux_context.exterior(self.geometry_scene.luxrender_world.default_exterior_volume)
 				
 			else:
 				object_is_emitter = False
@@ -638,78 +692,245 @@ class GeometryExporter(object):
 			self.have_emitting_object |= object_is_emitter
 			
 			# If the object emits, don't export instance or motioninstance, just the Shape
-			if (not self.allow_instancing(obj)) or object_is_emitter or me_shape_IsSupport:
+			if (not self.allow_instancing(mat_object)) or object_is_emitter or me_shape_IsSupport:
 				self.lux_context.shape(me_shape_type, me_shape_params)
 			# motionInstance for motion blur
 			elif is_object_animated:
 				num_instances = len(next_matrices)
 				for i in range(num_instances):
-					fni = float(num_instances) * self.scene.render.fps
+					fni = float(num_instances) * self.visibility_scene.render.fps
 					self.lux_context.motionInstance(me_name, i/fni, (i+1)/fni, '%s_motion_%i' % (obj.name, i))
 			# ordinary mesh instance
 			else:
 				self.lux_context.objectInstance(me_name)
 			
-			self.lux_context.attributeEnd()
-#		if (not instance) or object_is_emitter or me_shape_IsSupport:
+			if use_inner_scope: self.lux_context.attributeEnd()
+		
 		self.lux_context.attributeEnd()
 	
-	def handler_Duplis_GENERIC(self, obj, *args, **kwargs):
-		dupli_object_names = set()
+	def matrixHasNaN(self, M):
+		for row in M:
+			for i in row:
+				if str(i) == 'nan': return True
+		return False
+
+	def BSpline(self, points, dimension, degree, u):
+		controlpoints = []
+		def Basispolynom(controlpoints, i, u, degree):
+			if degree == 0:
+				temp = 0
+				if (controlpoints[i] <= u) and (u < controlpoints[i+1]): temp = 1
+			else:
+				N0 = Basispolynom(controlpoints,i,u,degree-1)
+				N1 = Basispolynom(controlpoints,i+1,u,degree-1)
+				
+				if N0 == 0: 
+					sum1 = 0
+				else:
+					sum1 = (u-controlpoints[i])/(controlpoints[i+degree] - controlpoints[i])*N0
+				if N1 == 0: 
+					sum2 = 0
+				else:
+					sum2 = (controlpoints[i+1+degree]-u)/(controlpoints[i+1+degree] - controlpoints[i+1])*N1
+				
+				temp = sum1 + sum2
+			return temp
+
+		for i in range(len(points)+degree+1):
+			if i <= degree:
+				controlpoints.append(0)
+			elif i >= len(points):
+				controlpoints.append(len(points)-degree)
+			else:
+				controlpoints.append(i - degree)                                                                        
+						
+		if dimension == 2: temp = mathutils.Vector((0.0,0.0))
+		elif dimension == 3:temp = mathutils.Vector((0.0,0.0,0.0))
+
+		for i in range(len(points)):            
+			temp = temp + Basispolynom(controlpoints, i, u, degree)*points[i]
+		return temp
+	
+	def handler_Duplis_PATH(self, obj, *args, **kwargs):
+		if not 'particle_system' in kwargs.keys():
+			LuxLog('ERROR: handler_Duplis_PATH called without particle_system')
+			return
 		
+		psys = kwargs['particle_system']
+		
+		if not psys.settings.type == 'HAIR':
+			LuxLog('ERROR: handler_Duplis_PATH can only handle Hair particle systems ("%s")' % psys.name)
+			return
+		
+		# No can do, because of RNA write restriction
+		#psys_pc = psys.settings.draw_percentage
+		#psys.settings.draw_percentage = 100
+		#psys.settings.update_tag()
+		#self.visibility_scene.update()
+		
+		LuxLog('Exporting Hair system "%s"...' % psys.name)
+		
+		size = psys.settings.particle_size / 2.0 # XXX divide by 2 twice ?
+		hair_Junction = (
+			(
+				'HAIR_Junction_%s'%psys.name,
+				psys.settings.material - 1,
+				'sphere',
+				ParamSet().add_float('radius', size/2.0)
+			),
+		)
+		hair_Strand = (		
+			(
+				'HAIR_Strand_%s'%psys.name,
+				psys.settings.material - 1,
+				'cylinder',
+				ParamSet() \
+					.add_float('radius', size/2.0) \
+					.add_float('zmin', 0.0) \
+					.add_float('zmax', 1.0)
+			),
+		)
+		
+		for sn, si, st, sp in hair_Junction:
+			self.lux_context.objectBegin(sn)
+			self.lux_context.shape(st, sp)
+			self.lux_context.objectEnd()
+
+		for sn, si, st, sp in hair_Strand:
+			self.lux_context.objectBegin(sn)
+			self.lux_context.shape(st, sp)
+			self.lux_context.objectEnd()
+		
+		det = DupliExportProgressThread()
+		det.start(len(psys.particles))
+		
+		for particle in psys.particles:
+			if not (particle.is_exist and particle.is_visible): continue
+			
+			det.exported_objects += 1
+
+			points = []			
+			for j in range(len(particle.hair)):
+				points.append(particle.hair[j].co)
+			if psys.settings.use_hair_bspline:
+				temp = []
+				degree = 2
+				dimension = 3
+				for i in range(math.trunc(math.pow(2,psys.settings.render_step))):
+					if i > 0:
+						u = i*(len(points)- degree)/math.trunc(math.pow(2,psys.settings.render_step)-1)-0.0000000000001
+					else:
+						u = i*(len(points)- degree)/math.trunc(math.pow(2,psys.settings.render_step)-1)
+					temp.append(self.BSpline(points, dimension, degree, u))
+				points = temp
+
+			for j in range(len(points)-1):
+				SB = obj.matrix_basis.copy().to_3x3()
+				v1 = points[j+1] - points[j]
+				v2 = SB[2].cross(v1)
+				v3 = v1.cross(v2)
+				v2.normalize()
+				v3.normalize()
+				M = mathutils.Matrix( (v3,v2,v1) )
+				if self.matrixHasNaN(M):
+					M = mathutils.Matrix( (SB[0], SB[1], SB[2]) )
+				M = M.to_4x4()
+				
+				Mtrans = mathutils.Matrix.Translation(points[j])
+				matrix = obj.matrix_world * Mtrans * M
+								
+				self.exportShapeInstances(
+					obj,
+					hair_Strand,
+					matrix=[matrix,None]
+				)
+				matrix = obj.matrix_world * Mtrans
+				
+				self.exportShapeInstances(
+					obj,
+					hair_Junction,
+					matrix=[matrix,None]
+				)
+		
+		det.stop()
+		det.join()
+		
+		#psys.settings.draw_percentage = psys_pc
+		#psys.settings.update_tag()
+		#self.visibility_scene.update()
+		
+		LuxLog('... done, exported %s hairs' % det.exported_objects)
+	
+	def handler_Duplis_GENERIC(self, obj, *args, **kwargs):
 		try:
-			# to fix this limitation, patch blender:
-			# - http://projects.blender.org/tracker/index.php?group_id=9&atid=498
-			# - http://www.pasteall.org/19115/c
-			if 'particle_system' in kwargs.keys():
-				prev_display_pc = kwargs['particle_system'].settings.draw_percentage
-				if prev_display_pc < 100:
-					LuxLog(
-						'WARNING: Due to a limitation in blender only %s%% of particle system "%s" will be exported. '
-						'Set the DISPLAY percentage to 100%% before exporting' % (prev_display_pc, kwargs['particle_system'].name)
+			# TODO - this workaround is still needed for file->export operator
+			#if 'particle_system' in kwargs.keys():
+			#	prev_display_pc = kwargs['particle_system'].settings.draw_percentage
+			#	if prev_display_pc < 100:
+			#		LuxLog(
+			#			'WARNING: Due to a limitation in blender only %s%% of particle system "%s" will be exported. '
+			#			'Set the DISPLAY percentage to 100%% before exporting' % (prev_display_pc, kwargs['particle_system'].name)
+			#		)
+			
+			LuxLog('Exporting Duplis...')
+			
+			obj.create_dupli_list(self.visibility_scene)
+			if not obj.dupli_list:
+				raise Exception('cannot create dupli list for object %s' % obj.name)
+			
+			# Create our own DupliOb list to work around incorrect layers
+			# attribute when inside create_dupli_list()..free_dupli_list()
+			duplis = []
+			for dupli_ob in obj.dupli_list:
+				if dupli_ob.object.type not in ['MESH', 'SURFACE', 'FONT', 'CURVE']:
+					continue
+				if not dupli_ob.object.is_visible(self.visibility_scene) or dupli_ob.object.hide_render:
+					continue
+				
+				duplis.append(
+					(
+						dupli_ob.object,
+						dupli_ob.matrix.copy()
 					)
+				)
 			
-			obj.create_dupli_list(self.scene)
-			
-			if obj.dupli_list:
-				LuxLog('Exporting Duplis...')
-				
-				det = DupliExportProgressThread()
-				det.start(len(obj.dupli_list))
-				
-				self.exporting_duplis = True
-				
-				for dupli_ob in obj.dupli_list:
-					if dupli_ob.object.type not in  ['MESH', 'SURFACE', 'FONT']:
-						continue
-					
-					self.exportShapeInstances(
-						obj,
-						self.buildMesh(dupli_ob.object),
-						matrix=[dupli_ob.matrix,None],
-						parent=dupli_ob.object
-					)
-					
-					dupli_object_names.add( dupli_ob.object.name )
-					
-					det.exported_objects += 1
-
-				
-				self.exporting_duplis = False
-				
-
-				det.stop()
-				det.join()
-			
-				LuxLog('... done, exported %s duplis' % det.exported_objects)
-			
-			# free object dupli list again. Warning: all dupli objects are INVALID now!
 			obj.free_dupli_list()
 			
-		except SystemError as err:
+			det = DupliExportProgressThread()
+			det.start(len(duplis))
+			
+			self.exporting_duplis = True
+			
+			# dupli object, dupli matrix
+			for do, dm in duplis:
+				
+				det.exported_objects += 1
+				
+				# Check for group layer visibility
+				gviz = False
+				for grp in do.users_group:
+					gviz |= True in [a&b for a,b in zip(do.layers, grp.layers)]
+				if not gviz:
+					continue
+				
+				self.exportShapeInstances(
+					obj,
+					self.buildMesh(do),
+					matrix=[dm,None],
+					parent=do
+				)
+			
+			del duplis
+			
+			self.exporting_duplis = False
+			
+			det.stop()
+			det.join()
+			
+			LuxLog('... done, exported %s duplis' % det.exported_objects)
+			
+		except Exception as err:
 			LuxLog('Error with handler_Duplis_GENERIC and object %s: %s' % (obj, err))
-		
-		return dupli_object_names
 	
 	def handler_MESH(self, obj, *args, **kwargs):
 		if OBJECT_ANALYSIS: print(' -> handler_MESH: %s' % obj)
@@ -725,61 +946,68 @@ class GeometryExporter(object):
 				obj,
 				self.buildMesh(obj)
 			)
+	
+	def iterateScene(self, geometry_scene):
+		self.geometry_scene = geometry_scene
+		self.have_emitting_object = False
+		
+		progress_thread = MeshExportProgressThread()
+		tot_objects = len(geometry_scene.objects)
+		progress_thread.start(tot_objects)
+		
+		for obj in geometry_scene.objects:
+			progress_thread.exported_objects += 1
+			
+			if OBJECT_ANALYSIS: print('Analysing object %s : %s' % (obj, obj.type))
+			
+			try:
+				# Export only objects which are enabled for render (in the outliner) and visible on a render layer
+				if not obj.is_visible(self.visibility_scene) or obj.hide_render:
+					raise UnexportableObjectException(' -> not visible: %s / %s' % (obj.is_visible(self.visibility_scene), obj.hide_render))
+				
+				if obj.parent and obj.parent.is_duplicator:
+					raise UnexportableObjectException(' -> parent is duplicator')
 
-def iterateScene(lux_context, scene):
-	
-	geometry_exporter = GeometryExporter(lux_context, scene)
-	
-	progress_thread = MeshExportProgressThread()
-	progress_thread.start(len(scene.objects))
-	
-	for obj in scene.objects:
-		if OBJECT_ANALYSIS: print('Analysing object %s : %s' % (obj, obj.type))
+				for mod in obj.modifiers:
+					if mod.name == 'Smoke':
+						if mod.smoke_type == 'DOMAIN':
+							raise UnexportableObjectException(' -> Smoke domain')
+
+				number_psystems = len(obj.particle_systems)
+				
+				if obj.is_duplicator and number_psystems < 1:
+					if OBJECT_ANALYSIS: print(' -> is duplicator without particle systems')
+					if obj.dupli_type in self.valid_duplis_callbacks:
+						self.callbacks['duplis'][obj.dupli_type](obj)
+					elif OBJECT_ANALYSIS: print(' -> Unsupported Dupli type: %s' % obj.dupli_type)
+				
+				# Some dupli types should hide the original
+				if obj.is_duplicator and obj.dupli_type in ('VERTS', 'FACES', 'GROUP'):
+					export_original_object = False
+				else:
+					export_original_object = True
+				
+				if number_psystems > 0:
+					export_original_object = False
+					if OBJECT_ANALYSIS: print(' -> has %i particle systems' % number_psystems)
+					for psys in obj.particle_systems:
+						export_original_object = export_original_object or psys.settings.use_render_emitter
+						if psys.settings.render_type in self.valid_particles_callbacks:
+							self.callbacks['particles'][psys.settings.render_type](obj, particle_system=psys)
+						elif OBJECT_ANALYSIS: print(' -> Unsupported Particle system type: %s' % psys.settings.render_type)
+				
+				if not export_original_object:
+					raise UnexportableObjectException('export_original_object=False')
+				
+				if not obj.type in self.valid_objects_callbacks:
+					raise UnexportableObjectException('Unsupported object type')
+				
+				self.callbacks['objects'][obj.type](obj)
 			
-		try:
-			# Export only objects which are enabled for render (in the outliner) and visible on a render layer
-			if not obj.is_visible(scene) or obj.hide_render:
-				raise UnexportableObjectException(' -> not visible: %s / %s' % (obj.is_visible(scene), obj.hide_render))
-			
-			if obj.parent and obj.parent.is_duplicator:
-				raise UnexportableObjectException(' -> parent is duplicator')
-			
-			number_psystems = len(obj.particle_systems)
-			
-			if obj.is_duplicator and number_psystems < 1:
-				if OBJECT_ANALYSIS: print(' -> is duplicator without particle systems')
-				if obj.dupli_type in geometry_exporter.valid_duplis_callbacks:
-					geometry_exporter.callbacks['duplis'][obj.dupli_type](obj)
-				elif OBJECT_ANALYSIS: print(' -> Unsupported Dupli type: %s' % obj.dupli_type)
-			
-			export_original_object = True
-			
-			if number_psystems > 0:
-				export_original_object = False
-				if OBJECT_ANALYSIS: print(' -> has %i particle systems' % number_psystems)
-				for psys in obj.particle_systems:
-					export_original_object = export_original_object or psys.settings.use_render_emitter
-					if psys.settings.render_type in geometry_exporter.valid_particles_callbacks:
-						geometry_exporter.callbacks['particles'][psys.settings.render_type](obj, particle_system=psys)
-					elif OBJECT_ANALYSIS: print(' -> Unsupported Particle system type: %s' % psys.settings.render_type)
-			
-			if not export_original_object:
-				raise UnexportableObjectException('export_original_object=False')
-			
-			if not obj.type in geometry_exporter.valid_objects_callbacks:
-				raise UnexportableObjectException('Unsupported object type')
-			
-			geometry_exporter.callbacks['objects'][obj.type](obj)
+			except UnexportableObjectException as err:
+				if OBJECT_ANALYSIS: print(' -> Unexportable object: %s : %s : %s' % (obj, obj.type, err))
 		
-		except UnexportableObjectException as err:
-			if OBJECT_ANALYSIS: print(' -> Unexportable object: %s : %s : %s' % (obj, obj.type, err))
+		progress_thread.stop()
+		progress_thread.join()
 		
-		progress_thread.exported_objects += 1
-	
-	progress_thread.stop()
-	progress_thread.join()
-	
-	# we keep a copy of the mesh_names exported for use as portalInstances when we export the lights
-	mesh_names = geometry_exporter.ExportedMeshes.cache_keys.copy()
-	
-	return mesh_names, geometry_exporter.have_emitting_object
+		return self.have_emitting_object

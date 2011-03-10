@@ -32,10 +32,11 @@ from extensions_framework.validate import Logic_OR as O, Logic_AND as A
 from .. import LuxRenderAddon
 from ..export import ParamSet
 from ..outputs.pure_api import LUXRENDER_VERSION
-from ..properties.material import texture_append_visibility, dict_merge
+from ..properties.material import texture_append_visibility
 from ..properties.texture import (
 	ColorTextureParameter, FloatTextureParameter, FresnelTextureParameter
 )
+from ..util import dict_merge
 
 def WorldVolumeParameter(attr, name):
 	return [
@@ -113,27 +114,6 @@ TC_absorption			= VolumeDataColorTextureParameter('absorption', 'Absorption',		d
 TC_sigma_a				= VolumeDataColorTextureParameter('sigma_a', 'Absorption',			default=(1.0,1.0,1.0))
 TC_sigma_s				= VolumeDataColorTextureParameter('sigma_s', 'Scattering',			default=(0.0,0.0,0.0))
 
-def volume_visibility():
-	v_vis = dict_merge({
-		'scattering_scale': { 'type': 'homogeneous', 'sigma_s_usecolortexture': False },
-		'g': { 'type': 'homogeneous' },
-		'depth': O([ A([{ 'type': 'clear' }, { 'absorption_usecolortexture': False }]), A([{'type': 'homogeneous' }, { 'sigma_a_usecolortexture': False }]) ])
-	},
-	TFR_IOR.visibility,
-	TC_absorption.visibility,
-	TC_sigma_a.visibility,
-	TC_sigma_s.visibility
-	)
-	
-	vis_append = { 'type': 'clear' }
-	v_vis = texture_append_visibility(v_vis, TC_absorption, vis_append)
-	
-	vis_append = { 'type': 'homogeneous' }
-	v_vis = texture_append_visibility(v_vis, TC_sigma_a, vis_append)
-	v_vis = texture_append_visibility(v_vis, TC_sigma_s, vis_append)
-	
-	return v_vis
-
 def volume_types():
 	v_types =  [
 		('clear', 'Clear', 'clear')
@@ -163,7 +143,7 @@ class luxrender_volume_data(declarative_property_group):
 	TC_absorption.controls + \
 	TC_sigma_a.controls + \
 	[
-		'depth',
+		'depth','absorption_scale'
 	] + \
 	TC_sigma_s.controls + \
 	[
@@ -171,7 +151,21 @@ class luxrender_volume_data(declarative_property_group):
 		'g',
 	]
 	
-	visibility = volume_visibility()
+	visibility = dict_merge(
+		{
+			'scattering_scale': { 'type': 'homogeneous', 'sigma_s_usecolortexture': False },
+			'g': { 'type': 'homogeneous' },
+			'depth': O([ A([{ 'type': 'clear' }, { 'absorption_usecolortexture': False }]), A([{'type': 'homogeneous' }, { 'sigma_a_usecolortexture': False }]) ])
+		},
+		TFR_IOR.visibility,
+		TC_absorption.visibility,
+		TC_sigma_a.visibility,
+		TC_sigma_s.visibility
+	)
+	
+	visibility = texture_append_visibility(visibility, TC_absorption, { 'type': 'clear' })
+	visibility = texture_append_visibility(visibility, TC_sigma_a, { 'type': 'homogeneous' })
+	visibility = texture_append_visibility(visibility, TC_sigma_s, { 'type': 'homogeneous' })
 	
 	properties = [
 		{
@@ -192,6 +186,19 @@ class luxrender_volume_data(declarative_property_group):
 			'attr': 'depth',
 			'name': 'Abs. at depth',
 			'description': 'Object will match absorption color at this depth in metres',
+			'default': 1.0,
+			'min': 0.00001,
+			'soft_min': 0.00001,
+			'max': 1000.0,
+			'soft_max': 1000.0,
+			'precision': 6,
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'absorption_scale',
+			'name': 'Abs. scale',
+			'description': 'Scale the absorption by this value',
 			'default': 1.0,
 			'min': 0.00001,
 			'soft_min': 0.00001,
@@ -231,23 +238,22 @@ class luxrender_volume_data(declarative_property_group):
 	def api_output(self, lux_context):
 		vp = ParamSet()
 		
-		scale = 1
-		def absorption_at_depth(i):
+		def absorption_at_depth_scaled(i):
 			# This is copied from the old LuxBlend, I don't pretend to understand it, DH
-			depthed = (-math.log(max([(float(i)),1e-30]))/(self.depth*scale)) * ((float(i))==1.0 and -1 or 1)
+			depthed = (-math.log(max([(float(i)),1e-30]))/(self.depth*self.absorption_scale)) * ((float(i))==1.0 and -1 or 1)
 			#print('abs xform: %f -> %f' % (i,depthed))
 			return depthed
 		
 		if self.type == 'clear':
 			vp.update( TFR_IOR.get_paramset(self) )
-			vp.update( TC_absorption.get_paramset(self, value_transform_function=absorption_at_depth) )
+			vp.update( TC_absorption.get_paramset(self, value_transform_function=absorption_at_depth_scaled) )
 		
 		if self.type == 'homogeneous':
 			def scattering_scale(i):
 				return i * self.scattering_scale
 			vp.update( TFR_IOR.get_paramset(self) )
 			vp.add_color('g', self.g)
-			vp.update( TC_sigma_a.get_paramset(self, value_transform_function=absorption_at_depth) )
+			vp.update( TC_sigma_a.get_paramset(self, value_transform_function=absorption_at_depth_scaled) )
 			vp.update( TC_sigma_s.get_paramset(self, value_transform_function=scattering_scale) )
 		
 		return self.type, vp
