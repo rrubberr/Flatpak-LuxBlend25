@@ -28,8 +28,7 @@
 from math import sqrt, atan2
 
 # Blender Libs
-import bpy
-from presets import AddPresetBase
+import bpy, bl_operators
 import math
 
 # LuxRender Libs
@@ -50,7 +49,7 @@ class LUXRENDER_MT_presets_engine(LUXRENDER_MT_base):
 	preset_subdir = "luxrender/engine"
 
 @LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_preset_engine_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_engine_add(bl_operators.presets.AddPresetBase, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_engine_add'
 	bl_label = 'Add LuxRender Engine settings preset'
@@ -80,7 +79,7 @@ class LUXRENDER_MT_presets_networking(LUXRENDER_MT_base):
 	preset_subdir = "luxrender/networking"
 
 @LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_preset_networking_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_networking_add(bl_operators.presets.AddPresetBase, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_networking_add'
 	bl_label = 'Add LuxRender Networking settings preset'
@@ -100,7 +99,7 @@ class LUXRENDER_MT_presets_material(LUXRENDER_MT_base):
 	preset_subdir = "luxrender/material"
 
 @LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_preset_material_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_material_add(bl_operators.presets.AddPresetBase, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_material_add'
 	bl_label = 'Add LuxRender Material settings preset'
@@ -134,7 +133,7 @@ class LUXRENDER_MT_presets_texture(LUXRENDER_MT_base):
 	preset_subdir = "luxrender/texture"
 
 @LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_preset_texture_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_texture_add(bl_operators.presets.AddPresetBase, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_texture_add'
 	bl_label = 'Add LuxRender Texture settings preset'
@@ -176,7 +175,7 @@ class LUXRENDER_MT_presets_volume(LUXRENDER_MT_base):
 	preset_subdir = "luxrender/volume"
 
 @LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_preset_volume_add(AddPresetBase, bpy.types.Operator):
+class LUXRENDER_OT_preset_volume_add(bl_operators.presets.AddPresetBase, bpy.types.Operator):
 	'''Save the current settings as a preset'''
 	bl_idname = 'luxrender.preset_volume_add'
 	bl_label = 'Add LuxRender Volume settings preset'
@@ -222,6 +221,7 @@ class LUXRENDER_OT_volume_remove(bpy.types.Operator):
 		w.volumes_index = len(w.volumes)-1
 		return {'FINISHED'}
 
+@LuxRenderAddon.addon_register_class
 class LUXRENDER_OT_lookat_file(bpy.types.Operator):
 	'''Load a 3x3 lookAt matrix from file'''
 	bl_idname = "luxrender.lookat_load"
@@ -284,7 +284,7 @@ class LUXRENDER_OT_lookat_file(bpy.types.Operator):
 		obj_act.rotation_euler[2] = et[2]
 		return {'FINISHED'}
 
-
+@LuxRenderAddon.addon_register_class
 class LUXRENDER_OT_transform_file(bpy.types.Operator):
 	'''Load a Transfrom matrix from file'''
 	bl_idname = "luxrender.transform_load"
@@ -406,19 +406,19 @@ def material_converter(report, scene, blender_mat):
 		
 		if blender_mat.raytrace_mirror.use and blender_mat.raytrace_mirror.reflect_factor >= 0.9:
 			# for high mirror reflection values switch to mirror material
-			luxrender_mat.type = 'mirror'
+			luxrender_mat.set_type( 'mirror' )
 			lmm = luxrender_mat.luxrender_mat_mirror
 			lmm.Kr_color = [i for i in blender_mat.mirror_color]
 			luxmat = lmm
 		elif blender_mat.specular_intensity < 0.01:
 			# use matte as glossy mat with very low specular is not equal matte
-			luxrender_mat.type = 'matte'
+			luxrender_mat.set_type( 'matte' )
 			lms = luxrender_mat.luxrender_mat_matte
 			lms.Kd_color = [blender_mat.diffuse_intensity*i for i in blender_mat.diffuse_color]
 			lms.sigma_floatvalue = 0.0
 			luxmat = lms
 		else:
-			luxrender_mat.type = 'glossy'
+			luxrender_mat.set_type( 'glossy' )
 			lmg = luxrender_mat.luxrender_mat_glossy
 			lmg.multibounce = False
 			lmg.useior = False
@@ -482,7 +482,7 @@ def material_converter(report, scene, blender_mat):
 						bump_tex = (tex_slot.texture, tex_slot.normal_factor)
 		
 		if luxrender_mat.type in ('matte', 'glossy'):
-			print(len(Kd_stack))
+			#print(len(Kd_stack))
 			if len(Kd_stack) == 1:
 				tex = Kd_stack[0][0]
 				dcf = Kd_stack[0][1]
@@ -685,6 +685,7 @@ def material_converter(report, scene, blender_mat):
 		return {'FINISHED'}
 	except Exception as err:
 		report({'ERROR'}, 'Cannot convert material: %s' % err)
+		#print('Material conversion failed on line %d' % err.__traceback__.tb_lineno)
 		return {'CANCELLED'}
 
 @LuxRenderAddon.addon_register_class

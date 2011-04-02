@@ -73,7 +73,10 @@ class luxrender_object(declarative_property_group):
 		}
 	]
 
+@LuxRenderAddon.addon_register_class
 class luxrender_transform(declarative_property_group):
+	ef_attach_to = ['Object']
+
 	controls = [
 		'op_transform',
 	]
@@ -90,7 +93,10 @@ class luxrender_transform(declarative_property_group):
 		},
 	]
 
+@LuxRenderAddon.addon_register_class
 class luxrender_lookat(declarative_property_group):
+	ef_attach_to = ['Object']
+
 	controls = [
 		'op_lookat',
 	]

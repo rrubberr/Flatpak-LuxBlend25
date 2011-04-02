@@ -134,41 +134,41 @@ TC_backface_Ka			= ColorTextureParameter('backface_Ka', 'Backface Absorption col
 TC_backface_Kd			= ColorTextureParameter('backface_Kd', 'Backface Diffuse color',	default=(0.64,0.64,0.64) )
 TC_backface_Ks			= ColorTextureParameter('backface_Ks', 'Backface Specular color',	default=(0.25,0.25,0.25) )
 
-mat_names = [
+mat_names = {
 	
 	# Categories are disabled for now, doesn't seem worth it
 	# and there's no agreeable correct way to do it
 	#('Matte', (
-		('matte','Matte'),
-		('mattetranslucent','Matte Translucent'),
+		'matte': 'Matte',
+		'mattetranslucent': 'Matte Translucent',
 	#)),
 	
 	#('Glossy', (
-		('glossy','Glossy'),
-		('glossy_lossy','Glossy (Lossy)'),
-		('glossytranslucent', 'Glossy Translucent'),
+		'glossy': 'Glossy',
+		'glossy_lossy': 'Glossy (Lossy)',
+		'glossytranslucent': 'Glossy Translucent',
 	#)),
 	
 	#('Glass', (
-		('glass', 'Glass'),
-		('glass2', 'Glass2'),
-		('roughglass','Rough Glass'),
-		('mirror','Mirror'),
+		'glass': 'Glass',
+		'glass2': 'Glass2',
+		'roughglass': 'Rough Glass',
+		'mirror': 'Mirror',
 	#)),
 	
 	#('Metal', (
-		('carpaint', 'Car Paint'),
-		('metal','Metal'),
-		('shinymetal','Shiny Metal'),
+		'carpaint': 'Car Paint',
+		'metal': 'Metal',
+		'shinymetal': 'Shiny Metal',
 	#)),
 	
 	#('Other', (
-		('velvet', 'Velvet'),
-		('scatter', 'Scatter'),
-		('mix','Mix'),
-		('null','Null'),
+		'velvet': 'Velvet',
+		'scatter': 'Scatter',
+		'mix': 'Mix',
+		'null': 'Null',
 	#))
-]
+}
 
 @LuxRenderAddon.addon_register_class
 class MATERIAL_OT_set_luxrender_type(bpy.types.Operator):
@@ -176,7 +176,6 @@ class MATERIAL_OT_set_luxrender_type(bpy.types.Operator):
 	bl_label = 'Set LuxRender material type'
 	
 	mat_name = bpy.props.StringProperty()
-	mat_label = bpy.props.StringProperty()
 	
 	@classmethod
 	def poll(cls, context):
@@ -184,8 +183,7 @@ class MATERIAL_OT_set_luxrender_type(bpy.types.Operator):
 				context.material.luxrender_material
 	
 	def execute(self, context):
-		context.material.luxrender_material.type = self.properties.mat_name
-		context.material.luxrender_material.type_label = self.properties.mat_label
+		context.material.luxrender_material.set_type( self.properties.mat_name )
 		return {'FINISHED'}
 
 #def draw_generator(operator, m_names):
@@ -224,10 +222,9 @@ class MATERIAL_MT_luxrender_type(bpy.types.Menu):
 	# Flat-list menu system
 	def draw(self, context):
 		sl = self.layout
-		for m_name, m_label in sorted(mat_names):
-			op = sl.operator('MATERIAL_OT_set_luxrender_type', text=m_label)
+		for m_name in sorted(mat_names.keys()):
+			op = sl.operator('MATERIAL_OT_set_luxrender_type', text=mat_names[m_name])
 			op.mat_name = m_name
-			op.mat_label = m_label
 	
 @LuxRenderAddon.addon_register_class
 class luxrender_material(declarative_property_group):
@@ -269,6 +266,10 @@ class luxrender_material(declarative_property_group):
 		VolumeParameter('Interior', 'Interior') + \
 		VolumeParameter('Exterior', 'Exterior')
 	
+	def set_type(self, mat_type):
+		self.type = mat_type
+		self.type_label = mat_names[mat_type]
+	
 	# Decide which material property sets the viewport object
 	# colour for each material type. If the property name is
 	# not set, then the color won't be changed.
@@ -287,7 +288,7 @@ class luxrender_material(declarative_property_group):
 	def reset(self):
 		super().reset()
 		# Also reset sub-property groups
-		for a,b in mat_names:
+		for a,b in mat_names.items():
 			getattr(self, 'luxrender_mat_%s'%a).reset()
 	
 	def set_master_color(self, blender_material):

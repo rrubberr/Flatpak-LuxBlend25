@@ -145,7 +145,7 @@ class GeometryExporter(object):
 				if obj.data.luxrender_mesh.projection:
 					ply_params.add_bool('projection', obj.data.luxrender_mesh.projection)
 					if obj.data.luxrender_mesh.ccam:
-						cam_pos =  self.scene.camera.data.luxrender_camera.lookAt(self.scene.camera)
+						cam_pos =  self.visibility_scene.camera.data.luxrender_camera.lookAt(self.visibility_scene.camera)
 						ply_params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
 					else:
 						ply_params.add_point('cam', obj.data.luxrender_mesh.ucam)
@@ -185,7 +185,7 @@ class GeometryExporter(object):
 		
 		try:
 			mesh_definitions = []
-			mesh = obj.create_mesh(self.geometry_scene, True, 'RENDER')
+			mesh = obj.to_mesh(self.geometry_scene, True, 'RENDER')
 			if mesh is None:
 				raise UnexportableObjectException('Cannot create render/export mesh')
 			
@@ -352,7 +352,7 @@ class GeometryExporter(object):
 					)
 					
 					# Add subdiv etc options
-					shape_params.update( obj.data.luxrender_mesh.get_paramset(self.scene) )
+					shape_params.update( obj.data.luxrender_mesh.get_paramset(self.visibility_scene) )
 					
 					mesh_definition = (
 						mesh_name,
@@ -393,7 +393,7 @@ class GeometryExporter(object):
 		
 		try:
 			mesh_definitions = []
-			mesh = obj.create_mesh(self.geometry_scene, True, 'RENDER')
+			mesh = obj.to_mesh(self.geometry_scene, True, 'RENDER')
 			if mesh is None:
 				raise UnexportableObjectException('Cannot create render/export mesh')
 			
@@ -519,7 +519,7 @@ class GeometryExporter(object):
 					#print(' %s nvertices: %i' % (obj.name, nvertices))
 					
 					# Add other properties from LuxRender Mesh panel
-					shape_params.update( obj.data.luxrender_mesh.get_paramset(self.scene) )
+					shape_params.update( obj.data.luxrender_mesh.get_paramset(self.visibility_scene) )
 					
 					mesh_definition = (
 						mesh_name,
@@ -715,7 +715,7 @@ class GeometryExporter(object):
 			for i in row:
 				if str(i) == 'nan': return True
 		return False
-
+	
 	def BSpline(self, points, dimension, degree, u):
 		controlpoints = []
 		def Basispolynom(controlpoints, i, u, degree):
@@ -737,19 +737,19 @@ class GeometryExporter(object):
 				
 				temp = sum1 + sum2
 			return temp
-
+		
 		for i in range(len(points)+degree+1):
 			if i <= degree:
 				controlpoints.append(0)
 			elif i >= len(points):
 				controlpoints.append(len(points)-degree)
 			else:
-				controlpoints.append(i - degree)                                                                        
-						
+				controlpoints.append(i - degree)
+		
 		if dimension == 2: temp = mathutils.Vector((0.0,0.0))
 		elif dimension == 3:temp = mathutils.Vector((0.0,0.0,0.0))
-
-		for i in range(len(points)):            
+		
+		for i in range(len(points)):
 			temp = temp + Basispolynom(controlpoints, i, u, degree)*points[i]
 		return temp
 	
@@ -797,7 +797,7 @@ class GeometryExporter(object):
 			self.lux_context.objectBegin(sn)
 			self.lux_context.shape(st, sp)
 			self.lux_context.objectEnd()
-
+		
 		for sn, si, st, sp in hair_Strand:
 			self.lux_context.objectBegin(sn)
 			self.lux_context.shape(st, sp)
@@ -810,10 +810,10 @@ class GeometryExporter(object):
 			if not (particle.is_exist and particle.is_visible): continue
 			
 			det.exported_objects += 1
-
-			points = []			
-			for j in range(len(particle.hair)):
-				points.append(particle.hair[j].co)
+			
+			points = []
+			for j in range(len(particle.hair_keys)):
+				points.append(particle.hair_keys[j].co)
 			if psys.settings.use_hair_bspline:
 				temp = []
 				degree = 2
@@ -825,7 +825,7 @@ class GeometryExporter(object):
 						u = i*(len(points)- degree)/math.trunc(math.pow(2,psys.settings.render_step)-1)
 					temp.append(self.BSpline(points, dimension, degree, u))
 				points = temp
-
+			
 			for j in range(len(points)-1):
 				SB = obj.matrix_basis.copy().to_3x3()
 				v1 = points[j+1] - points[j]
@@ -876,7 +876,7 @@ class GeometryExporter(object):
 			
 			LuxLog('Exporting Duplis...')
 			
-			obj.create_dupli_list(self.visibility_scene)
+			obj.dupli_list_create(self.visibility_scene)
 			if not obj.dupli_list:
 				raise Exception('cannot create dupli list for object %s' % obj.name)
 			
@@ -896,7 +896,7 @@ class GeometryExporter(object):
 					)
 				)
 			
-			obj.free_dupli_list()
+			obj.dupli_list_clear()
 			
 			det = DupliExportProgressThread()
 			det.start(len(duplis))
@@ -908,8 +908,8 @@ class GeometryExporter(object):
 				
 				det.exported_objects += 1
 				
-				# Check for group layer visibility
-				gviz = False
+				# Check for group layer visibility, if the object is in a group
+				gviz = len(do.users_group) == 0
 				for grp in do.users_group:
 					gviz |= True in [a&b for a,b in zip(do.layers, grp.layers)]
 				if not gviz:

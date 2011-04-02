@@ -63,8 +63,12 @@ def attr_light(lux_context, light, name, group, type, params, transform=None, po
 	
 	lux_context.lightGroup(group, [])
 	
-	if light.type == 'HEMI' and light.luxrender_lamp.luxrender_lamp_hemi.type == 'infinite':
-		lux_context.scale(-1, 1, 1) # correct worldmap orientation
+	mirrorTransform = light.type == 'HEMI' and light.luxrender_lamp.luxrender_lamp_hemi.type == 'infinite'
+	
+	if mirrorTransform:
+		# correct worldmap orientation
+		lux_context.transformBegin(file=Files.MAIN)
+		lux_context.scale(-1, 1, 1) 
 	
 	if light.luxrender_lamp.Exterior_volume != '':
 		lux_context.exterior(light.luxrender_lamp.Exterior_volume)
@@ -72,6 +76,9 @@ def attr_light(lux_context, light, name, group, type, params, transform=None, po
 		lux_context.exterior(LuxManager.CurrentScene.luxrender_world.default_exterior_volume)
 	
 	lux_context.lightSource(type, params)
+
+	if mirrorTransform:
+		lux_context.transformEnd()
 	
 	for portal in portals:
 		lux_context.portalInstance(portal)
@@ -103,7 +110,7 @@ def exportLight(lux_context, ob, matrix, portals = []):
 	# Other lamp params from lamp object
 	if light.type == 'SUN':
 		invmatrix = matrix.inverted()
-		light_params.add_vector('sundir', (invmatrix[0][2], invmatrix[1][2], invmatrix[2][2]))
+		if light.luxrender_lamp.luxrender_lamp_sun.sunsky_type != 'sky': light_params.add_vector('sundir', (invmatrix[0][2], invmatrix[1][2], invmatrix[2][2]))
 		attr_light(lux_context, light, ob.name, light.luxrender_lamp.lightgroup, light.luxrender_lamp.luxrender_lamp_sun.sunsky_type, light_params, portals=portals)
 		return True
 	
@@ -233,7 +240,7 @@ def lights(lux_context, geometry_scene, visibility_scene, mesh_definitions):
 		# to support a mesh/object which got lamp as dupli object
 		if ob.is_duplicator and ob.dupli_type in ('GROUP', 'VERTS', 'FACES'):
 			# create dupli objects
-			ob.create_dupli_list(geometry_scene)
+			ob.dupli_list_create(geometry_scene)
 			
 			for dupli_ob in ob.dupli_list:
 				if dupli_ob.object.type != 'LAMP':
@@ -242,7 +249,7 @@ def lights(lux_context, geometry_scene, visibility_scene, mesh_definitions):
 			
 			# free object dupli list again. Warning: all dupli objects are INVALID now!
 			if ob.dupli_list: 
-				ob.free_dupli_list()
+				ob.dupli_list_clear()
 		else:
 			if ob.type == 'LAMP':
 				have_light |= exportLight(lux_context, ob, ob.matrix_world, portal_shapes)
