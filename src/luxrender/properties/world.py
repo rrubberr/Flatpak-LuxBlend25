@@ -221,7 +221,7 @@ class luxrender_volume_data(declarative_property_group):
 		{
 			'type': 'float',
 			'attr': 'scattering_scale',
-			'name': 'Scattering scale factor',
+			'name': 'Scattering scale',
 			'description': 'Scattering colour will be multiplied by this value',
 			'default': 1.0,
 			'min': 0.0,
@@ -485,7 +485,7 @@ class luxrender_lightgroup_data(declarative_property_group):
 			'type': 'float',
 			'attr': 'gain',
 			'name': 'Gain',
-			'description': 'Overall gain for this light group',
+			'description': 'Overall gain for this gight group',
 			'min': 0.0,
 			'soft_min': 0.0,
 			'default': 1.0
@@ -530,8 +530,8 @@ class luxrender_lightgroups(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'ignore',
-			'name': 'Merge LightGroups',
-			'description': 'Enable this for final renders, or to decrease RAM usage.',
+			'name': 'Merge light groups',
+			'description': 'Combine all light groups into one. Enable this for final renders, or to decrease RAM usage.',
 			'default': False
 		},
 	]
