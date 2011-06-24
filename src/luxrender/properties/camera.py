@@ -395,6 +395,7 @@ class luxrender_film(declarative_property_group):
 		
 		'lbl_external',
 		'writeinterval',
+		'flmwriteinterval',
 		'displayinterval',
 		
 		'lbl_outputs',
@@ -437,8 +438,18 @@ class luxrender_film(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'writeinterval',
-			'name': 'Save interval',
+			'name': 'Write interval',
 			'description': 'Period for writing images to disk (seconds)',
+			'default': 180,
+			'min': 2,
+			'soft_min': 2,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'flmwriteinterval',
+			'name': 'Flm write interval',
+			'description': 'Period for writing flm files to disk (seconds)',
 			'default': 180,
 			'min': 2,
 			'soft_min': 2,
@@ -659,6 +670,7 @@ class luxrender_film(declarative_property_group):
 		if scene.luxrender_engine.export_type == 'EXT':
 			params.add_integer('displayinterval', self.displayinterval)
 			params.add_integer('writeinterval', self.writeinterval)
+			params.add_integer('flmwriteinterval', self.flmwriteinterval)
 		else:
 			params.add_integer('writeinterval', self.internal_updateinterval)
 		
