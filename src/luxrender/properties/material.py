@@ -280,7 +280,7 @@ class luxrender_material(declarative_property_group):
 		if self.type in ('glass', 'glass2', 'mirror'):
 			if blender_material.specular_hardness != 500:
 				blender_material.specular_hardness = 500
-		#Reset spec intensity if the mat type becomes something else
+		#Reset spec hardness if the mat type becomes something else
 		if self.type not in ('glass', 'glass2', 'mirror'):
 			if blender_material.specular_hardness != 50:
 				blender_material.specular_hardness = 50
