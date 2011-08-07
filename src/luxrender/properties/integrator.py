@@ -390,6 +390,7 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'maxdepth',
 			'name': 'Max. depth',
+			'description': 'Max recursion depth for ray casting from eye',
 			'default': 48,
 			'min': 8,
 			'max': 2048,
@@ -624,6 +625,7 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'maxphotondepth',
 			'name': 'Max. photon depth',
+			'description': 'Max recursion depth for photon tracing',
 			'default': 48,
 			'min': 8,
 			'max': 2048,
@@ -820,6 +822,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'maxeyedepth',
 			'name': 'Max. eye depth',
 			'default': 48,
+			'description': 'Max recursion depth for ray casting from eye',
 			'min': 8,
 			'max': 2048,
 			'save_in_preset': True

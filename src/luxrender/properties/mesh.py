@@ -105,6 +105,7 @@ class luxrender_mesh(declarative_property_group):
 			'type': 'bool',
 			'attr': 'portal',
 			'name': 'Exit Portal',
+			'description': 'Use this mesh as an exit portal',
 			'default': False,
 		},
 		{
@@ -129,6 +130,7 @@ class luxrender_mesh(declarative_property_group):
 			'type': 'bool',
 			'attr': 'nsmooth',
 			'name': 'Normal smoothing',
+			'description': 'Re-smooth normals after subdividing',
 			'default': True,
 		},
 		{
