@@ -359,9 +359,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 	
 	def set_export_path(self, scene):
 		# replace /tmp/ with the real %temp% folder on Windows
+		# OSX also has a special temp location that we should use
 		fp = scene.render.filepath
 		output_path_split = list(os.path.split(fp))
-		if sys.platform == 'win32' and output_path_split[0] == '/tmp':
+		if sys.platform in ('win32', 'darwin') and output_path_split[0] == '/tmp':
 			output_path_split[0] = efutil.temp_directory()
 			fp = '/'.join(output_path_split)
 		
