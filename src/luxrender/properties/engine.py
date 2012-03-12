@@ -24,16 +24,52 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
+import os
+
 from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil
-from extensions_framework.validate import Logic_OR as O, Logic_AND as A
+from extensions_framework.validate import Logic_OR as O, Logic_AND as A, Logic_Operator as LO
 
 from .. import LuxRenderAddon
-from ..export import ParamSet
 from ..outputs.pure_api import PYLUX_AVAILABLE
-from ..outputs.pure_api import LUXRENDER_VERSION
 
-#from ..outputs.luxfire_client import LUXFIRE_CLIENT_AVAILABLE
+def check_renderer_settings(context):
+	lre = context.scene.luxrender_rendermode
+	lri = context.scene.luxrender_integrator
+	
+	def clear_renderer_alert():
+		if 'surfaceintegrator' in lri.alert.keys(): del lri.alert['surfaceintegrator']
+		if 'lightstrategy' in lri.alert.keys(): del lri.alert['lightstrategy']
+		if 'bidirstrategy' in lri.alert.keys(): del lri.alert['bidirstrategy']
+		if 'advanced' in lri.alert.keys(): del lri.alert['advanced']
+	
+	# Check hybrid renderer and surfaceintegrator compatibility
+	hybrid_valid = (lri.surfaceintegrator == 'path' and lri.lightstrategy in ['one', 'all', 'auto']) or (lri.surfaceintegrator == 'bidirectional' and lri.bidirstrategy in ['one'])
+	if ((lre.renderer == 'hybrid' and hybrid_valid) or lre.renderer!='hybrid'):
+		clear_renderer_alert()
+	elif lre.renderer == 'hybrid' and not hybrid_valid:
+		# These logical tests should evaluate to True if the setting is incompatible
+		lri.alert['surfaceintegrator'] = { 'surfaceintegrator': LO({'!=':['path', 'bidirectional']}) }
+		lri.alert['lightstrategy'] = { 'lightstrategy': LO({'!=':['one', 'all', 'auto']}) }
+		lri.alert['bidirstrategy'] = { 'bidirstrategy': LO({'!=':['one']}) }
+		lri.alert['advanced'] = { 'bidirstrategy': LO({'!=':['one']}) }
+		return
+	
+	# check compatible SPPM mode
+	sppm_valid = lri.surfaceintegrator == 'sppm'
+	if ((lre.renderer == 'sppm' and sppm_valid) or lre.renderer!='sppm'):
+		clear_renderer_alert()
+	elif lre.renderer == 'sppm' and not sppm_valid:
+		lri.alert['surfaceintegrator'] = { 'surfaceintegrator': LO({'!=':'sppm'}) }
+		return
+
+def find_luxrender_path():
+	return os.getenv(
+		# Use the env var path, if set ...
+		'LUXRENDER_ROOT',
+		# .. or load the last path from CFG file
+		efutil.find_config_value('luxrender', 'defaults', 'install_path', '')
+	)
 
 def find_apis():
 	apis = [
@@ -42,10 +78,47 @@ def find_apis():
 	if PYLUX_AVAILABLE:
 		apis.append( ('INT', 'Internal', 'INT') )
 	
-	#if LUXFIRE_CLIENT_AVAILABLE:
-	#	apis.append( ('LFC', 'LuxFire Client', 'LFC') )
-	
 	return apis
+
+@LuxRenderAddon.addon_register_class
+class luxrender_testing(declarative_property_group):
+	"""
+	Properties related to exporter and scene testing
+	"""
+	
+	ef_attach_to = ['Scene']
+	
+	controls = [
+		'clay_render',
+		'object_analysis',
+		're_raise'
+	]
+	
+	visibility = {}
+	
+	properties = [
+		{
+			'type': 'bool',
+			'attr': 'clay_render',
+			'name': 'Clay render',
+			'description': 'Export all materials as default "clay"',
+			'default': False
+		},
+		{
+			'type': 'bool',
+			'attr': 'object_analysis',
+			'name': 'Debug: print object analysis',
+			'description': 'Show extra output as objects are processed',
+			'default': False
+		},
+		{
+			'type': 'bool',
+			'attr': 're_raise',
+			'name': 'Debug: show full trace on export error',
+			'description': '',
+			'default': False
+		},
+	]
 
 @LuxRenderAddon.addon_register_class
 class luxrender_engine(declarative_property_group):
@@ -59,38 +132,35 @@ class luxrender_engine(declarative_property_group):
 		'export_type',
 		'binary_name',
 		'write_files',
-		['write_lxs', 'write_lxm', 'write_lxo', 'write_lxv'],
-		
-		# 'embed_filedata', # Disabled pending acceptance into LuxRender core
+		'install_path',
+		['write_lxv',
+		'embed_filedata'],
 		
 		'mesh_type',
 		'partial_ply',
-		'render',
-		'install_path',
-		['threads_auto', 'threads'],
-	]
-	
-	if LUXRENDER_VERSION >= '0.8':
-		# Insert 'renderer' before 'binary_name'
-		controls.insert(controls.index('binary_name'), 'renderer')
-		controls.insert(controls.index('binary_name'), 'opencl_platform_index')
-		controls.append('log_verbosity')
-	
+		['render', 'monitor_external'],
+		['threads_auto', 'fixed_seed'],
+		'threads',
+		'log_verbosity',
+		]
+		
 	visibility = {
-		'opencl_platform_index':	{ 'renderer': 'hybrid' },
 		'write_files':				{ 'export_type': 'INT' },
-		'write_lxs':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
-		'write_lxm':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
-		'write_lxo':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
-		'write_lxv':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
+		#'write_lxv':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
+		'embed_filedata':			O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'mesh_type':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
 		'binary_name':				{ 'export_type': 'EXT' },
-		'render':					O([{'write_files': True}, {'export_type': 'EXT'}]),
+		'render':					O([{'write_files': True}, { 'export_type': 'EXT' }]), #We need run renderer unless we are set for internal-pipe mode, which is the only time both of these are false
+		'monitor_external':			{'export_type': 'EXT', 'binary_name': 'luxrender', 'render': True },
 		'partial_ply':				O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
-		'install_path':				{ 'render': True, 'export_type': 'EXT' },
-		'threads_auto':				A([O([{'write_files': True}, {'export_type': 'EXT'}]), { 'render': True }]),
-		'threads':					A([O([{'write_files': True}, {'export_type': 'EXT'}]), { 'render': True }, { 'threads_auto': False }]),
+		'install_path':				{ 'export_type': 'EXT' },
+		'threads_auto':				O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]), #The flag options must be present for any condition where run renderer is present and checked, as well as internal-pipe mode
+		'threads':					O([A([{'write_files': False}, { 'export_type': 'INT' }, {'threads_auto': False}]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }, {'threads_auto': False}])]), #Longest logic test in the whole plugin! threads-auto is in both sides, since we must check that it is false for either internal-pipe mode, or when using run-renderer.
+		'fixed_seed':				O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]),
+		'log_verbosity':			O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]),
 	}
+	
+	alert = {}
 	
 	properties = [
 		{
@@ -114,7 +184,7 @@ class luxrender_engine(declarative_property_group):
 		{
 			'type': 'enum',
 			'attr': 'export_type',
-			'name': 'Rendering Mode',
+			'name': 'Export Type',
 			'description': 'Run LuxRender inside or outside of Blender',
 			'default': 'EXT', # if not PYLUX_AVAILABLE else 'INT',
 			'items': find_apis(),
@@ -125,44 +195,28 @@ class luxrender_engine(declarative_property_group):
 			'attr': 'render',
 			'name': 'Run Renderer',
 			'description': 'Run Renderer after export',
-			'default': efutil.find_config_value('luxrender', 'defaults', 'auto_start', False),
+			'default': efutil.find_config_value('luxrender', 'defaults', 'auto_start', True),
+		},
+		{
+			'type': 'bool',
+			'attr': 'monitor_external',
+			'name': 'Monitor External',
+			'description': 'Monitor external GUI rendering; when selected, LuxBlend will copy the render image from the external GUI',
+			'default': True,
+			'save_in_preset': True
 		},
 		{
 			'type': 'bool',
 			'attr': 'partial_ply',
 			'name': 'Partial PLY Export',
-			'description': 'Skip PLY file write',
+			'description': 'Skip exporting PLY files that already exist. Try disabling this if you have geometry issues',
 			'default': False,
 			'save_in_preset': True
 		},
 		{
 			'type': 'enum',
-			'attr': 'renderer',
-			'name': 'Renderer',
-			'description': 'Renderer type',
-			'default': 'sampler',
-			'items': [
-				('sampler', 'Sampler (traditional CPU)', 'sampler'),
-				('hybrid', 'Hybrid (CPU + GPU)', 'hybrid'),
-			],
-			'save_in_preset': True
-		},
-		{
-			'type': 'int',
-			'attr': 'opencl_platform_index',
-			'name': 'OpenCL Platform Index',
-			'description': 'Try increasing this value 1 at a time if LuxRender fails to use your GPU',
-			'default': 0,
-			'min': 0,
-			'soft_min': 0,
-			'max': 16,
-			'soft_max': 16,
-			'save_in_preset': True
-		},
-		{
-			'type': 'enum',
 			'attr': 'binary_name',
-			'name': 'External type',
+			'name': 'External Type',
 			'description': 'Choose full GUI or console renderer',
 			'default': 'luxrender',
 			'items': [
@@ -176,61 +230,45 @@ class luxrender_engine(declarative_property_group):
 			'subtype': 'DIR_PATH',
 			'attr': 'install_path',
 			'name': 'Path to LuxRender Installation',
-			'description': 'Path to LuxRender',
-			'default': efutil.find_config_value('luxrender', 'defaults', 'install_path', '')
+			'description': 'Path to LuxRender install directory',
+			'default': find_luxrender_path()
 		},
 		{
 			'type': 'bool',
 			'attr': 'write_files',
-			'name': 'Write to disk',
+			'name': 'Write to Disk',
 			'description': 'Write scene files to disk',
 			'default': True,
 			'save_in_preset': True
 		},
 		{
 			'type': 'bool',
-			'attr': 'write_lxs',
-			'name': 'LXS',
-			'description': 'Write master scene file',
-			'default': True,
-			'save_in_preset': True
-		},
-		{
-			'type': 'bool',
-			'attr': 'write_lxm',
-			'name': 'LXM',
-			'description': 'Write materials file',
-			'default': True,
-			'save_in_preset': True
-		},
-		{
-			'type': 'bool',
-			'attr': 'write_lxo',
-			'name': 'LXO',
-			'description': 'Write objects file',
-			'default': True,
-			'save_in_preset': True
-		},
-		{
-			'type': 'bool',
 			'attr': 'write_lxv',
-			'name': 'LXV',
-			'description': 'Write volumes file',
+			'name': 'Export Smoke',
+			'description': 'Process and export smoke simulations',
 			'default': True,
 			'save_in_preset': True
 		},
 		{
 			'type': 'bool',
 			'attr': 'embed_filedata',
-			'name': 'Embed File data',
+			'name': 'Embed File Data',
 			'description': 'Embed all external files (images etc) inline into the exporter output',
 			'default': False,
 			'save_in_preset': True
 		},
 		{
+			'type': 'bool',
+			'attr': 'is_saving_lbm2',
+			'name': '<for internal use>',
+			'default': False,
+			'save_in_preset': False
+		},
+		{
 			'type': 'enum',
 			'attr': 'mesh_type',
 			'name': 'Default mesh format',
+			'description': 'Sets whether to export scene geometry as PLY files or directly in the LXO file. PLY is faster and recommended',
 			'items': [
 				('native', 'LuxRender mesh', 'native'),
 				('binary_ply', 'Binary PLY', 'binary_ply')
@@ -251,16 +289,21 @@ class luxrender_engine(declarative_property_group):
 				('very-quiet', 'Very quiet', 'very-quiet'),
 			],
 			'save_in_preset': True
-		}
+		},
+		{
+			'type': 'bool',
+			'attr': 'fixed_seed',
+			'name': 'Use fixed seeds',
+			'description': 'Use fixed seeds for threads. Helps with keeping noise even for animations',
+			'default': False,
+			'save_in_preset': True
+		},
 	]
 	
-	def api_output(self):
-		renderer_params = ParamSet()
+	def allow_file_embed(self):
+		saving_files = (self.export_type == 'EXT' or (self.export_type == 'INT' and self.write_files == True))
 		
-		if self.renderer == 'hybrid':
-			renderer_params.add_integer('opencl.platform.index', self.opencl_platform_index)
-		
-		return self.renderer, renderer_params
+		return self.is_saving_lbm2 or (saving_files and self.embed_filedata)
 
 @LuxRenderAddon.addon_register_class
 class luxrender_networking(declarative_property_group):
@@ -268,7 +311,6 @@ class luxrender_networking(declarative_property_group):
 	ef_attach_to = ['Scene']
 	
 	controls = [
-		# 'use_network_servers', # drawn in panel header
 		'servers',
 		'serverinterval'
 	]
@@ -279,7 +321,7 @@ class luxrender_networking(declarative_property_group):
 	}
 	
 	properties = [
-		{
+		{	# drawn in panel header
 			'type': 'bool',
 			'attr': 'use_network_servers',
 			'name': 'Use Networking',

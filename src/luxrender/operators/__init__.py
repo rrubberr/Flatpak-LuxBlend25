@@ -29,12 +29,16 @@ from math import sqrt, atan2
 
 # Blender Libs
 import bpy, bl_operators
-import math
+import json, math, os
 
 # LuxRender Libs
 from .. import LuxRenderAddon
-from ..outputs import LuxLog
+from ..outputs import LuxLog, LuxManager
 from ..export.scene import SceneExporter
+from ..export import materials as export_materials
+from ..export import fix_matrix_order
+
+from extensions_framework import util as efutil
 
 # Per-IDPropertyGroup preset handling
 
@@ -93,80 +97,6 @@ class LUXRENDER_OT_preset_networking_add(bl_operators.presets.AddPresetBase, bpy
 		]
 		return super().execute(context)
 
-@LuxRenderAddon.addon_register_class
-class LUXRENDER_MT_presets_material(LUXRENDER_MT_base):
-	bl_label = "LuxRender Material Presets"
-	preset_subdir = "luxrender/material"
-
-@LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_preset_material_add(bl_operators.presets.AddPresetBase, bpy.types.Operator):
-	'''Save the current settings as a preset'''
-	bl_idname = 'luxrender.preset_material_add'
-	bl_label = 'Add LuxRender Material settings preset'
-	preset_menu = 'LUXRENDER_MT_presets_material'
-	preset_values = []
-	preset_subdir = 'luxrender/material'
-	
-	def execute(self, context):
-		pv = [
-			'bpy.context.material.luxrender_material.%s'%v['attr'] for v in bpy.types.luxrender_material.get_exportable_properties()
-		] + [
-			'bpy.context.material.luxrender_emission.%s'%v['attr'] for v in bpy.types.luxrender_emission.get_exportable_properties()
-		] + [
-			'bpy.context.material.luxrender_transparency.%s'%v['attr'] for v in bpy.types.luxrender_transparency.get_exportable_properties()
-		]
-		
-		# store only the sub-properties of the selected lux material type
-		lux_type = context.material.luxrender_material.type
-		sub_type = getattr(bpy.types, 'luxrender_mat_%s' % lux_type)
-		
-		pv.extend([
-			'bpy.context.material.luxrender_material.luxrender_mat_%s.%s'%(lux_type, v['attr']) for v in sub_type.get_exportable_properties()
-		])
-		
-		self.preset_values = pv
-		return super().execute(context)
-
-@LuxRenderAddon.addon_register_class
-class LUXRENDER_MT_presets_texture(LUXRENDER_MT_base):
-	bl_label = "LuxRender Texture Presets"
-	preset_subdir = "luxrender/texture"
-
-@LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_preset_texture_add(bl_operators.presets.AddPresetBase, bpy.types.Operator):
-	'''Save the current settings as a preset'''
-	bl_idname = 'luxrender.preset_texture_add'
-	bl_label = 'Add LuxRender Texture settings preset'
-	preset_menu = 'LUXRENDER_MT_presets_texture'
-	preset_values = []
-	preset_subdir = 'luxrender/texture'
-	
-	def execute(self, context):
-		pv = [
-			'bpy.context.texture.luxrender_texture.%s'%v['attr'] for v in bpy.types.luxrender_texture.get_exportable_properties()
-		]
-		
-		# store only the sub-properties of the selected lux texture type
-		lux_type = context.texture.luxrender_texture.type
-		sub_type = getattr(bpy.types, 'luxrender_tex_%s' % lux_type)
-		
-		features, junk = getattr(context.texture.luxrender_texture, 'luxrender_tex_%s' % lux_type).get_paramset(context.scene, context.texture)
-		if '2DMAPPING' in features:
-			pv.extend([
-				'bpy.context.texture.luxrender_texture.luxrender_tex_mapping.%s'%v['attr'] for v in bpy.types.luxrender_tex_mapping.get_exportable_properties()
-			])
-		if '3DMAPPING' in features:
-			pv.extend([
-				'bpy.context.texture.luxrender_texture.luxrender_tex_transform.%s'%v['attr'] for v in bpy.types.luxrender_tex_transform.get_exportable_properties()
-			])
-		
-		pv.extend([
-			'bpy.context.texture.luxrender_texture.luxrender_tex_%s.%s'%(lux_type, v['attr']) for v in sub_type.get_exportable_properties()
-		])
-		
-		self.preset_values = pv
-		return super().execute(context)
-
 # Volume data handling
 
 @LuxRenderAddon.addon_register_class
@@ -222,24 +152,32 @@ class LUXRENDER_OT_volume_remove(bpy.types.Operator):
 		return {'FINISHED'}
 
 @LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_lookat_file(bpy.types.Operator):
-	'''Load a 3x3 lookAt matrix from file'''
-	bl_idname = "luxrender.lookat_load"
-	bl_label = "Load Camera LookAt"	
+class LUXRENDER_OT_camera_setting_file(bpy.types.Operator):
+	'''Load camera settings from file'''
+	bl_idname = "luxrender.camera_setting_load"
+	bl_label = "Load Camera Settings"	
 
 	directory		= bpy.props.StringProperty(name='LXS directory')
 	filename   	 	= bpy.props.StringProperty(name='LXS filename')
 
 	def readfile(self,file_name):
 		FILE = open(file_name, "r")
-		transf = []
-		lines = FILE.readlines()
-		for line in lines:
-			data = line.split()
-			for i in data:
-				transf.append(float(i))
+		lines = [ l.rstrip("\n") for l in FILE.readlines() ]
 		FILE.close()
-		return transf
+		return lines
+
+	def get_cam_value(self, lines, prop, num_lines):
+		try:
+			idx = lines.index(prop) + 1
+			VAL = lines[idx : idx+num_lines]
+			OUT = []
+			for line in VAL:
+				data = line.split()
+				for i in data:
+					OUT.append(float(i))
+			return OUT
+		except ValueError:
+			return []
 
 	def invoke(self, context, event):
 		context.window_manager.fileselect_add(self)
@@ -250,43 +188,62 @@ class LUXRENDER_OT_lookat_file(bpy.types.Operator):
 			self.properties.directory,
 			self.properties.filename
 		])
-		LKT = self.readfile(lkt_filename)
+		
+		DATA = self.readfile(lkt_filename)	
+
+		LKT = self.get_cam_value(DATA, '#LookAt', 3)
+		FDIST = self.get_cam_value(DATA, '#float focaldistance', 1)
+		FOV = self.get_cam_value(DATA, '#float fov', 1)
+		RES = self.get_cam_value(DATA, '#int resolution', 1)
 
 		scene = context.scene
 		obj_act = scene.objects.active
 
-		obj_act.location[0] = LKT[0] 
-		obj_act.location[1] = LKT[1]
-		obj_act.location[2] = LKT[2]
-		obj_act.rotation_mode = 'XYZ'
+		if len(LKT) == 9:
+			obj_act.location[0] = LKT[0] 
+			obj_act.location[1] = LKT[1]
+			obj_act.location[2] = LKT[2]
+			obj_act.rotation_mode = 'XYZ'
 
-		Dir = [ LKT[3]-LKT[0], LKT[4]-LKT[1], LKT[5]-LKT[2] ]
-		Right = [ Dir[1]*LKT[8]-Dir[2]*LKT[7], Dir[2]*LKT[6]-Dir[0]*LKT[8], Dir[0]*LKT[7]-Dir[1]*LKT[6] ]
+			Dir = [ LKT[3]-LKT[0], LKT[4]-LKT[1], LKT[5]-LKT[2] ]
+			Right = [ Dir[1]*LKT[8]-Dir[2]*LKT[7], Dir[2]*LKT[6]-Dir[0]*LKT[8], Dir[0]*LKT[7]-Dir[1]*LKT[6] ]
 		
-		M = [ Right[0], Right[1], Right[2], LKT[0], LKT[6], LKT[7], LKT[8], LKT[1], -Dir[0], -Dir[1], -Dir[2], LKT[2], 0, 0, 0, 1 ]
+			M = [ Right[0], Right[1], Right[2], LKT[0], LKT[6], LKT[7], LKT[8], LKT[1], -Dir[0], -Dir[1], -Dir[2], LKT[2], 0, 0, 0, 1 ]
 		
-		et = [ 0, 0, 0 ]
+			et = [ 0, 0, 0 ]
 
-		cy = sqrt( M[0]*M[0] + M[1]*M[1] )
+			cy = sqrt( M[0]*M[0] + M[1]*M[1] )
 	
-		if cy > 0:
-			et[0] = atan2( M[6], M[10] )
-			et[1] = atan2( -M[2], cy )
-			et[2] = atan2( M[1], M[0] )
+			if cy > 0:
+				et[0] = atan2( M[6], M[10] )
+				et[1] = atan2( -M[2], cy )
+				et[2] = atan2( M[1], M[0] )
 
-		else :
-			et[0] = atan2( -M[9], M[5] )
-			et[1] = atan2( -M[2], cy )
-			et[2] = 0
+			else :
+				et[0] = atan2( -M[9], M[5] )
+				et[1] = atan2( -M[2], cy )
+				et[2] = 0
 
-		obj_act.rotation_euler[0] = et[0]
-		obj_act.rotation_euler[1] = et[1]
-		obj_act.rotation_euler[2] = et[2]
+			obj_act.rotation_euler[0] = et[0]
+			obj_act.rotation_euler[1] = et[1]
+			obj_act.rotation_euler[2] = et[2]
+
+		if len(FOV) >= 0 :
+			obj_act.data.lens_unit = 'DEGREES'
+			obj_act.data.angle = math.radians(FOV[0])
+
+		if len(FDIST) >= 0 :
+			obj_act.data.dof_distance = FDIST[0]
+
+		if len(RES) >= 2:
+			scene.render.resolution_x = int(RES[0])
+			scene.render.resolution_y = int(RES[1])
+
 		return {'FINISHED'}
 
 @LuxRenderAddon.addon_register_class
 class LUXRENDER_OT_transform_file(bpy.types.Operator):
-	'''Load a Transfrom matrix from file'''
+	'''Load a transfrom matrix from file'''
 	bl_idname = "luxrender.transform_load"
 	bl_label = "Load Transform Matrix"	
 
@@ -295,14 +252,92 @@ class LUXRENDER_OT_transform_file(bpy.types.Operator):
 
 	def readfile(self,file_name):
 		FILE = open(file_name, "r")
-		transf = []
-		lines = FILE.readlines()
-		for line in lines:
-			data = line.split()
-			for i in data:
-				transf.append(float(i))
+		lines = [ l.rstrip("\n") for l in FILE.readlines() ]
 		FILE.close()
-		return transf
+		return lines
+
+	def get_transform(self, lines, prop, num_lines):
+		try:
+			idx = lines.index(prop) + 1
+			VAL = lines[idx : idx+num_lines]
+			OUT = []
+			for line in VAL:
+				data = line.split()
+				for i in data:
+					OUT.append(float(i))
+			return OUT
+		except ValueError:
+			return []
+
+	def invoke(self, context, event):
+		context.window_manager.fileselect_add(self)
+		return {'RUNNING_MODAL'}
+
+	def execute(self, context):
+		trf_filename = '/'.join([
+			self.properties.directory,
+			self.properties.filename
+		])
+
+		scene = context.scene
+		obj_act = scene.objects.active
+
+		DATA = self.readfile(trf_filename)	
+
+		M = self.get_transform(DATA, '#Transform', 4)
+
+		if len(M) == 16:
+			et = [ 0, 0, 0 ]
+
+			cy = sqrt( M[0]*M[0] + M[1]*M[1] )
+	
+			if cy > 0:
+				et[0] = atan2( M[6], M[10] )
+				et[1] = atan2( -M[2], cy )
+				et[2] = atan2( M[1], M[0] )
+
+			else :
+				et[0] = atan2( -M[9], M[5] )
+				et[1] = atan2( -M[2], cy )
+				et[2] = 0
+
+			obj_act.location[0] = M[3] 
+			obj_act.location[1] = M[7]
+			obj_act.location[2] = M[11]
+			obj_act.rotation_euler[0] = et[0]
+			obj_act.rotation_euler[1] = et[1]
+			obj_act.rotation_euler[2] = et[2]
+			obj_act.rotation_mode = 'XYZ'
+		return {'FINISHED'}
+
+
+@LuxRenderAddon.addon_register_class
+class LUXRENDER_OT_projector_params_file(bpy.types.Operator):
+	'''Load projector parameters from file'''
+	bl_idname = "luxrender.projector_params_load"
+	bl_label = "Load Projector Parameters"	
+
+	directory		= bpy.props.StringProperty(name='LXS directory')
+	filename   	 	= bpy.props.StringProperty(name='LXS filename')
+
+	def readfile(self,file_name):
+		FILE = open(file_name, "r")
+		lines = [ l.rstrip("\n") for l in FILE.readlines() ]
+		FILE.close()
+		return lines
+
+	def get_params(self, lines, prop, num_lines):
+		try:
+			idx = lines.index(prop) + 1
+			VAL = lines[idx : idx+num_lines]
+			OUT = []
+			for line in VAL:
+				data = line.split()
+				for i in data:
+					OUT.append(float(i))
+			return OUT
+		except ValueError:
+			return []
 
 	def invoke(self, context, event):
 		context.window_manager.fileselect_add(self)
@@ -313,33 +348,111 @@ class LUXRENDER_OT_transform_file(bpy.types.Operator):
 			self.properties.directory,
 			self.properties.filename
 		])
+		
+		DATA = self.readfile(lkt_filename)	
+
+		LKT = self.get_params(DATA, '#LookAt', 3)
+		FOV = self.get_params(DATA, '#float fov', 1)
+		RES = self.get_params(DATA, '#int resolution', 1)
+		ANG = self.get_params(DATA, '#Fov', 1)
+		ASPECT = self.get_params(DATA, '#Aspect', 1)
+		CAM = self.get_params(DATA, '#Cam', 1)
+		DIR = self.get_params(DATA, '#Dir', 1)
+		UP  = self.get_params(DATA, '#Up', 1)
+
+		text_act = context.texture.luxrender_texture.luxrender_tex_mapping
+		if len(LKT) == 9:
+			Cam = [ LKT[0], LKT[1], LKT[2] ]
+			Dir = [ LKT[3]-LKT[0], LKT[4]-LKT[1], LKT[5]-LKT[2] ]
+			Up = [ LKT[6], LKT[7], LKT[8] ]
+
+			text_act.dir = Dir;
+			text_act.cam = Cam;
+			text_act.up = Up;
+
+		if len(FOV) >= 1 :
+			text_act.fov = FOV[0];
+
+		if len(RES) >= 2 :
+			text_act.aspect = RES[1]/RES[0];
+
+		if len(CAM) == 3:
+			text_act.cam = CAM;
+		if len(DIR) == 3:
+			text_act.dir = DIR;
+		if len(UP) == 3:
+			text_act.up = UP;
+
+		if len(ANG) >= 1 :
+			text_act.fov = ANG[0];
+		if len(ASPECT) >= 1 :
+			text_act.aspect = ASPECT[0];
+
+		return {'FINISHED'}
+
+
+@LuxRenderAddon.addon_register_class
+class LUXRENDER_OT_projector_copy_from_camera(bpy.types.Operator):
+	'''Copy projector parameters from active camera'''
+	bl_idname = "luxrender.projector_copy_from_cam"
+	bl_label = "Copy parameters from active camera"	
+
+	directory		= bpy.props.StringProperty(name='LXS directory')
+	filename   	 	= bpy.props.StringProperty(name='LXS filename')
+
+	def execute(self, context):
 
 		scene = context.scene
-		obj_act = scene.objects.active
+		act_text = context.texture.luxrender_texture.luxrender_tex_mapping
+		matrix = scene.camera.matrix_world.copy()
+		matrix = fix_matrix_order(matrix) # matrix indexing hack
+		matrix = matrix.transposed() 
+		pos = matrix[3]
+		forwards = -matrix[2]
+		up = matrix[1]
 
-		M = self.readfile(lkt_filename)
+		xrt, yrt = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
 
-		et = [ 0, 0, 0 ]
+		act_text.cam = pos[:3]
+		act_text.dir = forwards[:3]
+		act_text.up = up[:3]
+		act_text.fov = math.degrees(scene.camera.data.angle)
+		act_text.aspect = yrt/xrt
 
-		cy = sqrt( M[0]*M[0] + M[1]*M[1] )
+		return {'FINISHED'}
+
+@LuxRenderAddon.addon_register_class
+class LUXRENDER_OT_lightgroup_add(bpy.types.Operator):
+	'''Add a new light group definition to the scene'''
 	
-		if cy > 0:
-			et[0] = atan2( M[6], M[10] )
-			et[1] = atan2( -M[2], cy )
-			et[2] = atan2( M[1], M[0] )
+	bl_idname = "luxrender.lightgroup_add"
+	bl_label = "Add LuxRender Light Group"
+	
+	new_lightgroup_name = bpy.props.StringProperty(default='New Light Group')
+	
+	def invoke(self, context, event):
+		lg = context.scene.luxrender_lightgroups.lightgroups
+		lg.add()
+		new_lg = lg[len(lg)-1]
+		new_lg.name = self.properties.new_lightgroup_name
+		return {'FINISHED'}
 
-		else :
-			et[0] = atan2( -M[9], M[5] )
-			et[1] = atan2( -M[2], cy )
-			et[2] = 0
-
-		obj_act.location[0] = M[3] 
-		obj_act.location[1] = M[7]
-		obj_act.location[2] = M[11]
-		obj_act.rotation_euler[0] = et[0]
-		obj_act.rotation_euler[1] = et[1]
-		obj_act.rotation_euler[2] = et[2]
-		obj_act.rotation_mode = 'XYZ'
+@LuxRenderAddon.addon_register_class
+class LUXRENDER_OT_lightgroup_remove(bpy.types.Operator):
+	'''Remove the selected lightgroup definition'''
+	
+	bl_idname = "luxrender.lightgroup_remove"
+	bl_label = "Remove LuxRender Light Group"
+	
+	lg_index = bpy.props.IntProperty(default=-1)
+	
+	def invoke(self, context, event):
+		w = context.scene.luxrender_lightgroups
+		if self.properties.lg_index == -1:
+			w.lightgroups.remove( w.lightgroups_index )
+		else:
+			w.lightgroups.remove( self.properties.lg_index )
+		w.lightgroups_index = len(w.lightgroups)-1
 		return {'FINISHED'}
 
 # Export process
@@ -349,6 +462,8 @@ class EXPORT_OT_luxrender(bpy.types.Operator):
 	bl_idname = 'export.luxrender'
 	bl_label = 'Export LuxRender Scene (.lxs)'
 	
+	filter_glob		= bpy.props.StringProperty(default='*.lxs',options={'HIDDEN'})
+	use_filter		= bpy.props.BoolProperty(default=True,options={'HIDDEN'})
 	filename		= bpy.props.StringProperty(name='LXS filename')
 	directory		= bpy.props.StringProperty(name='LXS directory')
 	
@@ -378,19 +493,118 @@ menu_func = lambda self, context: self.layout.operator("export.luxrender", text=
 bpy.types.INFO_MT_file_export.append(menu_func)
 
 @LuxRenderAddon.addon_register_class
-class LUXRENDER_OT_copy_mat_color(bpy.types.Operator):
-	bl_idname = 'luxrender.copy_mat_color'
-	bl_label = 'Copy material color to viewport'
+class LUXRENDER_OT_load_material(bpy.types.Operator):
+	bl_idname = 'luxrender.load_material'
+	bl_label = 'Load material'
+	bl_description = 'Load material from LBM2 file'
+	
+	filter_glob	= bpy.props.StringProperty(default='*.lbm2',options={'HIDDEN'})
+	use_filter	= bpy.props.BoolProperty(default=True,options={'HIDDEN'})
+	filename	= bpy.props.StringProperty(name='Destination filename')
+	directory	= bpy.props.StringProperty(name='Destination directory')
+	
+	def invoke(self, context, event):
+		context.window_manager.fileselect_add(self)
+		return {'RUNNING_MODAL'}
 	
 	def execute(self, context):
-		
 		try:
+			if self.properties.filename == '' or self.properties.directory == '':
+				raise Exception('No filename or directory given.')
+			
 			blender_mat = context.material
 			luxrender_mat = context.material.luxrender_material
-			luxrender_mat.set_master_color(blender_mat)
+			
+			fullpath = os.path.join(
+				self.properties.directory,
+				self.properties.filename
+			)
+			with open(fullpath, 'r') as lbm2_file:
+				lbm2_data = json.load(lbm2_file)
+			
+			luxrender_mat.load_lbm2(context, lbm2_data, blender_mat, context.object)
+			
 			return {'FINISHED'}
+		
 		except Exception as err:
-			self.report({'ERROR'}, 'Cannot copy settings: %s' % err)
+			self.report({'ERROR'}, 'Cannot load: %s' % err)
+			return {'CANCELLED'}
+
+@LuxRenderAddon.addon_register_class
+class LUXRENDER_OT_save_material(bpy.types.Operator):
+	bl_idname = 'luxrender.save_material'
+	bl_label = 'Save material'
+	bl_description = 'Save material as LXM or LBM2 file'
+	
+	filter_glob			= bpy.props.StringProperty(default='*.lbm2;*.lxm',options={'HIDDEN'})
+	use_filter			= bpy.props.BoolProperty(default=True,options={'HIDDEN'})
+	filename			= bpy.props.StringProperty(name='Destination filename')
+	directory			= bpy.props.StringProperty(name='Destination directory')
+	
+	material_file_type	= bpy.props.EnumProperty(name="Exported file type", items=[('LBM2','LBM2','LBM2'),('LXM','LXM','LXM')])
+	
+	def invoke(self, context, event):
+		context.window_manager.fileselect_add(self)
+		return {'RUNNING_MODAL'}
+	
+	def execute(self, context):
+		try:
+			if self.properties.filename == '' or self.properties.directory == '':
+				raise Exception('No filename or directory given.')
+			
+			blender_mat = context.material
+			luxrender_mat = context.material.luxrender_material
+			
+			LM = LuxManager("material_save", self.properties.material_file_type)
+			LuxManager.SetActive(LM)
+			LM.SetCurrentScene(context.scene)
+			
+			material_context = LM.lux_context
+			
+			fullpath = os.path.join(
+				self.properties.directory,
+				self.properties.filename
+			)
+			
+			# Make sure the filename has the correct extension
+			if not fullpath.lower().endswith( '.%s' % self.properties.material_file_type.lower() ):
+				fullpath += '.%s' % self.properties.material_file_type.lower()
+			
+			export_materials.ExportedMaterials.clear()
+			export_materials.ExportedTextures.clear()
+			
+			# This causes lb25 to embed all external data ...
+			context.scene.luxrender_engine.is_saving_lbm2 = True
+			
+			# Include interior/exterior for this material
+			for volume in context.scene.luxrender_volumes.volumes:
+				if volume.name in [luxrender_mat.Interior_volume, luxrender_mat.Exterior_volume]:
+					material_context.makeNamedVolume( volume.name, *volume.api_output(material_context) )
+			
+			cr = context.scene.luxrender_testing.clay_render
+			context.scene.luxrender_testing.clay_render = False
+			luxrender_mat.export(context.scene, material_context, blender_mat)
+			context.scene.luxrender_testing.clay_render = cr
+			
+			material_context.set_material_name(blender_mat.name)
+			material_context.update_material_metadata(
+				interior=luxrender_mat.Interior_volume,
+				exterior=luxrender_mat.Exterior_volume
+			)
+			
+			material_context.write(fullpath)
+			
+			# .. and must be reset!
+			context.scene.luxrender_engine.is_saving_lbm2 = False
+			
+			LM.reset()
+			LuxManager.SetActive(None)
+			
+			self.report({'INFO'}, 'Material "%s" saved to %s' % (blender_mat.name, fullpath))
+			return {'FINISHED'}
+			
+		except Exception as err:
+			self.report({'ERROR'}, 'Cannot save: %s' % err)
 			return {'CANCELLED'}
 
 def material_converter(report, scene, blender_mat):
@@ -402,7 +616,7 @@ def material_converter(report, scene, blender_mat):
 		luxrender_mat.Interior_volume = ''
 		luxrender_mat.Exterior_volume = ''
 		
-		luxrender_mat.reset()
+		luxrender_mat.reset(prnt=blender_mat)
 		
 		if blender_mat.raytrace_mirror.use and blender_mat.raytrace_mirror.reflect_factor >= 0.9:
 			# for high mirror reflection values switch to mirror material
@@ -487,7 +701,7 @@ def material_converter(report, scene, blender_mat):
 				tex = Kd_stack[0][0]
 				dcf = Kd_stack[0][1]
 				color = Kd_stack[0][2]
-				variant, paramset = tex.luxrender_texture.get_paramset(scene, tex)
+				variant = tex.luxrender_texture.get_paramset(scene, tex)[0]
 				if variant == 'color':
 					# assign the texture directly
 					luxmat.Kd_usecolortexture = True
@@ -544,7 +758,7 @@ def material_converter(report, scene, blender_mat):
 									setattr(alpha_params,'offsetfloat%d'%(i+1),col_ramp[i].position)
 									setattr(color_params,'tex%d_color'%(i+1),(col_ramp[i].color[0], col_ramp[i].color[1], col_ramp[i].color[2]))
 									setattr(alpha_params,'tex%d_floatvalue'%(i+1),col_ramp[i].color[3])
-
+							
 							luxmat.Kd_usecolortexture = True
 							luxmat.Kd_colortexturename = mix_tex.name
 					pass
@@ -647,7 +861,7 @@ def material_converter(report, scene, blender_mat):
 		if luxrender_mat.type in ('glossy'):
 			if len(Ks_stack) == 1:
 				tex = Ks_stack[0][0]
-				variant, paramset = tex.luxrender_texture.get_paramset(scene, tex)
+				variant = tex.luxrender_texture.get_paramset(scene, tex)[0]
 				if variant == 'color':
 					# assign the texture directly
 					luxmat.Ks_usecolortexture = True
@@ -667,7 +881,7 @@ def material_converter(report, scene, blender_mat):
 		
 		if bump_tex != None:
 			tex = bump_tex[0]
-			variant, paramset = tex.luxrender_texture.get_paramset(scene, tex)
+			variant = tex.luxrender_texture.get_paramset(scene, tex)[0]
 			if variant == 'float':
 				luxrender_mat.bumpmap_usefloattexture = True
 				luxrender_mat.bumpmap_floattexturename = tex.name
@@ -695,7 +909,7 @@ class LUXRENDER_OT_material_reset(bpy.types.Operator):
 	
 	def execute(self, context):
 		if context.material and hasattr(context.material, 'luxrender_material'):
-			context.material.luxrender_material.reset()
+			context.material.luxrender_material.reset(prnt=context.material)
 		return {'FINISHED'}
 
 @LuxRenderAddon.addon_register_class
@@ -728,4 +942,3 @@ class LUXRENDER_OT_convert_material(bpy.types.Operator):
 		
 		material_converter(self.report, context.scene, blender_mat)
 		return {'FINISHED'}	
-

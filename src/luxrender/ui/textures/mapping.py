@@ -29,10 +29,11 @@ from ...ui.textures import luxrender_texture_base
 
 @LuxRenderAddon.addon_register_class
 class ui_texture_mapping(luxrender_texture_base):
-	bl_label = 'LuxRender Texture Mapping'
+	bl_label = 'LuxRender 2D Texture Mapping'
 	bl_options = {'DEFAULT_CLOSED'}
 	
-	LUX_COMPAT = {'bilerp', 'checkerboard', 'dots', 'imagemap', 'uv', 'uvmask'}
+	LUX_COMPAT	= {'BLENDER', 'bilerp', 'checkerboard', 'dots', 'imagemap', 'normalmap', 'uv', 'uvmask'}
+	BL_COMPAT	= {'IMAGE'}
 	
 	display_property_groups = [
 		( ('texture', 'luxrender_texture'), 'luxrender_tex_mapping' )

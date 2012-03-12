@@ -24,13 +24,15 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
+import bpy
+
 from extensions_framework import declarative_property_group
-from extensions_framework.validate import Logic_Operator as LO
+from extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 
 from .. import LuxRenderAddon
 from ..export import ParamSet
 from ..properties.material import texture_append_visibility
-from ..properties.texture import FloatTextureParameter
+from ..properties.texture import FloatTextureParameter, ColorTextureParameter
 from ..util import dict_merge
 
 class MeshFloatTextureParameter(FloatTextureParameter):
@@ -45,6 +47,18 @@ TF_displacementmap = MeshFloatTextureParameter(
 	add_float_value=False
 )
 
+class MeshColorTextureParameter(ColorTextureParameter):
+	def texture_slot_set_attr(self):
+		# Looks in a different location than other FloatTextureParameters
+		return lambda s,c: c.luxrender_mesh
+
+TC_artexture = MeshColorTextureParameter(
+	'projmap',
+	'Projector Texture Map',
+	real_attr='projectionmap',
+	texture_only=True
+)
+
 @LuxRenderAddon.addon_register_class
 class luxrender_mesh(declarative_property_group):
 	'''
@@ -55,11 +69,19 @@ class luxrender_mesh(declarative_property_group):
 	
 	controls = [
 		'mesh_type',
-		['portal', 'AR_enabled'],
-		['projection', 'ccam'],
-		'ucam',
-		['subdiv','sublevels'],
-		['nsmooth', 'sharpbound'],
+		'instancing_mode',
+		'portal',
+		'generatetangents',
+		'AR_enabled',
+#		'projection',
+	] + \
+		TC_artexture.controls + \
+	[
+		'subdiv',
+		'sublevels',
+		'mdsublevels',
+		'nsmooth',
+		['sharpbound', 'splitnormal'],
 	] + \
 		TF_displacementmap.controls + \
 	[
@@ -67,16 +89,19 @@ class luxrender_mesh(declarative_property_group):
 	]
 	
 	visibility = dict_merge({
-		'ccam':		{'projection': True },
-		'ucam': 	{'projection': True , 'ccam': False },
-		'nsmooth':		{ 'subdiv': LO({'!=': 'None'}) },
-		'sharpbound':	{ 'subdiv': LO({'!=': 'None'}) },
-		'sublevels':	{ 'subdiv': LO({'!=': 'None'}) },
+#		'ccam':		{'projection': True },
+#		'ucam': 	{'projection': True , 'ccam': False },
+		'nsmooth':	{ 'subdiv': 'loop' },
+		'sharpbound':	{ 'subdiv': 'loop' },
+		'splitnormal':	{ 'subdiv': 'loop' },
+		'sublevels':	{ 'subdiv': 'loop' },
+		'mdsublevels':  { 'subdiv': 'microdisplacement' },
 		'dmscale':		{ 'subdiv': LO({'!=': 'None'}), 'dm_floattexturename': LO({'!=': ''}) },
 		'dmoffset':		{ 'subdiv': LO({'!=': 'None'}), 'dm_floattexturename': LO({'!=': ''}) },
-	}, TF_displacementmap.visibility )
+	}, TF_displacementmap.visibility, TC_artexture.visibility )
 	
 	visibility = texture_append_visibility(visibility, TF_displacementmap, { 'subdiv': LO({'!=': 'None'}) })
+	visibility = texture_append_visibility(visibility, TC_artexture, { })
 	
 	properties = [
 		{
@@ -91,9 +116,28 @@ class luxrender_mesh(declarative_property_group):
 			'default': 'global'
 		},
 		{
+			'type': 'enum',
+			'attr': 'instancing_mode',
+			'name': 'Instancing',
+			'items': [
+				('auto', 'Automatic', 'Let the exporter code decide'),
+				('always', 'Always', 'Always export this mesh as instances'),
+				('never', 'Never', 'Never export this mesh as instances')
+			],
+			'default': 'auto'
+		},
+		{
 			'type': 'bool',
 			'attr': 'portal',
 			'name': 'Exit Portal',
+			'description': 'Use this mesh as an exit portal',
+			'default': False,
+		},
+		{
+			'type': 'bool',
+			'attr': 'generatetangents',
+			'name': 'Generate Tangents',
+			'description': 'Generate tanget space for this mesh. Enable when using a bake-generated normal map',
 			'default': False,
 		},
 		{
@@ -103,27 +147,44 @@ class luxrender_mesh(declarative_property_group):
 			'default': 'None',
 			'items': [
 				('None', 'None', 'None'),
-				('loop', 'loop', 'loop'),
-				('microdisplacement', 'microdisplacement', 'microdisplacement')
+				('loop', 'Loop', 'loop'),
+				('microdisplacement', 'Microdisplacement', 'microdisplacement')
 			]
 		},
 		{
 			'type': 'bool',
 			'attr': 'nsmooth',
 			'name': 'Normal smoothing',
+			'description': 'Re-smooth normals after subdividing',
 			'default': True,
 		},
 		{
 			'type': 'bool',
 			'attr': 'sharpbound',
-			'name': 'Sharpen Bounds',
+			'name': 'Sharpen bounds',
 			'default': False,
 		},
+		{
+			'type': 'bool',
+			'attr': 'splitnormal',
+			'name': 'Keep split edges',
+			'default': False,
+			'description': 'Preserves effects of edge-split modifier with smooth-shaded meshes. WARNING: This will cause solid-shaded meshes to rip open!'},
 		{
 			'type': 'int',
 			'attr': 'sublevels',
 			'name': 'Subdivision Levels',
 			'default': 2,
+			'min': 0,
+			'soft_min': 0,
+			'max': 6,
+			'soft_max': 6
+		},
+		{
+			'type': 'int',
+			'attr': 'mdsublevels',
+			'name': 'Microsubdivision Levels',
+			'default': 50,
 			'min': 0,
 			'soft_min': 0,
 			'max': 1000,
@@ -136,13 +197,13 @@ class luxrender_mesh(declarative_property_group):
 			'description': 'Using for declare the object as support object in Augmented Reality Scene',
 			'default': False,
 		},
-		{
-			'type': 'bool',
-			'attr': 'projection',
-			'name': 'Use projector texture',
-			'description': 'Select the projector texture type for the object',
-			'default': False,
-		},
+#		{
+#			'type': 'bool',
+#			'attr': 'projection',
+#			'name': 'Use projector texture',
+#			'description': 'Select the projector texture type for the object',
+#			'default': False,
+#		},
 		{
 			'type': 'bool',
 			'attr': 'ccam',
@@ -168,6 +229,8 @@ class luxrender_mesh(declarative_property_group):
 			'description': 'Displacement Map Scale',
 			'default': 1.0,
 			'precision': 6,
+			'sub_type': 'DISTANCE',
+			'unit': 'LENGTH'
 		},
 		{
 			'type': 'float',
@@ -176,23 +239,31 @@ class luxrender_mesh(declarative_property_group):
 			'description': 'Displacement Map Offset',
 			'default': 0.0,
 			'precision': 6,
+			'sub_type': 'DISTANCE',
+			'unit': 'LENGTH'
 		},
-	]
-	
+	] + \
+		TC_artexture.properties
 
 	def get_shape_IsSupport(self):
 		return self.AR_enabled
 	
 	def get_paramset(self, scene):
-
 		params = ParamSet()
+		
+		#Export generatetangents
+		params.add_bool('generatetangents', self.generatetangents)
 		
 		# check if subdivision is used
 		if self.subdiv != 'None':
 			params.add_string('subdivscheme', self.subdiv)
-			params.add_integer('nsubdivlevels',self.sublevels)
+			if self.subdiv == 'loop':
+				params.add_integer('nsubdivlevels', self.sublevels)
+			elif self.subdiv == 'microdisplacement':
+				params.add_integer('nsubdivlevels', self.mdsublevels)
 			params.add_bool('dmnormalsmooth', self.nsmooth)
 			params.add_bool('dmsharpboundary', self.sharpbound)
+			params.add_bool('dmnormalsplit', self.splitnormal)
 			
 		
 		export_dm = TF_displacementmap.get_paramset(self)
@@ -204,12 +275,17 @@ class luxrender_mesh(declarative_property_group):
 
 		if self.AR_enabled:
 			params.add_bool('support', self.AR_enabled)
-		if self.projection:
-			params.add_bool('projection', self.projection)
-			if self.ccam:
-				cam_pos =  scene.camera.data.luxrender_camera.lookAt(scene.camera)
-				params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
-			else:
-				params.add_point('cam', self.ucam)
+
+		export_proj = TC_artexture.get_paramset(self)
+		if self.projmap_colortexturename != '' and len(export_proj) > 0:
+			params.add_bool('projection', True)
+#			cam_pos =  scene.world.texture_slots[self.projmap_colortexturename].texture.luxrender_texture.luxrender_tex_mapping.cam
+			cam_pos =  bpy.context.blend_data.textures[self.projmap_colortexturename].luxrender_texture.luxrender_tex_mapping.cam
+			params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
+#			if self.ccam:
+#				cam_pos =  scene.camera.data.luxrender_camera.lookAt(scene.camera)
+#				params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
+#			else:
+#				params.add_point('cam', self.ucam)
 		
 		return params

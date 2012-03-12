@@ -26,16 +26,16 @@
 #
 # System Libs
 from __future__ import division
-from ctypes import cdll, c_uint, c_float, cast, POINTER, byref, sizeof, c_long
-import errno, os, struct, sys
+from ctypes import cdll, c_uint, c_float, cast, POINTER, byref, sizeof
+import os, struct, sys
 
 # Blender Libs
 import bpy
 
 # LuxRender libs
-from luxrender.export import ParamSet, matrix_to_list, LuxManager
-from luxrender.outputs import LuxLog
-from luxrender.outputs.file_api import Files
+from . import ParamSet, matrix_to_list, LuxManager
+from ..outputs import LuxLog
+from ..outputs.file_api import Files
 
 class library_loader():
 	
@@ -49,35 +49,39 @@ class library_loader():
 	has_lzma = False
 	lzmadll = None
 	
+	ver_str = '%d.%d' % bpy.app.version[0:2]
+	
 	platform_search = {
 		'lzo': {
 			'darwin': [
 				bpy.utils.user_resource('SCRIPTS','addons/luxrender/liblzo2.dylib' ),
-				bpy.app.binary_path[:-7] + '2.56/scripts/addons/luxrender/liblzo2.dylib'
+				bpy.app.binary_path[:-7] + ver_str + '/scripts/addons/luxrender/liblzo2.dylib'
 			],
 			'win32': [
 				'lzo.dll',
-				bpy.app.binary_path[:-11] + '2.56/scripts/addons/luxrender/lzo.dll'
+				bpy.utils.user_resource('SCRIPTS','addons/luxrender/lzo.dll'),
+				bpy.app.binary_path[:-11] + ver_str + '/scripts/addons/luxrender/lzo.dll'
 			],
 			'linux2': [
 				'/usr/lib/liblzo2.so',
 				'/usr/lib/liblzo2.so.2',
-				bpy.app.binary_path[:-7] + '2.56/scripts/addons/luxrender/liblzo2.so'
+				bpy.app.binary_path[:-7] + ver_str + '/scripts/addons/luxrender/liblzo2.so'
 			],
 		},
 		'lzma': {
 			'darwin': [
 				bpy.utils.user_resource('SCRIPTS','addons/luxrender/liblzmadec.dylib'),
-				bpy.app.binary_path[:-7] + '2.56/scripts/addons/luxrender/liblzmadec.dylib'
+				bpy.app.binary_path[:-7] + ver_str + '/scripts/addons/luxrender/liblzmadec.dylib'
 			],
 			'win32': [
 				'lzma.dll',
-				bpy.app.binary_path[:-11] + '2.56/scripts/addons/luxrender/lzma.dll'
+				bpy.utils.user_resource('SCRIPTS','addons/luxrender/lzma.dll'),
+				bpy.app.binary_path[:-11] + ver_str + '/scripts/addons/luxrender/lzma.dll'
 			],
 			'linux2': [
 				'/usr/lib/liblzma.so',
 				'/usr/lib/liblzma.so.2',
-				bpy.app.binary_path[:-7] + '2.56/scripts/addons/luxrender/liblzma.so'
+				bpy.app.binary_path[:-7] + ver_str + '/scripts/addons/luxrender/liblzma.so'
 			]
 		}
 	}
@@ -209,7 +213,7 @@ def read_cache(smokecache, is_high_res, amplifier):
 				if (data_type == 3) or (data_type == 4):
 					cell_count = struct.unpack("1I", cachefile.read(SZ_UINT))[0]
 					#print("Cell count: {0:1d}".format(cell_count))
-					usr_data_type = struct.unpack("1I", cachefile.read(SZ_UINT))[0]
+					struct.unpack("1I", cachefile.read(SZ_UINT))[0]
 					
 					# Shadow values
 					compressed = struct.unpack("1B", cachefile.read(1))[0]
@@ -366,7 +370,7 @@ def read_cache(smokecache, is_high_res, amplifier):
 							p_dens = cast(uncomp_stream, POINTER(c_float))
 							
 							#call lzo decompressor
-							lReturn = lzodll.lzo1x_decompress(stream,stream_size,p_dens,byref(outlen), None)
+							lzodll.lzo1x_decompress(stream,stream_size,p_dens,byref(outlen), None)
 							
 							for i in range(cell_count):
 								density.append(p_dens[i])
@@ -383,7 +387,7 @@ def read_cache(smokecache, is_high_res, amplifier):
 							outlen = c_uint(cell_count*SZ_FLOAT)
 							
 							#call lzma decompressor
-							lReturn = lzmadll.LzmaUncompress(p_dens, byref(outlen), stream, byref(c_uint(stream_size)), props, props_size)
+							lzmadll.LzmaUncompress(p_dens, byref(outlen), stream, byref(c_uint(stream_size)), props, props_size)
 							
 							for i in range(cell_count):
 								density.append(p_dens[i])
@@ -401,6 +405,7 @@ def export_smoke(lux_context, scene):
 		for mod in object.modifiers:
 			if mod.name == 'Smoke':
 				if mod.smoke_type == 'DOMAIN':
+					eps = 0.000001
 					domain = object
 					p = []
 					# gather smoke domain settings
@@ -427,14 +432,12 @@ def export_smoke(lux_context, scene):
 									if param[0] == 'color sigma_s': sigma_s = param[1]
 									if param[0] == 'color g': g = param[1][0]
 
-					x = max = int(domain.dimensions[0])
-					y = int(domain.dimensions[1])
-					z = int(domain.dimensions[2])
 
-					if y > max: max = y
-					if z > max: max = z
-
-					big_res = [int(resolution/max*x),int(resolution/max*y),int(resolution/max*z)]
+					max = domain.dimensions[0]
+					if (max - domain.dimensions[1]) < -eps: max = domain.dimensions[1]
+					if (max - domain.dimensions[2]) < -eps: max = domain.dimensions[2]
+					
+					big_res = [int(round(resolution*domain.dimensions[0]/max,0)),int(round(resolution*domain.dimensions[1]/max,0)),int(round(resolution*domain.dimensions[2]/max,0))]
 					if set.use_high_resolution: big_res = [big_res[0]*(set.amplify+1), big_res[1]*(set.amplify+1), big_res[2]*(set.amplify+1)]
 
 					if len(density) == big_res[0]*big_res[1]*big_res[2]:

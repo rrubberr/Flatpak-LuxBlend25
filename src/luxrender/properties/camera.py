@@ -31,11 +31,12 @@ import bpy
 
 from extensions_framework import util as efutil
 from extensions_framework import declarative_property_group
-from extensions_framework.validate import Logic_OR as O
+from extensions_framework.validate import Logic_OR as O, Logic_AND as A
 
 from .. import LuxRenderAddon
-from ..export import get_worldscale
+from ..export import get_worldscale, get_output_filename
 from ..export import ParamSet, LuxManager
+from ..export import fix_matrix_order
 from ..outputs.pure_api import LUXRENDER_VERSION
 
 def CameraVolumeParameter(attr, name):
@@ -67,26 +68,36 @@ class luxrender_camera(declarative_property_group):
 	ef_attach_to = ['Camera']
 	
 	controls = [
+		# type is drawn in the UI class manually, and only for perspective camera type
+		#'type',
+		
 		'Exterior',
 		['autofocus', 'use_dof', 'use_clipping'],
-		'type',
 		'fstop',
+		'blades',
+		['distribution', 'power'],
 		'sensitivity',
 		'exposure_mode',
-		['exposure_start', 'exposure_end'],
+		'exposure_start', 'exposure_end_norm', 'exposure_end_abs',
 		['exposure_degrees_start', 'exposure_degrees_end'],
 		'usemblur',
+		'motion_blur_samples',
 		'shutterdistribution', 
 		['cammblur', 'objectmblur'],
-		'background',		
+		'background',	
 	]
 	
 	visibility = {
+		'blades':					{ 'use_dof': True },
+		'distribution':				{ 'use_dof': True },
+		'power':					{ 'use_dof': True },
 		'exposure_start':			{ 'exposure_mode': O(['normalised','absolute']) },
-		'exposure_end':				{ 'exposure_mode': O(['normalised','absolute']) },
+		'exposure_end_norm':		{ 'exposure_mode': 'normalised' },
+		'exposure_end_abs':			{ 'exposure_mode': 'absolute' },
 		'exposure_degrees_start':	{ 'exposure_mode': 'degrees' },
 		'exposure_degrees_end':		{ 'exposure_mode': 'degrees' },
 		'shutterdistribution':		{ 'usemblur': True },
+		'motion_blur_samples':		{ 'usemblur': True },
 		'cammblur':					{ 'usemblur': True },
 		'objectmblur':				{ 'usemblur': True },
 	}
@@ -112,6 +123,36 @@ class luxrender_camera(declarative_property_group):
 			'name': 'Auto focus',
 			'description': 'Use auto focus',
 			'default': True,
+		},
+		{
+			'type': 'int',
+			'attr': 'blades',
+			'name': 'Blades',
+			'description': 'Number of aperture blades. Use 2 or lower for circular aperture',
+			'min': 0,
+			'default': 0,
+		},
+		{
+			'type': 'enum',
+			'attr': 'distribution',
+			'name': 'Distribution',
+			'description': 'This value controls the lens sampling distribution. Non-uniform distributions allow for ring effects',
+			'default': 'uniform',
+			'items': [
+				('uniform', 'Uniform', 'Uniform'),
+				('exponential', 'Exponential', 'Exponential'),
+				('inverse exponential', 'Inverse Exponential', 'Inverse Exponential'),
+				('gaussian', 'Gaussian', 'Gaussian'),
+				('inverse gaussian', 'Inverse Gaussian', 'Inverse Gaussian'),
+				]
+		},
+		{
+			'type': 'int',
+			'attr': 'power',
+			'name': 'Power',
+			'description': 'Exponent for lens samping distribution. Higher values give more pronounced ring-effects',
+			'min': 0,
+			'default': 0,
 		},
 		{
 			'type': 'enum',
@@ -147,19 +188,28 @@ class luxrender_camera(declarative_property_group):
 			'max': 6400.0,
 			'soft_max': 6400.0
 		},
-		
 		{
 			'type': 'enum',
 			'attr': 'exposure_mode',
 			'name': 'Exposure timing',
 			'items': [
-				('normalised', 'normalised', 'normalised'),
-				('absolute', 'absolute', 'absolute'),
-				('degrees', 'degrees', 'degrees'),
+				('normalised', 'Normalised', 'normalised'),
+				('absolute', 'Absolute', 'absolute'),
+				('degrees', 'Degrees', 'degrees'),
 			],
 			'default': 'normalised'
 		},
-		
+		{
+			'type': 'int',
+			'attr': 'motion_blur_samples',
+			'name': 'Shutter Steps',
+			'description': 'Shutter Steps',
+			'default': 1,
+			'min': 1,
+			'soft_min': 1,
+			'max': 100,
+			'soft_max': 100
+		},
 		{
 			'type': 'float',
 			'attr': 'exposure_start',
@@ -174,7 +224,7 @@ class luxrender_camera(declarative_property_group):
 		},
 		{
 			'type': 'float',
-			'attr': 'exposure_end',
+			'attr': 'exposure_end_norm',
 			'name': 'Close',
 			'description': 'Shutter close time',
 			'precision': 6,
@@ -183,6 +233,18 @@ class luxrender_camera(declarative_property_group):
 			'soft_min': 0.0,
 			'max': 1.0,
 			'soft_max': 1.0
+		},
+		{
+			'type': 'float',
+			'attr': 'exposure_end_abs',
+			'name': 'Close',
+			'description': 'Shutter close time',
+			'precision': 6,
+			'default': 1.0,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 120.0,
+			'soft_max': 120.0
 		},
 		{
 			'type': 'float',
@@ -208,8 +270,6 @@ class luxrender_camera(declarative_property_group):
 			'max': 360.0,
 			'soft_max': 360.0
 		},
-		
-		
 		{
 			'type': 'bool',
 			'attr': 'usemblur',
@@ -244,7 +304,8 @@ class luxrender_camera(declarative_property_group):
 			'attr': 'background',
 			'name': 'Background Image Plane',
 			'description': 'Select a background image for the current camera',
-			'save_in_preset': True
+			'default': '',
+#			'save_in_preset': True
 		},
 		
 	]
@@ -259,16 +320,20 @@ class luxrender_camera(declarative_property_group):
 		ws = get_worldscale()
 		matrix *= ws
 		ws = get_worldscale(as_scalematrix=False)
-		matrix[3][0] *= ws
-		matrix[3][1] *= ws
-		matrix[3][2] *= ws
+		matrix = fix_matrix_order(matrix) # matrix indexing hack
+		matrix[0][3] *= ws
+		matrix[1][3] *= ws
+		matrix[2][3] *= ws
+		# transpose to extract columns
+		# TODO - update to matrix.col when available
+		matrix = matrix.transposed() 
 		pos = matrix[3]
 		forwards = -matrix[2]
 		target = (pos + forwards)
 		up = matrix[1]
 		return pos[:3] + target[:3] + up[:3]
 	
-	def screenwindow(self, xr, yr, cam):
+	def screenwindow(self, xr, yr, scene, cam):
 		'''
 		xr			float
 		yr			float
@@ -304,7 +369,19 @@ class luxrender_camera(declarative_property_group):
 				((2*shiftY)-1) * scale,
 				((2*shiftY)+1) * scale
 				]
-				
+		
+		if scene.render.use_border:
+			(x1,x2,y1,y2) = [
+				scene.render.border_min_x, scene.render.border_max_x,
+				scene.render.border_min_y, scene.render.border_max_y
+			]
+			sw = [
+				sw[0]*(1-x1)+sw[1]*x1,
+				sw[0]*(1-x2)+sw[1]*x2,
+				sw[2]*(1-y1)+sw[3]*y1,
+				sw[2]*(1-y2)+sw[3]*y2
+			]
+		
 		return sw
 	
 	def exposure_time(self):
@@ -315,9 +392,9 @@ class luxrender_camera(declarative_property_group):
 		
 		time = 1.0
 		if self.exposure_mode == 'normalised':
-			time = (self.exposure_end - self.exposure_start) / fps
+			time = (self.exposure_end_norm - self.exposure_start) / fps
 		if self.exposure_mode == 'absolute':
-			time = (self.exposure_end - self.exposure_start)
+			time = (self.exposure_end_abs - self.exposure_start)
 		if self.exposure_mode == 'degrees':
 			time = (self.exposure_degrees_end - self.exposure_degrees_start) / (fps * 360.0)
 		
@@ -333,23 +410,23 @@ class luxrender_camera(declarative_property_group):
 		'''
 		
 		cam = scene.camera.data
-		xr, yr = self.luxrender_film.resolution()
+		xr, yr = self.luxrender_film.resolution(scene)
 		
 		params = ParamSet()
 		
 		if cam.type == 'PERSP' and self.type == 'perspective':
 			params.add_float('fov', math.degrees(scene.camera.data.angle))
 		
-		params.add_float('screenwindow', self.screenwindow(xr, yr, cam))
+		params.add_float('screenwindow', self.screenwindow(xr, yr, scene, cam))
 		params.add_bool('autofocus', False)
 		
 		fps = scene.render.fps
 		if self.exposure_mode == 'normalised':
 			params.add_float('shutteropen', self.exposure_start / fps)
-			params.add_float('shutterclose', self.exposure_end / fps)
+			params.add_float('shutterclose', self.exposure_end_norm / fps)
 		if self.exposure_mode == 'absolute':
 			params.add_float('shutteropen', self.exposure_start)
-			params.add_float('shutterclose', self.exposure_end)
+			params.add_float('shutterclose', self.exposure_end_abs)
 		if self.exposure_mode == 'degrees':
 			params.add_float('shutteropen', self.exposure_degrees_start / (fps*360.0))
 			params.add_float('shutterclose', self.exposure_degrees_end / (fps*360.0))
@@ -357,6 +434,11 @@ class luxrender_camera(declarative_property_group):
 		if self.use_dof:
 			# Do not world-scale this, it is already in meters !
 			params.add_float('lensradius', (cam.lens / 1000.0) / ( 2.0 * self.fstop ))
+		
+			#Write apperture params
+			params.add_integer('blades', self.blades)
+			params.add_integer('power', self.power)
+			params.add_string('distribution', self.distribution)
 		
 		ws = get_worldscale(as_scalematrix=False)
 		
@@ -371,11 +453,11 @@ class luxrender_camera(declarative_property_group):
 		if self.use_clipping:
 			params.add_float('hither', ws*cam.clip_start)
 			params.add_float('yon', ws*cam.clip_end)
-
+		
 		if self.usemblur:
 			# update the camera settings with motion blur settings
 			params.add_string('shutterdistribution', self.shutterdistribution)
-
+		
 			if self.cammblur and is_cam_animated:
 				params.add_string('endtransform', 'CameraEndTransform')
 		
@@ -388,25 +470,79 @@ class luxrender_film(declarative_property_group):
 	ef_attach_to = ['luxrender_camera']
 	
 	controls = [
-		'writeinterval',
-		'displayinterval',
-		'lbl_outputs',
+		'lbl_internal',
+		'internal_updateinterval',
 		'integratedimaging',
-		['write_png', 'write_exr','write_tga','write_flm'],
-		['output_alpha', 'write_exr_applyimaging'],
+		
+		'lbl_external',
+		'writeinterval',
+		'flmwriteinterval',
+		'displayinterval',
+		
+		'lbl_outputs',
+		['write_png', 'write_png_16bit'],
+		'write_tga',
+		['write_exr', 'write_exr_applyimaging', 'write_exr_halftype'],
+		'write_exr_compressiontype',
+		'write_zbuf',
+		'zbuf_normalization',
+		['output_alpha', 'premultiply_alpha'],
+		['write_flm', 'restart_flm', 'write_flm_direct'],
+		
+		'ldr_clamp_method',
 		'outlierrejection_k',
+		'tilecount'
 	]
 	
-	visibility = {}
+	visibility = {
+		'restart_flm': { 'write_flm': True },
+		'premultiply_alpha': { 'output_alpha': True },
+		'write_flm_direct': { 'write_flm': True },
+		'write_png_16bit': { 'write_png': True },
+		'write_exr_applyimaging': { 'write_exr': True },
+		'write_exr_halftype': { 'write_exr': True },
+		'write_exr_compressiontype': { 'write_exr': True },
+		'write_zbuf': O([{'write_exr': True }, { 'write_tga': True }]),
+		'zbuf_normalization': A([{'write_zbuf': True}, O([{'write_exr': True }, { 'write_tga': True }])]),
+	}
 	
 	properties = [
-		
+		{
+			'type': 'text',
+			'attr': 'lbl_internal',
+			'name': 'Internal rendering'
+		},
+		{
+			'type': 'int',
+			'attr': 'internal_updateinterval',
+			'name': 'Update interval',
+			'description': 'Period for updating render image (seconds)',
+			'default': 10,
+			'min': 2,
+			'soft_min': 2,
+			'save_in_preset': True
+		},
+		{
+			'type': 'text',
+			'attr': 'lbl_external',
+			'name': 'External rendering'
+		},
 		{
 			'type': 'int',
 			'attr': 'writeinterval',
-			'name': 'Save interval',
+			'name': 'Write interval',
 			'description': 'Period for writing images to disk (seconds)',
-			'default': 10,
+			'default': 180,
+			'min': 2,
+			'soft_min': 2,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'flmwriteinterval',
+			'name': 'Flm write interval',
+			'description': 'Period for writing flm files to disk (seconds)',
+			'default': 900,
 			'min': 2,
 			'soft_min': 2,
 			'save_in_preset': True
@@ -414,7 +550,7 @@ class luxrender_film(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'displayinterval',
-			'name': 'GUI refresh interval',
+			'name': 'Refresh interval',
 			'description': 'Period for updating rendering on screen (seconds)',
 			'default': 10,
 			'min': 2,
@@ -429,7 +565,7 @@ class luxrender_film(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'integratedimaging',
-			'name': 'Integrated Imaging workflow',
+			'name': 'Integrated imaging workflow',
 			'description': 'Transfer rendered image directly to Blender without saving to disk (adds Alpha and Z-buffer support)',
 			'default': False
 		},
@@ -437,60 +573,155 @@ class luxrender_film(declarative_property_group):
 			'type': 'bool',
 			'attr': 'write_png',
 			'name': 'PNG',
+			'description': 'Enable PNG output',
 			'default': True
 		},
 		{
 			'type': 'bool',
-			'attr': 'write_exr',
-			'name': 'EXR',
+			'attr': 'write_png_16bit',
+			'name': 'Use 16bit PNG',
+			'description': 'Use 16bit per channel PNG instead of 8bit',
 			'default': False
 		},
 		{
 			'type': 'bool',
+			'attr': 'write_exr',
+			'name': 'OpenEXR',
+			'description': 'Enable OpenEXR ouput',
+			'default': False
+		},
+		{
+			'type': 'bool',
+			'attr': 'write_exr_halftype',
+			'name': 'Use 16bit EXR',
+			'description': 'Use "half" (16bit float) OpenEXR format instead of 32bit float',
+			'default': True
+		},
+		{
+			'type': 'enum',
+			'attr': 'write_exr_compressiontype',
+			'name': 'EXR Compression',
+			'description': 'Compression format for OpenEXR output',
+			'items': [
+				('RLE (lossless)', 'RLE (lossless)', 'RLE (lossless)'),
+				('PIZ (lossless)', 'PIZ (lossless)', 'PIZ (lossless)'),
+				('ZIP (lossless)', 'ZIP (lossless)', 'ZIP (lossless)'),
+				('Pxr24 (lossy)', 'Pxr24 (lossy)', 'Pxr24 (lossy)'),
+				('None', 'None', 'None'),
+			],
+			'default': 'PIZ (lossless)'
+		},
+		{
+			'type': 'bool',
 			'attr': 'write_tga',
-			'name': 'TGA',
+			'name': 'TARGA',
+			'description': 'Enable TARGA ouput',
 			'default': False
 		},
 		{
 			'type': 'bool',
 			'attr': 'write_flm',
-			'name': 'FLM',
+			'name': 'Write FLM',
+			'default': False
+		},
+		{
+			'type': 'bool',
+			'attr': 'restart_flm',
+			'name': 'Restart FLM',
+			'description': 'Restart render from the beginning even if an FLM is available',
+			'default': False
+		},
+		{
+			'type': 'bool',
+			'attr': 'write_flm_direct',
+			'name': 'Write FLM Directly',
+			'description': 'Write FLM directly to disk instead of trying to build it in RAM first. Slower, but uses less memory',
 			'default': False
 		},
 		{
 			'type': 'bool',
 			'attr': 'output_alpha',
 			'name': 'Enable alpha channel',
+			'description': 'Enable alpha channel. This applies to all image formats',
 			'default': False
+		},
+		{
+			'type': 'bool',
+			'attr': 'premultiply_alpha',
+			'name': 'Premultiply Alpha',
+			'description': 'Premultiply alpha channel (happens during film stage, not image output)',
+			'default': True
 		},
 		{
 			'type': 'bool',
 			'attr': 'write_exr_applyimaging',
 			'name': 'Tonemap EXR',
-			'description': 'Apply imaging pipeline to OpenEXR output. Will not affect output gamma',
+			'description': 'Apply imaging pipeline to OpenEXR output. Gamma correction will be skipped regardless',
 			'default': True
+		},
+		{
+			'type': 'bool',
+			'attr': 'write_zbuf',
+			'name': 'Enable Z-Buffer',
+			'description': 'Include Z-buffer in OpenEXR and TARGA output',
+			'default': False
+		},
+		{
+			'type': 'enum',
+			'attr': 'zbuf_normalization',
+			'name': 'Z-Buffer Normalization',
+			'description': 'Where to get normalization info for Z-buffer',
+			'items': [
+				('Camera Start/End clip', 'Camera start/end clip', 'Use Camera clipping range'),
+				('Min/Max', 'Min/max', 'Min/max'),
+				('None', 'None', 'None'),
+			],
+			'default': 'None'
 		},
 		{
 			'type': 'int',
 			'attr': 'outlierrejection_k',
 			'name': 'Firefly rejection',
-			'description': 'Firefly (outlier) rejection k parameter',
+			'description': 'Firefly (outlier) rejection k parameter. 0=disabled',
 			'default': 0,
 			'min': 0,
 			'soft_min': 0,
 		},
+		{
+			'type': 'int',
+			'attr': 'tilecount',
+			'name': 'Tiles',
+			'description': 'Number of film buffer tiles to use. 0=auto-detect',
+			'default': 0,
+			'min': 0,
+			'soft_min': 0,
+		},
+		{
+			'type': 'enum',
+			'attr': 'ldr_clamp_method',
+			'name': 'LDR Clamp method',
+			'description': 'Method used to clamp bright areas into LDR range',
+			'items': [
+				('lum', 'Luminosity', 'Preserve luminosity'),
+				('hue', 'Hue', 'Preserve hue'),
+				('cut', 'Cut', 'Clip channels individually')
+			],
+			'default': 'cut'
+		},
 	]
 	
-	def resolution(self):
+	def resolution(self, scene):
 		'''
 		Calculate the output render resolution
 		
 		Returns		tuple(2) (floats)
 		'''
-		scene = LuxManager.CurrentScene
 		
 		xr = scene.render.resolution_x * scene.render.resolution_percentage / 100.0
 		yr = scene.render.resolution_y * scene.render.resolution_percentage / 100.0
+		
+		xr = round(xr)
+		yr = round(yr)
 		
 		return xr, yr
 	
@@ -508,13 +739,29 @@ class luxrender_film(declarative_property_group):
 		'''
 		scene = LuxManager.CurrentScene
 		
-		xr, yr = self.resolution()
+		xr, yr = self.resolution(scene)
 		
 		params = ParamSet()
 		
-		# Set resolution
-		params.add_integer('xresolution', int(xr))
-		params.add_integer('yresolution', int(yr))
+		if scene.render.use_border:
+			(x1,x2,y1,y2) = [
+				scene.render.border_min_x, scene.render.border_max_x,
+				scene.render.border_min_y, scene.render.border_max_y
+			]
+			# Set resolution
+			params.add_integer('xresolution', round(xr*x2, 0)-round(xr*x1, 0))
+			params.add_integer('yresolution', round(yr*y2, 0)-round(yr*y1, 0))
+		else:
+			# Set resolution
+			params.add_integer('xresolution', xr)
+			params.add_integer('yresolution', yr)
+		
+#		if scene.render.use_border:
+#			cropwindow = [
+#				scene.render.border_min_x, scene.render.border_max_x,
+#				scene.render.border_min_y, scene.render.border_max_y
+#			]
+#			params.add_float('cropwindow', cropwindow)
 		
 		# ColourSpace
 		if self.luxrender_colorspace.preset:
@@ -535,64 +782,90 @@ class luxrender_film(declarative_property_group):
 			else:
 				local_crf_filepath = self.luxrender_colorspace.crf_file
 			local_crf_filepath = efutil.filesystem_path( local_crf_filepath )
-			if scene.luxrender_engine.embed_filedata:
+			if scene.luxrender_engine.allow_file_embed():
 				from ..util import bencode_file2string
 				params.add_string('cameraresponse', os.path.basename(local_crf_filepath))
-				params.add_string('cameraresponse_data', bencode_file2string(local_crf_filepath) )
+				encoded_data = bencode_file2string(local_crf_filepath)
+				params.add_string('cameraresponse_data', encoded_data.splitlines() )
 			else:
 				params.add_string('cameraresponse', local_crf_filepath)
 		if LUXRENDER_VERSION >= '0.8' and self.luxrender_colorspace.use_crf == 'preset':
 			params.add_string('cameraresponse', self.luxrender_colorspace.crf_preset)
 		
 		# Output types
-		params.add_string('filename', efutil.path_relative_to_export(efutil.export_path))
-		params.add_string('background',  scene.camera.data.luxrender_camera.background)
+		params.add_string('filename', get_output_filename(scene))
+		background_path = scene.camera.data.luxrender_camera.background
+		params.add_string('background', efutil.path_relative_to_export(background_path) )
+#		params.add_string('background',  scene.camera.data.luxrender_camera.background)
 		params.add_bool('write_resume_flm', self.write_flm)
+		params.add_bool('restart_resume_flm', self.restart_flm)
+		params.add_bool('write_flm_direct', self.write_flm_direct)
 		
 		if self.output_alpha:
 			output_channels = 'RGBA'
+			params.add_bool('premultiplyalpha', self.premultiply_alpha)
 		else:
 			output_channels = 'RGB'
-		
+								
 		if scene.luxrender_engine.export_type == 'INT' and self.integratedimaging:
 			# Set up params to enable z buffer and set gamma=1.0
 			# Also, this requires tonemapped EXR output
 			params.add_string('write_exr_channels', 'RGBA')
 			params.add_bool('write_exr_halftype', False)
 			params.add_bool('write_exr_applyimaging', True)
+			params.add_bool('premultiplyalpha', True) #Apparently, this should always be true with EXR
 			params.add_bool('write_exr_ZBuf', True)
 			params.add_string('write_exr_zbuf_normalizationtype', 'Camera Start/End clip')
-			params.add_float('gamma', 1.0) # Linear workflow !
+			if scene.render.use_color_management:
+				params.add_float('gamma', 1.0) # Linear workflow !
+			# else leave as pre-corrected gamma
 		else:
 			# Otherwise let the user decide on tonemapped EXR and other EXR settings
+			params.add_bool('write_exr_halftype', self.write_exr_halftype)
 			params.add_bool('write_exr_applyimaging', self.write_exr_applyimaging)
+			params.add_bool('write_exr_ZBuf', self.write_zbuf)
+			params.add_string('write_exr_compressiontype', self.write_exr_compressiontype)
+			params.add_string('write_exr_zbuf_normalizationtype', self.zbuf_normalization)
 			params.add_bool('write_exr', self.write_exr)
 			if self.write_exr: params.add_string('write_exr_channels', output_channels)
 		
 		params.add_bool('write_png', self.write_png)
-		if self.write_png: params.add_string('write_png_channels', output_channels)
+		if self.write_png:
+			params.add_string('write_png_channels', output_channels)
+			params.add_bool('write_png_16bit', self.write_png_16bit)
 		params.add_bool('write_tga', self.write_tga)
-		if self.write_tga: params.add_string('write_tga_channels', output_channels)
+		if self.write_tga:
+			params.add_string('write_tga_channels', output_channels)
+			params.add_string('write_tga_Zbuf', self.write_zbuf)
+			params.add_string('write_tga_zbuf_normalizationtype', self.zbuf_normalization)
 		
-		params.add_integer('displayinterval', self.displayinterval)
-		params.add_integer('writeinterval', self.writeinterval)
+		params.add_string('ldr_clamp_method', self.ldr_clamp_method)
+		
+		if scene.luxrender_engine.export_type == 'EXT':
+			params.add_integer('displayinterval', self.displayinterval)
+			params.add_integer('writeinterval', self.writeinterval)
+			params.add_integer('flmwriteinterval', self.flmwriteinterval)
+		else:
+			params.add_integer('writeinterval', self.internal_updateinterval)
 		
 		# Halt conditions
-		if scene.luxrender_sampler.haltspp > 0:
-			params.add_integer('haltspp', scene.luxrender_sampler.haltspp)
+		if scene.luxrender_halt.haltspp > 0:
+			params.add_integer('haltspp', scene.luxrender_halt.haltspp)
 		
-		if scene.luxrender_sampler.halttime > 0:
-			params.add_integer('halttime', scene.luxrender_sampler.halttime)
+		if scene.luxrender_halt.halttime > 0:
+			params.add_integer('halttime', scene.luxrender_halt.halttime)
 		
-		if self.outlierrejection_k > 0:
+		if self.outlierrejection_k > 0 and scene.luxrender_rendermode.renderer != 'sppm':
 			params.add_integer('outlierrejection_k', self.outlierrejection_k)
+			
+		params.add_integer('tilecount', self.tilecount)
 		
 		# update the film settings with tonemapper settings
 		params.update( self.luxrender_tonemapping.get_paramset() )
 		
 		return ('fleximage', params)
 
-#	Valid CRF preset names (case sensitive):
+# Valid CRF preset names (case sensitive):
 # See lux/core/cameraresponse.cpp to keep this up to date
 
 crf_preset_names = [s.strip() for s in
@@ -647,7 +920,7 @@ Portra_800CD""".splitlines()]
 @LuxRenderAddon.addon_register_class
 class CAMERA_OT_set_luxrender_crf(bpy.types.Operator):
 	bl_idname = 'camera.set_luxrender_crf'
-	bl_label = 'Set LuxRender Camera Response Function'
+	bl_label = 'Set LuxRender Film Response Function'
 	
 	preset_name = bpy.props.StringProperty()
 	
@@ -735,7 +1008,11 @@ class luxrender_colorspace(declarative_property_group):
 			'attr': 'gamma',
 			'type': 'float',
 			'name': 'Gamma',
-			'default': 2.2
+			'default': 2.2,
+			'min': 0.1,
+			'soft_min': 0.1,
+			'max': 20.0,
+			'soft_max': 20.0
 		},
 		{
 			'attr': 'preset',
@@ -775,7 +1052,6 @@ class luxrender_colorspace(declarative_property_group):
 			'precision': 6,
 			'default': 0.329411
 		},
-		
 		{
 			'attr': 'cs_redX',
 			'type': 'float',
@@ -790,7 +1066,6 @@ class luxrender_colorspace(declarative_property_group):
 			'precision': 6,
 			'default': 0.34
 		},
-		
 		{
 			'attr': 'cs_greenX',
 			'type': 'float',
@@ -805,7 +1080,6 @@ class luxrender_colorspace(declarative_property_group):
 			'precision': 6,
 			'default': 0.595
 		},
-		
 		{
 			'attr': 'cs_blueX',
 			'type': 'float',
@@ -825,17 +1099,17 @@ class luxrender_colorspace(declarative_property_group):
 		{
 			'attr': 'crf_label',
 			'type': 'text',
-			'name': 'Camera Response Function',
+			'name': 'Film Response Function',
 		},
 		{
 			'attr': 'use_crf',
 			'type': 'enum',
-			'name': 'Use Camera Response Function',
+			'name': 'Use Film Response',
 			'default': 'none',
 			'items': [
-				('none', 'None', 'Don\'t use a CRF'),
-				('file', 'File', 'Load a CRF from File'),
-				('preset', 'Preset', 'Use a built-in CRF Preset'),
+				('none', 'None', 'Don\'t use a Film Response'),
+				('file', 'File', 'Load a Film Response from file'),
+				('preset', 'Preset', 'Use a built-in Film Response Preset'),
 			],
 			'expand': True
 		},
@@ -848,14 +1122,14 @@ class luxrender_colorspace(declarative_property_group):
 			'attr': 'crf_file',
 			'type': 'string',
 			'subtype': 'FILE_PATH',
-			'name': 'CRF File',
+			'name': 'Film Reponse File',
 			'default': '',
 		},
 		{
 			'attr': 'crf_preset',
 			'type': 'string',
-			'name': 'CRF Preset',
-			'default': 'CRF Preset',
+			'name': 'Film Reponse Preset',
+			'default': 'Film Response Preset',
 		},
 	]
 
@@ -941,23 +1215,6 @@ class colorspace_presets(object):
 		cs_blueX	= 0.1666
 		cs_blueY	= 0.0089
 
-def get_tonemaps():
-	
-	items =  [
-		('reinhard', 'Reinhard', 'reinhard'),
-		('linear', 'Linear (manual)', 'linear'),
-		# put autolinear in this space for supported versions
-		('contrast', 'Contrast', 'contrast'),
-		('maxwhite', 'Maxwhite', 'maxwhite')
-	]
-	
-	if LUXRENDER_VERSION >= '0.8':
-		items.insert(2,
-			('autolinear', 'Linear (auto-exposure)', 'autolinear')
-		)
-	
-	return items
-
 @LuxRenderAddon.addon_register_class
 class luxrender_tonemapping(declarative_property_group):
 	'''
@@ -1001,8 +1258,14 @@ class luxrender_tonemapping(declarative_property_group):
 			'attr': 'type',
 			'name': 'Tonemapper',
 			'description': 'Choose tonemapping type',
-			'default': 'reinhard',
-			'items': get_tonemaps(),
+			'default': 'autolinear',
+			'items': [
+				('reinhard', 'Reinhard', 'reinhard'),
+				('linear', 'Linear (manual)', 'linear'),
+				('autolinear', 'Linear (auto-exposure)', 'autolinear'),
+				('contrast', 'Contrast', 'contrast'),
+				('maxwhite', 'Maxwhite', 'maxwhite')
+			]
 		},
 		
 		# Reinhard

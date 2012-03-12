@@ -49,12 +49,12 @@ class ui_transform(bl_ui.properties_object.ObjectButtonsPanel, property_group_re
 	]
 
 @LuxRenderAddon.addon_register_class
-class ui_lookat(bl_ui.properties_object.ObjectButtonsPanel, property_group_renderer):
+class ui_camera_setting(bl_ui.properties_object.ObjectButtonsPanel, property_group_renderer):
 	'''
-	Camera LookAt Transform Settings
+	Camera Settings
 	'''
 	
-	bl_label = 'LuxRender Camera LookAt Settings'
+	bl_label = 'LuxRender Camera  Settings'
 	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	@classmethod
@@ -63,12 +63,11 @@ class ui_lookat(bl_ui.properties_object.ObjectButtonsPanel, property_group_rende
 		return context.object and context.object.type == 'CAMERA' and (engine in cls.COMPAT_ENGINES)
 	
 	display_property_groups = [
-		( ('object',), 'luxrender_lookat' )
+		( ('object',), 'luxrender_camera_setting' )
 	]
 
 @LuxRenderAddon.addon_register_class
 class ui_object(bl_ui.properties_object.ObjectButtonsPanel, property_group_renderer):
-
 	'''
 	Object settings
 	'''

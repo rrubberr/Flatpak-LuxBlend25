@@ -76,12 +76,9 @@ class luxrender_accelerator(declarative_property_group):
 			'description': 'Scene accelerator type',
 			'default': 'qbvh',
 			'items': [
-				#('none', 'none', 'None'),
-				#('bruteforce', 'bruteforce', 'bruteforce'),
+				# Other accelerator types are omitted deliberately, as broken or not useful.
 				('tabreckdtree', 'KD Tree', 'tabreckdtree'),
-				#('grid', 'Grid', 'grid'),
-				#('bvh', 'BVH', 'bvh'),
-				('qbvh', 'QBVH', 'qbvh'),
+				('qbvh', 'QBVH', 'SSE-accelerated quad bounding volume hierarchy'),
 			],
 			'save_in_preset': True
 		},
@@ -89,6 +86,7 @@ class luxrender_accelerator(declarative_property_group):
 			'attr': 'advanced',
 			'type': 'bool',
 			'name': 'Advanced',
+			'description': 'Configure advanced accelerator options',
 			'default': False,
 			'save_in_preset': True
 		},

@@ -46,8 +46,8 @@ class luxrender_object(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'append_external_mesh',
-			'name': 'External PLY Mesh',
-			'description': 'Use this object to place an external PLY mesh file in the scene',
+			'name': 'External PLY or STL Mesh',
+			'description': 'Use this object to place an external PLY or STL mesh file in the scene',
 			'default': False
 		},
 		{
@@ -69,7 +69,7 @@ class luxrender_object(declarative_property_group):
 			'subtype': 'FILE_PATH',
 			'attr': 'external_mesh',
 			'name': 'Mesh file',
-			'description': 'External PLY mesh file to place in scene',
+			'description': 'External PLY or STL mesh file to place in scene',
 		}
 	]
 
@@ -88,26 +88,26 @@ class luxrender_transform(declarative_property_group):
 			'type': 'operator',
 			'attr': 'op_transform',
 			'operator': 'luxrender.transform_load',
-			'text': 'Load Transform file',
+			'text': 'Load Object Transform From File',
 			'icon': 'FILE_FOLDER',
 		},
 	]
 
 @LuxRenderAddon.addon_register_class
-class luxrender_lookat(declarative_property_group):
+class luxrender_camera_setting(declarative_property_group):
 	ef_attach_to = ['Object']
 
 	controls = [
-		'op_lookat',
+		'op_camera_setting',
 	]
 	visibility = {
 	}
 	properties = [
 		{
 			'type': 'operator',
-			'attr': 'op_lookat',
-			'operator': 'luxrender.lookat_load',
-			'text': 'Load an LookAt file',
+			'attr': 'op_camera_setting',
+			'operator': 'luxrender.camera_setting_load',
+			'text': 'Load Camera Settings From File',
 			'icon': 'FILE_FOLDER',
 		},
 	]

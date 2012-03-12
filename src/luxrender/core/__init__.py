@@ -42,6 +42,7 @@ from extensions_framework import util as efutil
 
 # Exporter libs
 from .. import LuxRenderAddon
+from ..export import get_output_filename
 from ..export.scene import SceneExporter
 from ..outputs import LuxManager, LuxFilmDisplay
 from ..outputs import LuxLog
@@ -50,7 +51,7 @@ from ..outputs.pure_api import LUXRENDER_VERSION
 # Exporter Property Groups need to be imported to ensure initialisation
 from ..properties import (
 	accelerator, camera, engine, filter, integrator, ior_data, lamp, lampspectrum_data,
-	material, mesh, object as prop_object, sampler, texture, world
+	material, mesh, object as prop_object, rendermode, sampler, texture, world
 )
 
 # Exporter Interface Panels need to be imported to ensure initialisation
@@ -59,32 +60,51 @@ from ..ui import (
 )
 
 from ..ui.materials import (
-	main, compositing, carpaint, glass, glass2, roughglass, glossytranslucent,
-	glossy_lossy, glossy, matte, mattetranslucent, metal, mirror, mix, null,
+	main as mat_main, compositing, carpaint, glass, glass2, roughglass, glossytranslucent,
+	glossy_lossy, glossycoating, glossy, layered, matte, mattetranslucent, metal, metal2, mirror, mix as mat_mix, null,
 	scatter, shinymetal, velvet
 )
 
 from ..ui.textures import (
-	main, band, bilerp, blackbody, brick, cauchy, constant, checkerboard, dots,
-	equalenergy, fbm, gaussian, harlequin, imagemap, lampspectrum,
-	luxpop, marble, mix, multimix, sellmeier, scale, sopra, uv, uvmask, windy,
-	wrinkled, mapping, tabulateddata, transform
+	main as tex_main, band, blender, bilerp, blackbody, brick, cauchy, constant, colordepth,
+	checkerboard, dots, equalenergy, fbm, fresnelcolor, fresnelname, gaussian, harlequin, imagemap, normalmap,
+	lampspectrum, luxpop, marble, mix as tex_mix, multimix, sellmeier, scale, sopra, uv,
+	uvmask, windy, wrinkled, mapping, tabulateddata, transform
 )
 
 # Exporter Operators need to be imported to ensure initialisation
 from .. import operators
 from ..operators import lrmdb
 
+def _register_elm(elm, required=False):
+	try:
+		elm.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
+	except:
+		if required:
+			LuxLog('Failed to add LuxRender to ' + elm.__name__)
+
 # Add standard Blender Interface elements
-bl_ui.properties_render.RENDER_PT_render.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
-bl_ui.properties_render.RENDER_PT_dimensions.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
-bl_ui.properties_render.RENDER_PT_output.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
+_register_elm(bl_ui.properties_render.RENDER_PT_render, required=True)
+_register_elm(bl_ui.properties_render.RENDER_PT_dimensions, required=True)
+_register_elm(bl_ui.properties_render.RENDER_PT_output, required=True)
+_register_elm(bl_ui.properties_render.RENDER_PT_post_processing)
+_register_elm(bl_ui.properties_render.RENDER_PT_stamp)
 
-bl_ui.properties_material.MATERIAL_PT_context_material.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
-bl_ui.properties_material.MATERIAL_PT_preview.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
+_register_elm(bl_ui.properties_scene.SCENE_PT_scene, required=True)
+_register_elm(bl_ui.properties_scene.SCENE_PT_audio)
+_register_elm(bl_ui.properties_scene.SCENE_PT_physics) #This is the gravity panel
+_register_elm(bl_ui.properties_scene.SCENE_PT_keying_sets)
+_register_elm(bl_ui.properties_scene.SCENE_PT_keying_set_paths)
+_register_elm(bl_ui.properties_scene.SCENE_PT_unit)
+_register_elm(bl_ui.properties_scene.SCENE_PT_custom_props)
 
-bl_ui.properties_data_lamp.DATA_PT_context_lamp.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
-# bl_ui.properties_data_lamp.DATA_PT_area.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
+_register_elm(bl_ui.properties_world.WORLD_PT_context_world, required=True)
+
+_register_elm(bl_ui.properties_material.MATERIAL_PT_context_material, required=True)
+_register_elm(bl_ui.properties_material.MATERIAL_PT_preview)
+_register_elm(bl_ui.properties_texture.TEXTURE_PT_preview)
+
+_register_elm(bl_ui.properties_data_lamp.DATA_PT_context_lamp)
 
 @classmethod
 def blender_texture_poll(cls, context):
@@ -98,8 +118,7 @@ def blender_texture_poll(cls, context):
 	
 	return show
 
-bl_ui.properties_texture.TEXTURE_PT_context_texture.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
-# properties_texture.TEXTURE_PT_preview.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
+_register_elm(bl_ui.properties_texture.TEXTURE_PT_context_texture)
 blender_texture_ui_list = [
 	bl_ui.properties_texture.TEXTURE_PT_blend,
 	bl_ui.properties_texture.TEXTURE_PT_clouds,
@@ -108,28 +127,27 @@ blender_texture_ui_list = [
 	bl_ui.properties_texture.TEXTURE_PT_magic,
 	bl_ui.properties_texture.TEXTURE_PT_marble,
 	bl_ui.properties_texture.TEXTURE_PT_musgrave,
-	#bl_ui.properties_texture.TEXTURE_PT_noise,
 	bl_ui.properties_texture.TEXTURE_PT_stucci,
 	bl_ui.properties_texture.TEXTURE_PT_voronoi,
 	bl_ui.properties_texture.TEXTURE_PT_wood,
+	bl_ui.properties_texture.TEXTURE_PT_ocean,
 ]
 for blender_texture_ui in blender_texture_ui_list:
-	blender_texture_ui.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
+	_register_elm(blender_texture_ui)
 	blender_texture_ui.poll = blender_texture_poll
 
 # compatible() copied from blender repository (netrender)
 def compatible(mod):
 	mod = getattr(bl_ui, mod)
 	for subclass in mod.__dict__.values():
-		try:
-			subclass.COMPAT_ENGINES.add(LuxRenderAddon.BL_IDNAME)
-		except:
-			pass
+		_register_elm(subclass)
 	del mod
 
 compatible("properties_data_mesh")
 compatible("properties_data_camera")
 compatible("properties_particle")
+compatible("properties_data_speaker")
+
 
 @LuxRenderAddon.addon_register_class
 class RENDERENGINE_luxrender(bpy.types.RenderEngine):
@@ -154,30 +172,64 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		'''
 		
 		with RENDERENGINE_luxrender.render_lock:	# just render one thing at a time
+			prev_cwd = os.getcwd()
+			try:
+				self.LuxManager				= None
+				self.render_update_timer	= None
+				self.output_dir				= efutil.temp_directory()
+				self.output_file			= 'default.png'
+				
+				if scene is None:
+					LuxLog('ERROR: Scene to render is not valid')
+					return
+				
+				if scene.name == 'preview':
+					self.render_preview(scene)
+					return
+				
+				if scene.render.use_color_management == False:
+					LuxLog('WARNING: Colour Management is switched off, render results may look too dark.')
+				
+				api_type, write_files = self.set_export_path(scene)
+				
+				os.chdir(efutil.export_path)
+				
+				is_animation = hasattr(self, 'is_animation') and self.is_animation
+				make_queue = scene.luxrender_engine.export_type == 'EXT' and scene.luxrender_engine.binary_name == 'luxrender' and write_files
+				
+				if is_animation and make_queue:
+					queue_file = efutil.export_path + '%s.%s.lxq' % (efutil.scene_filename(), bpy.path.clean_name(scene.name))
+					
+					# Open/reset a queue file
+					if scene.frame_current == scene.frame_start:
+						open(queue_file, 'w').close()
+					
+					if hasattr(self, 'update_progress'):
+						fr = scene.frame_end - scene.frame_start
+						fo = scene.frame_current - scene.frame_start
+						self.update_progress(fo/fr)
+				
+				exported_file = self.export_scene(scene)
+				if exported_file == False:
+					return	# Export frame failed, abort rendering
+				
+				if is_animation and make_queue:
+					self.LuxManager = LuxManager.GetActive()
+					self.LuxManager.lux_context.worldEnd()
+					with open(queue_file, 'a') as qf:
+						qf.write("%s\n" % exported_file)
+					
+					if scene.frame_current == scene.frame_end:
+						# run the queue
+						self.render_queue(scene, queue_file)
+				else:
+					self.render_start(scene)
 			
-			self.LuxManager				= None
-			self.render_update_timer	= None
-			self.output_dir				= efutil.temp_directory()
-			self.output_file			= 'default.png'
+			except Exception as err:
+				LuxLog('%s'%err)
+				self.report({'ERROR'}, '%s'%err)
 			
-			prev_dir = os.getcwd()
-			
-			if scene is None:
-				LuxLog('ERROR: Scene to render is not valid')
-				return
-			
-			if scene.name == 'preview':
-				self.render_preview(scene)
-				return
-			
-			if scene.render.use_color_management == False:
-				LuxLog('WARNING: Colour Management is switched off, render results may look too dark.')
-			
-			if self.render_scene(scene) == False:
-				return
-			
-			self.render_start(scene)
-			os.chdir(prev_dir)
+			os.chdir(prev_cwd)
 	
 	def render_preview(self, scene):
 		if sys.platform == 'darwin':
@@ -189,8 +241,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			self.output_dir += '/'
 		
 		efutil.export_path = self.output_dir
-		#print('(2) export_path is %s' % efutil.export_path)
-		os.chdir( self.output_dir )
 		
 		from ..outputs.pure_api import PYLUX_AVAILABLE
 		if not PYLUX_AVAILABLE:
@@ -231,7 +281,11 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			return
 		
 		pm = likely_materials[0]
+		pt = None
 		LuxLog('Rendering material preview: %s' % pm.name)
+
+		if PREVIEW_TYPE == 'TEXTURE':
+			pt = pm.active_texture		
 		
 		LM = LuxManager(
 			scene.name,
@@ -246,7 +300,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			# Dump to file in temp dir for debugging
 			from ..outputs.file_api import Custom_Context as lxs_writer
 			preview_context = lxs_writer(scene.name)
-			preview_context.set_filename(scene, 'luxblend25-preview', LXS=True, LXM=False, LXO=False, LXV=False)
+			preview_context.set_filename(scene, 'luxblend25-preview', LXV=False)
 			LM.lux_context = preview_context
 		else:
 			preview_context = LM.lux_context
@@ -257,14 +311,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			export_materials.ExportedTextures.clear()
 			
 			from ..export import preview_scene
-			xres, yres = scene.camera.data.luxrender_camera.luxrender_film.resolution()
-			xres, yres = int(xres), int(yres)
+			xres, yres = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
 			
 			# Don't render the tiny images
 			if xres <= 96:
 				raise Exception('Preview image too small (%ix%i)' % (xres,yres))
 			
-			preview_scene.preview_scene(scene, preview_context, obj=preview_objects[0], mat=pm)
+			preview_scene.preview_scene(scene, preview_context, obj=preview_objects[0], mat=pm, tex=pt)
 			
 			# render !
 			preview_context.worldEnd()
@@ -277,8 +330,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				time.sleep(0.05)
 			
 			def is_finished(ctx):
-				#future
-				#return ctx.getAttribute('renderer', 'state') == ctx.PYLUX.Renderer.State.TERMINATE
 				return ctx.statistics('enoughSamples') == 1.0
 			
 			def interruptible_sleep(sec, increment=0.05):
@@ -299,6 +350,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				
 				# progressively update the preview
 				time.sleep(0.2) # safety-sleep
+				
 				if LUXRENDER_VERSION < '0.8' or preview_context.statistics('samplesPx') > 24:
 					interruptible_sleep(1.8) # up to HALTSPP every 2 seconds in sum
 					
@@ -307,7 +359,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				result = self.begin_result(0, 0, xres, yres)
 				lay = result.layers[0]
 				
-				lay.rect, no_z_buffer  = preview_context.blenderCombinedDepthRects()
+				lay.rect  = preview_context.blenderCombinedDepthRects()[0]
 				
 				self.end_result(result)
 		except Exception as exc:
@@ -321,17 +373,26 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		
 		LM.reset()
 	
-	def render_scene(self, scene):
-		scene_path = efutil.filesystem_path(scene.render.filepath)
+	def set_export_path(self, scene):
+		# replace /tmp/ with the real %temp% folder on Windows
+		# OSX also has a special temp location that we should use
+		fp = scene.render.filepath
+		output_path_split = list(os.path.split(fp))
+		if sys.platform in ('win32', 'darwin') and output_path_split[0] == '/tmp':
+			output_path_split[0] = efutil.temp_directory()
+			fp = '/'.join(output_path_split)
+		
+		scene_path = efutil.filesystem_path( fp )
+		
 		if os.path.isdir(scene_path):
 			self.output_dir = scene_path
 		else:
 			self.output_dir = os.path.dirname( scene_path )
 		
-		if self.output_dir[-1] != '/':
+		if self.output_dir[-1] not in ('/', '\\'):
 			self.output_dir += '/'
 		
-		if scene.luxrender_engine.export_type == 'INT': # and not scene.luxrender_engine.write_files:
+		if scene.luxrender_engine.export_type == 'INT':
 			write_files = scene.luxrender_engine.write_files
 			if write_files:
 				api_type = 'FILE'
@@ -342,16 +403,16 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				else:
 					self.output_dir = efutil.temp_directory()
 		
-		elif scene.luxrender_engine.export_type == 'LFC':
-			api_type = 'LUXFIRE_CLIENT'
-			write_files = False
 		else:
 			api_type = 'FILE'
 			write_files = True
 		
 		efutil.export_path = self.output_dir
-		#print('(1) export_path is %s' % efutil.export_path)
-		os.chdir(self.output_dir)
+		
+		return api_type, write_files
+	
+	def export_scene(self, scene):
+		api_type, write_files = self.set_export_path(scene)
 		
 		# Pre-allocate the LuxManager so that we can set up the network servers before export
 		LM = LuxManager(
@@ -367,7 +428,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				for server in scene.luxrender_networking.servers.split(','):
 					LM.lux_context.addServer(server.strip())
 		
-		output_filename = '%s.%s.%05i' % (efutil.scene_filename(), scene.name, scene.frame_current)
+		output_filename = get_output_filename(scene)
 		
 		scene_exporter = SceneExporter()
 		scene_exporter.properties.directory = self.output_dir
@@ -396,20 +457,12 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				'%s/%s.exr' % (self.output_dir, output_filename)
 			)
 		
-		return True
+		return "%s.lxs" % output_filename
 	
-	def render_start(self, scene):
-		self.LuxManager = LuxManager.ActiveManager
-		
-		# TODO: this will be removed when direct framebuffer
-		# access is implemented in Blender
-		if os.path.exists(self.output_file):
-			# reset output image file and
-			os.remove(self.output_file)
-		
-		internal	= (scene.luxrender_engine.export_type in ['INT', 'LFC'])
+	def rendering_behaviour(self, scene):
+		internal	= (scene.luxrender_engine.export_type in ['INT'])
 		write_files	= scene.luxrender_engine.write_files and (scene.luxrender_engine.export_type in ['INT', 'EXT'])
-		render		= scene.luxrender_engine.render or (scene.luxrender_engine.export_type in ['LFC'])
+		render		= scene.luxrender_engine.render
 		
 		# Handle various option combinations using simplified variable names !
 		if internal:
@@ -438,17 +491,96 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				parse = False
 				worldEnd = False
 		
-		#print('internal %s' % internal)
-		#print('write_files %s' % write_files)
-		#print('render %s' % render)
-		#print('start_rendering %s' % start_rendering)
-		#print('parse %s' % parse)
-		#print('worldEnd %s' % worldEnd)
+		return internal, start_rendering, parse, worldEnd
+	
+	def render_queue(self, scene, queue_file):
+		internal, start_rendering, parse, worldEnd = self.rendering_behaviour(scene)
+		
+		if start_rendering:
+			cmd_args = self.get_process_args(scene, start_rendering)
+			
+			cmd_args.extend(['-L', queue_file])
+			
+			LuxLog('Launching Queue: %s' % cmd_args)
+			# LuxLog(' in %s' % self.outout_dir)
+			luxrender_process = subprocess.Popen(cmd_args, cwd=self.output_dir)
+	
+	def get_process_args(self, scene, start_rendering):
+		config_updates = {
+			'auto_start': start_rendering
+		}
+		
+		luxrender_path = efutil.filesystem_path( scene.luxrender_engine.install_path )
+		if luxrender_path[-1] != '/':
+			luxrender_path += '/'
+		
+		if os.path.isdir(luxrender_path) and os.path.exists(luxrender_path):
+			config_updates['install_path'] = luxrender_path
+		
+		if sys.platform == 'darwin':
+			# Get binary from OSX package
+			luxrender_path += 'LuxRender.app/Contents/MacOS/%s' % scene.luxrender_engine.binary_name
+		elif sys.platform == 'win32':
+			luxrender_path += '%s.exe' % scene.luxrender_engine.binary_name
+		else:
+			luxrender_path += scene.luxrender_engine.binary_name
+		
+		if not os.path.exists(luxrender_path):
+			raise Exception('LuxRender not found at path: %s' % luxrender_path)
+		
+		cmd_args = [luxrender_path]
+		
+		# set log verbosity
+		if scene.luxrender_engine.log_verbosity != 'default':
+			cmd_args.append('--' + scene.luxrender_engine.log_verbosity)
+		
+		if scene.luxrender_engine.binary_name == 'luxrender':
+			# Copy the GUI log to the console
+			cmd_args.append('--logconsole')
+		
+		# Set number of threads for external processes
+		if not scene.luxrender_engine.threads_auto:
+			cmd_args.append('--threads=%i' % scene.luxrender_engine.threads)
+			
+		#Set fixed seeds, if enabled
+		if scene.luxrender_engine.fixed_seed:
+			cmd_args.append('--fixedseed')
+		
+		if scene.luxrender_networking.use_network_servers:
+			for server in scene.luxrender_networking.servers.split(','):
+				cmd_args.append('--useserver')
+				cmd_args.append(server.strip())
+			
+			cmd_args.append('--serverinterval')
+			cmd_args.append('%i' % scene.luxrender_networking.serverinterval)
+			
+			config_updates['servers'] = scene.luxrender_networking.servers
+			config_updates['serverinterval'] = '%i' % scene.luxrender_networking.serverinterval
+		
+		config_updates['use_network_servers'] = scene.luxrender_networking.use_network_servers
+		
+		# Save changed config items and then launch Lux
+		
+		try:
+			for k, v in config_updates.items():
+				efutil.write_config_value('luxrender', 'defaults', k, v)
+		except Exception as err:
+			LuxLog('WARNING: Saving LuxRender config failed, please set your user scripts dir: %s' % err)
+		
+		return cmd_args
+	
+	def render_start(self, scene):
+		self.LuxManager = LuxManager.GetActive()
+		
+		# Remove previous rendering, to prevent loading old data
+		# if the update timer fires before the image is written
+		if os.path.exists(self.output_file):
+			os.remove(self.output_file)
+		
+		internal, start_rendering, parse, worldEnd = self.rendering_behaviour(scene)
 		
 		if self.LuxManager.lux_context.API_TYPE == 'FILE':
 			fn = self.LuxManager.lux_context.file_names[0]
-			
-			#print('calling pylux.context.worldEnd() (1)')
 			self.LuxManager.lux_context.worldEnd()
 			if parse:
 				# file_api.parse() creates a real pylux context. we must replace
@@ -459,7 +591,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				self.LuxManager.stats_thread.LocalStorage['lux_context'] = ctx
 				self.LuxManager.fb_thread.LocalStorage['lux_context'] = ctx
 		elif worldEnd:
-			#print('calling pylux.context.worldEnd() (2)')
 			self.LuxManager.lux_context.worldEnd()
 		
 		# Begin rendering
@@ -474,12 +605,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				
 				self.LuxManager.fb_thread.LocalStorage['integratedimaging'] = scene.camera.data.luxrender_camera.luxrender_film.integratedimaging
 				
-				if scene.camera.data.luxrender_camera.luxrender_film.integratedimaging:
-					# Use the GUI update interval
-					self.LuxManager.fb_thread.set_kick_period( scene.camera.data.luxrender_camera.luxrender_film.displayinterval )
-				else:
-					# Update the image from disk only as often as it is written
-					self.LuxManager.fb_thread.set_kick_period( scene.camera.data.luxrender_camera.luxrender_film.writeinterval )
+				# Update the image from disk only as often as it is written
+				self.LuxManager.fb_thread.set_kick_period( scene.camera.data.luxrender_camera.luxrender_film.internal_updateinterval )
 				
 				# Start the stats and framebuffer threads and add additional threads to Lux renderer
 				self.LuxManager.start_worker_threads(self)
@@ -488,7 +615,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 					try:
 						thread_count = multiprocessing.cpu_count()
 					except:
-						# TODO: when might this fail?
 						thread_count = 1
 				else:
 					thread_count = scene.luxrender_engine.threads
@@ -502,87 +628,35 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 					self.render_update_timer.start()
 					if self.render_update_timer.isAlive(): self.render_update_timer.join()
 			else:
-				config_updates = {
-					'auto_start': render
-				}
+				cmd_args = self.get_process_args(scene, start_rendering)
 				
-				luxrender_path = efutil.filesystem_path( scene.luxrender_engine.install_path )
-				if luxrender_path[-1] != '/':
-					luxrender_path += '/'
-				
-				if os.path.isdir(luxrender_path) and os.path.exists(luxrender_path):
-					config_updates['install_path'] = luxrender_path
-				
-				if sys.platform == 'darwin' and scene.luxrender_engine.binary_name == 'luxrender':
-					# Get binary from OSX package
-					luxrender_path += 'luxrender.app/Contents/MacOS/luxrender'
-				elif sys.platform == 'win32':
-					luxrender_path += '%s.exe' % scene.luxrender_engine.binary_name
-				else:
-					luxrender_path += scene.luxrender_engine.binary_name
-				
-				if not os.path.exists(luxrender_path):
-					LuxLog('LuxRender not found at path: %s' % luxrender_path)
-					return False
-				
-				cmd_args = [luxrender_path, fn.replace('//','/')]
-				
-				# set log verbosity
-				if scene.luxrender_engine.log_verbosity != 'default':
-					cmd_args.append('--' + scene.luxrender_engine.log_verbosity)
-				
-				if scene.luxrender_engine.binary_name == 'luxrender':
-					# Copy the GUI log to the console
-					cmd_args.append('--logconsole')
-				
-				# Set number of threads for external processes
-				if not scene.luxrender_engine.threads_auto:
-					cmd_args.append('--threads=%i' % scene.luxrender_engine.threads)
-				
-				if scene.luxrender_networking.use_network_servers:
-					for server in scene.luxrender_networking.servers.split(','):
-						cmd_args.append('--useserver')
-						cmd_args.append(server.strip())
-					
-					cmd_args.append('--serverinterval')
-					cmd_args.append('%i' % scene.luxrender_networking.serverinterval)
-					
-					config_updates['servers'] = scene.luxrender_networking.servers
-					config_updates['serverinterval'] = '%i' % scene.luxrender_networking.serverinterval
-				
-				config_updates['use_network_servers'] = scene.luxrender_networking.use_network_servers
-				
-				# Save changed config items and then launch Lux
-				
-				try:
-					for k, v in config_updates.items():
-						efutil.write_config_value('luxrender', 'defaults', k, v)
-				except Exception as err:
-					LuxLog('WARNING: Saving LuxRender config failed, please set your user scripts dir: %s' % err)
+				cmd_args.append(fn.replace('//','/'))
 				
 				LuxLog('Launching: %s' % cmd_args)
 				# LuxLog(' in %s' % self.outout_dir)
 				luxrender_process = subprocess.Popen(cmd_args, cwd=self.output_dir)
-				framebuffer_thread = LuxFilmDisplay({
-					'resolution': scene.camera.data.luxrender_camera.luxrender_film.resolution(),
-					'RE': self,
-				})
-				framebuffer_thread.set_kick_period( scene.camera.data.luxrender_camera.luxrender_film.writeinterval ) 
-				framebuffer_thread.start()
-				while luxrender_process.poll() == None and not self.test_break():
-					self.render_update_timer = threading.Timer(1, self.process_wait_timer)
-					self.render_update_timer.start()
-					if self.render_update_timer.isAlive(): self.render_update_timer.join()
 				
-				# If we exit the wait loop (user cancelled) and luxconsole is still running, then send SIGINT
-				if luxrender_process.poll() == None and scene.luxrender_engine.binary_name != 'luxrender':
-					# Use SIGTERM because that's the only one supported on Windows
-					luxrender_process.send_signal(subprocess.signal.SIGTERM)
-				
-				# Stop updating the render result and load the final image
-				framebuffer_thread.stop()
-				framebuffer_thread.join()
-				framebuffer_thread.kick(render_end=True)
+				if not (scene.luxrender_engine.binary_name == 'luxrender' and not scene.luxrender_engine.monitor_external):
+					framebuffer_thread = LuxFilmDisplay({
+						'resolution': scene.camera.data.luxrender_camera.luxrender_film.resolution(scene),
+						'RE': self,
+					})
+					framebuffer_thread.set_kick_period( scene.camera.data.luxrender_camera.luxrender_film.writeinterval ) 
+					framebuffer_thread.start()
+					while luxrender_process.poll() == None and not self.test_break():
+						self.render_update_timer = threading.Timer(1, self.process_wait_timer)
+						self.render_update_timer.start()
+						if self.render_update_timer.isAlive(): self.render_update_timer.join()
+					
+					# If we exit the wait loop (user cancelled) and luxconsole is still running, then send SIGINT
+					if luxrender_process.poll() == None and scene.luxrender_engine.binary_name != 'luxrender':
+						# Use SIGTERM because that's the only one supported on Windows
+						luxrender_process.send_signal(subprocess.signal.SIGTERM)
+					
+					# Stop updating the render result and load the final image
+					framebuffer_thread.stop()
+					framebuffer_thread.join()
+					framebuffer_thread.kick(render_end=True)
 	
 	def process_wait_timer(self):
 		# Nothing to do here
@@ -595,10 +669,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		Returns None
 		'''
 		
+		LC = self.LuxManager.lux_context
+		
 		self.update_stats('', 'LuxRender: Rendering %s' % self.LuxManager.stats_thread.stats_string)
+		
+		if hasattr(self, 'update_progress') and LC.statistics('percentComplete') > 0:
+			prg = LC.statistics('percentComplete') / 100.0
+			self.update_progress(prg)
+		
 		if self.test_break() or \
-			self.LuxManager.lux_context.statistics('filmIsReady') == 1.0 or \
-			self.LuxManager.lux_context.statistics('terminated') == 1.0 or \
-			self.LuxManager.lux_context.statistics('enoughSamples') == 1.0:
+			LC.statistics('filmIsReady') == 1.0 or \
+			LC.statistics('terminated') == 1.0 or \
+			LC.statistics('enoughSamples') == 1.0:
 			self.LuxManager.reset()
 			self.update_stats('', '')

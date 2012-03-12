@@ -56,68 +56,32 @@ class engine(render_panel):
 		row.operator("luxrender.preset_engine_add", text="", icon="ZOOMOUT").remove_active = True
 		
 		super().draw(context)
-
+		
 @LuxRenderAddon.addon_register_class
-class sampler(render_panel):
+class render_settings(render_panel):
 	'''
-	Sampler settings UI Panel
+	Render settings UI Panel
 	'''
 	
-	bl_label = 'Sampler'
+	bl_label = 'LuxRender Render Settings'
 	
 	display_property_groups = [
-		( ('scene',), 'luxrender_sampler' )
+		( ('scene',), 'luxrender_rendermode' ),
+		( ('scene',), 'luxrender_integrator' ),
+		( ('scene',), 'luxrender_sampler' ),
+		( ('scene',), 'luxrender_volumeintegrator' ),
+		( ('scene',), 'luxrender_filter' ),
+		( ('scene',), 'luxrender_accelerator' ),
+		( ('scene',), 'luxrender_halt' ),
 	]
-
-@LuxRenderAddon.addon_register_class
-class integrator(render_panel):
-	'''
-	Surface Integrator settings UI Panel
-	'''
 	
-	bl_label = 'Surface Integrator'
+@LuxRenderAddon.addon_register_class
+class testing(render_panel):
+	bl_label = 'LuxRender Test/Debugging Options'
+	bl_options = {'DEFAULT_CLOSED'}
 	
 	display_property_groups = [
-		( ('scene',), 'luxrender_integrator' )
-	]
-
-@LuxRenderAddon.addon_register_class
-class volume(render_panel):
-	'''
-	Volume Integrator settings UI panel
-	'''
-	
-	bl_label = 'Volume Integrator'
-	bl_options = 'DEFAULT_CLOSED'
-	
-	display_property_groups = [
-		( ('scene',), 'luxrender_volumeintegrator' )
-	]
-
-@LuxRenderAddon.addon_register_class
-class filter(render_panel):
-	'''
-	PixelFilter settings UI Panel
-	'''
-	
-	bl_label = 'Filter'
-	bl_options = 'DEFAULT_CLOSED'
-	
-	display_property_groups = [
-		( ('scene',), 'luxrender_filter' )
-	]
-
-@LuxRenderAddon.addon_register_class
-class accelerator(render_panel):
-	'''
-	Accelerator settings UI Panel
-	'''
-	
-	bl_label = 'Accelerator'
-	bl_options = 'DEFAULT_CLOSED'
-	
-	display_property_groups = [
-		( ('scene',), 'luxrender_accelerator' )
+		( ('scene',), 'luxrender_testing' )
 	]
 
 @LuxRenderAddon.addon_register_class
@@ -127,7 +91,7 @@ class networking(render_panel):
 	'''
 	
 	bl_label = 'LuxRender Networking'
-	bl_options = 'DEFAULT_CLOSED'
+	bl_options = {'DEFAULT_CLOSED'}
 	
 	display_property_groups = [
 		( ('scene',), 'luxrender_networking' )

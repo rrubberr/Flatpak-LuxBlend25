@@ -40,6 +40,8 @@ class luxrender_filter(declarative_property_group):
 	controls = [
 		[ 0.7, 'filter', 'advanced'],
 		
+		'sharpness',
+		
 		['xwidth', 'ywidth'],
 		'alpha',
 		['b', 'c'],
@@ -48,13 +50,14 @@ class luxrender_filter(declarative_property_group):
 	]
 	
 	visibility = {
-		'xwidth':				{ 'advanced': True },
-		'ywidth':				{ 'advanced': True },
-		'alpha':				{ 'advanced': True, 'filter': 'gaussian' },
-		'b':					{ 'advanced': True, 'filter': 'mitchell' },
-		'c':					{ 'advanced': True, 'filter': 'mitchell' },
-		'supersample':			{ 'advanced': True, 'filter': 'mitchell' },
-		'tau':					{ 'advanced': True, 'filter': 'sinc' },
+		'sharpness':	{ 'advanced': False, 'filter': 'mitchell' },
+		'xwidth':		{ 'advanced': True },
+		'ywidth':		{ 'advanced': True },
+		'alpha':		{ 'advanced': True, 'filter': 'gaussian' },
+		'b':			{ 'advanced': True, 'filter': 'mitchell' },
+		'c':			{ 'advanced': True, 'filter': 'mitchell' },
+		'supersample':	{ 'filter': 'mitchell' },
+		'tau':			{ 'advanced': True, 'filter': 'sinc' },
 	}
 	
 	properties = [
@@ -79,6 +82,20 @@ class luxrender_filter(declarative_property_group):
 			'name': 'Advanced',
 			'description': 'Configure advanced filter settings',
 			'default': False,
+			'save_in_preset': True
+		},
+		#The values for sharpness are not actually tied to the values of B/C, they are completely independent controls!
+		{
+			'type': 'float',
+			'attr': 'sharpness',
+			'name': 'Sharpness',
+			'description': 'Sets the sharpness of the the Mitchell filter B/C coefficients. Increased sharpness may increase ringing/edge artifacts',
+			'default': 1/3,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 1.0,
+			'soft_max': 1.0,
+			'slider': True,
 			'save_in_preset': True
 		},
 		{
@@ -127,6 +144,7 @@ class luxrender_filter(declarative_property_group):
 			'soft_min': 0.0,
 			'max': 1.0,
 			'soft_max': 1.0,
+			'slider': True,
 			'save_in_preset': True
 		},
 		{
@@ -139,6 +157,7 @@ class luxrender_filter(declarative_property_group):
 			'soft_min': 0.0,
 			'max': 1.0,
 			'soft_max': 1.0,
+			'slider': True,
 			'save_in_preset': True
 		},
 		{
@@ -174,6 +193,20 @@ class luxrender_filter(declarative_property_group):
 		
 		if self.filter == 'mitchell':
 			params.add_bool('supersample', self.supersample)
+			
+			# See LuxBlend_01.py lines ~3895
+			if not self.advanced:
+				if not self.supersample:
+					B = 1.0 - self.sharpness
+					C = self.sharpness * 0.5
+				else:
+					B = C = self.sharpness
+					
+				params.add_float('B', B)
+				params.add_float('C', C)
+			else:
+				params.add_float('B', self.b)
+				params.add_float('C', self.c)
 		
 		if self.advanced:
 			params.add_float('xwidth', self.xwidth)
@@ -181,10 +214,6 @@ class luxrender_filter(declarative_property_group):
 			
 			if self.filter == 'gaussian':
 				params.add_float('alpha', self.alpha)
-			
-			if self.filter == 'mitchell':
-				params.add_float('B', self.b)
-				params.add_float('C', self.c)
 			
 			if self.filter == 'sinc':
 				params.add_float('tau', self.tau)

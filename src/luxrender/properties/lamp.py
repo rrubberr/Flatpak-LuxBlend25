@@ -55,6 +55,26 @@ def LampVolumeParameter(attr, name):
 		},
 	]
 
+def LampLightGroupParameter():
+	return [
+		{
+			'attr': 'lightgroup',
+			'type': 'string',
+			'name': 'lightgroup',
+			'description': 'lightgroup; leave blank to use default',
+			'save_in_preset': True
+		},
+		{
+			'type': 'prop_search',
+			'attr': 'lightgroup_chooser',
+			'src': lambda s,c: s.scene.luxrender_lightgroups,
+			'src_attr': 'lightgroups',
+			'trg': lambda s,c: c.luxrender_lamp,
+			'trg_attr': 'lightgroup',
+			'name': 'Light Group'
+		},
+	]
+
 class LampColorTextureParameter(ColorTextureParameter):
 	def texture_slot_set_attr(self):
 		return lambda s,c: getattr(c, 'luxrender_lamp_%s'%s.lamp.type.lower())
@@ -80,17 +100,13 @@ class luxrender_lamp(declarative_property_group):
 	ef_attach_to = ['Lamp']
 	
 	controls = [
-		'importance', 'lightgroup', 'Exterior'
+		'importance',
+		'lightgroup_chooser',
+		'Exterior',
+		'AR_enabled',
 	]
 	
 	properties = [
-		{
-			'type': 'string',
-			'attr': 'lightgroup',
-			'name': 'Light Group',
-			'description': 'Name of group to put this light in',
-			'default': 'default'
-		},
 		{
 			'type': 'float',
 			'attr': 'importance',
@@ -109,12 +125,21 @@ class luxrender_lamp(declarative_property_group):
 			'name': 'IES Data',
 			'description': 'Use IES data for this light\'s distribution'
 		},
+		{ 
+			'type': 'bool',
+			'attr': 'AR_enabled',
+			'name': 'Support Light for Augmented Reality',
+			'description': 'Using for declare the object as support light in Augmented Reality Scene',
+			'default': False,
+		},
 	] + \
-		LampVolumeParameter('Exterior', 'Exterior')
+		LampVolumeParameter('Exterior', 'Exterior') + \
+		LampLightGroupParameter()
 	
 	def get_paramset(self):
 		params = ParamSet()
 		params.add_float('importance', self.importance)
+		params.add_bool('support', self.AR_enabled)
 		return params
 
 class luxrender_lamp_basic(declarative_property_group):
@@ -132,8 +157,21 @@ class luxrender_lamp_point(luxrender_lamp_basic):
 	ef_attach_to = ['luxrender_lamp']
 	
 	controls = TC_L.controls[:] + [
-		'flipz'
+		'flipz',
+		'power',
+		'efficacy',
+		'usesphere',
+		'pointsize',
+		'nsamples',
+		'null_lamp',
 	]
+	
+	visibility = dict_merge(
+		luxrender_lamp_basic.visibility,
+		{ 'pointsize':				{ 'usesphere': True} },
+		{ 'nsamples':				{ 'usesphere': True} },
+		{ 'null_lamp':				{ 'usesphere': True} },
+		)
 	
 	properties = TC_L.properties[:] + [
 		{
@@ -143,11 +181,70 @@ class luxrender_lamp_point(luxrender_lamp_basic):
 			'description': 'Flip Z direction in mapping',
 			'default': True
 		},
+				{
+			'type': 'float',
+			'attr': 'power',
+			'name': 'Power',
+			'default': 0,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 1e6,
+			'soft_max': 1e6,
+		},
+		{
+			'type': 'float',
+			'attr': 'efficacy',
+			'name': 'Efficacy',
+			'default': 0,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 1e6,
+			'soft_max': 1e6,
+		},
+		{
+			'type': 'bool',
+			'attr': 'usesphere',
+			'name': 'Use Sphere',
+			'description': 'Use a spherical area light instead of a true point light. This is more realistic, but can deform IES profiles',
+			'default': False,
+
+		},	
+		{
+			'type': 'float',
+			'attr': 'pointsize',
+			'name': 'Radius',
+			'default': 0.025, #2.5cm default, this is roughly the radius of a common light bulb.
+			'description': 'Radius of the lamp sphere',
+			'min': 0.000001, #1-micron minimum radius. This needs to be non-zero.
+			'soft_min': 0.0000001,
+			'sub_type': 'DISTANCE',
+			'unit': 'LENGTH'
+		},
+		{
+			'type': 'int',
+			'attr': 'nsamples',
+			'name': 'Shadow ray samples',
+			'description': 'The suggested number of shadow samples',
+			'default': 1 ,
+			'min': 1 ,
+			'soft_min': 1 ,
+			'max': 100,
+			'soft_max': 100,
+		},
+		{
+			'type': 'bool',
+			'attr': 'null_lamp',
+			'name': 'Hide geometry',
+			'description': 'Use a null material for lamp geometry (lamp will still be visible when viewed directly, as it emits its own light',
+			'default': True,
+		},	
 	]
 
 	def get_paramset(self, lamp_object):
 		params = super().get_paramset(lamp_object)
 		params.add_bool('flipz', self.flipz)
+		params.add_float('power', self.power)
+		params.add_float('efficacy', self.efficacy)
 		return params
 
 @LuxRenderAddon.addon_register_class
@@ -156,7 +253,9 @@ class luxrender_lamp_spot(luxrender_lamp_basic):
 	
 	controls = luxrender_lamp_basic.controls[:] + [
 		'projector',
-		'mapname'
+		'mapname',
+		'power',
+		'efficacy'
 	]
 	visibility = dict_merge(
 		luxrender_lamp_basic.visibility,
@@ -177,9 +276,31 @@ class luxrender_lamp_spot(luxrender_lamp_basic):
 			'description': 'Image to project from this lamp',
 			'default': ''
 		},
+		{
+			'type': 'float',
+			'attr': 'power',
+			'name': 'Power',
+			'default': 0,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 1e6,
+			'soft_max': 1e6,
+		},
+		{
+			'type': 'float',
+			'attr': 'efficacy',
+			'name': 'Efficacy',
+			'default': 0,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 1e6,
+			'soft_max': 1e6,
+		}
 	]
 	def get_paramset(self, lamp_object):
 		params = super().get_paramset(lamp_object)
+		params.add_float('power', self.power)
+		params.add_float('efficacy', self.efficacy)
 		if self.projector:
 			params.add_string('mapname', self.mapname)
 		return params
@@ -193,21 +314,21 @@ class luxrender_lamp_sun(declarative_property_group):
 		'nsamples',
 		'turbidity',
 		'sunsky_advanced',
+		'relsize',
 		'horizonbrightness',
 		'horizonsize',
-		'relsize',
 		'sunhalobrightness',
 		'sunhalosize',
 		'backscattering',
 	]
 	
 	visibility = {
-		'horizonbrightness':	{ 'sunsky_advanced': True },
-		'horizonsize':			{ 'sunsky_advanced': True },
-		'sunhalobrightness':	{ 'sunsky_advanced': True },
-		'relsize':				{ 'sunsky_advanced': True },
-		'sunhalosize':			{ 'sunsky_advanced': True },
-		'backscattering':		{ 'sunsky_advanced': True },
+		'relsize':				{ 'sunsky_advanced': True, 'sunsky_type': LO({'!=':'sky'}) },
+		'horizonbrightness':	{ 'sunsky_advanced': True, 'sunsky_type': LO({'!=':'sun'}) },
+		'horizonsize':			{ 'sunsky_advanced': True, 'sunsky_type': LO({'!=':'sun'}) },
+		'sunhalobrightness':	{ 'sunsky_advanced': True, 'sunsky_type': LO({'!=':'sun'}) },
+		'sunhalosize':			{ 'sunsky_advanced': True, 'sunsky_type': LO({'!=':'sun'}) },
+		'backscattering':		{ 'sunsky_advanced': True, 'sunsky_type': LO({'!=':'sun'}) },
 	}
 	
 	properties = [
@@ -216,10 +337,10 @@ class luxrender_lamp_sun(declarative_property_group):
 			'attr': 'turbidity',
 			'name': 'turbidity',
 			'default': 2.2,
-			'min': 0.7,
-			'soft_min': 0.7,
-			'max': 50.0,
-			'soft_max': 50.0,
+			'min': 1.2,
+			'soft_min': 1.2,
+			'max': 30.0,
+			'soft_max': 30.0,
 		},
 		{
 			'type': 'enum',
@@ -232,7 +353,6 @@ class luxrender_lamp_sun(declarative_property_group):
 				('sky', 'Sky Only', 'sky'),
 			]
 		},
-		
 		{
 			'type': 'bool',
 			'attr': 'sunsky_advanced',
@@ -318,10 +438,12 @@ class luxrender_lamp_sun(declarative_property_group):
 		params.add_float('turbidity', self.turbidity)
 		params.add_integer('nsamples', self.nsamples)
 		
-		if self.sunsky_advanced:
+		if self.sunsky_advanced and self.sunsky_type != 'sky':
+			params.add_float('relsize', self.relsize)
+		
+		if self.sunsky_advanced and self.sunsky_type != 'sun':
 			params.add_float('horizonbrightness', self.horizonbrightness)
 			params.add_float('horizonsize', self.horizonsize)
-			params.add_float('relsize', self.relsize)
 			params.add_float('sunhalobrightness', self.sunhalobrightness)
 			params.add_float('sunhalosize', self.sunhalosize)
 			params.add_float('backscattering', self.backscattering)
@@ -336,6 +458,7 @@ class luxrender_lamp_area(declarative_property_group):
 		'nsamples',
 		'power',
 		'efficacy',
+		'null_lamp',
 	]
 	
 	visibility = TC_L.visibility
@@ -372,6 +495,13 @@ class luxrender_lamp_area(declarative_property_group):
 			'max': 100,
 			'soft_max': 100,
 		},
+		{
+			'type': 'bool',
+			'attr': 'null_lamp',
+			'name': 'Hide geometry',
+			'description': 'Use a null material for lamp geometry (lamp will still be visible when viewed on emitting side, as it emits its own light',
+			'default': True,
+		},
 	]
 	
 	def get_paramset(self, lamp_object):
@@ -402,8 +532,8 @@ class luxrender_lamp_hemi(declarative_property_group):
 		'infinite_map':		{ 'type': 'infinite' },
 		'mapping_type':		{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
 		'hdri_multiply':	{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
-		'gamma':		{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
-		'nsamples':		{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
+		'gamma':			{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
+		'nsamples':			{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
 	}
 	
 	properties = TC_L.properties[:] + [
@@ -469,9 +599,9 @@ class luxrender_lamp_hemi(declarative_property_group):
 			'attr': 'LNsamples',
 			'name': 'AR Samples',
 			'min': 0,
-			'max': 12,
+			'max': 11,
 			'description': 'Number of samples for MedianCut algorithm (needed only by AR)',
-			'default': 10,
+			'default': 9,
 		},
 		{
 			'type': 'int',
@@ -484,7 +614,6 @@ class luxrender_lamp_hemi(declarative_property_group):
 			'max': 100,
 			'soft_max': 100,
 		},
-
 	]
 	
 	def get_paramset(self, lamp_object):
@@ -506,6 +635,6 @@ class luxrender_lamp_hemi(declarative_property_group):
 		else:
 			params.add_color('L', self.L_color)
 
-		params.add_integer('LNsamples', self.LNsamples)
-		
+		params.add_integer('LNsamples', self.LNsamples)		
+
 		return params

@@ -24,13 +24,14 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
-import collections, math
+import collections, math, os
 
 import bpy, mathutils
 
 from extensions_framework import util as efutil
 
 from ..outputs import LuxManager, LuxLog
+from ..util import bencode_file2string_with_size
 
 class ExportProgressThread(efutil.TimerThread):
 	message = '%i%%'
@@ -50,11 +51,6 @@ class ExportProgressThread(efutil.TimerThread):
 			LuxLog(self.message % pc)
 
 class ExportCache(object):
-	
-#	name = 'Cache'
-#	cache_keys = set()
-#	cache_items = {}
-	
 	def __init__(self, name='Cache'):
 		self.name = name
 		self.cache_keys = set()
@@ -80,14 +76,9 @@ class ExportCache(object):
 		if self.have(ck):
 			return self.cache_items[ck]
 		else:
-			raise InvalidGeometryException('Item %s not found in %s!' % (ck, self.name))
+			raise Exception('Item %s not found in %s!' % (ck, self.name))
 
 class ParamSetItem(list):
-	
-	type		= None
-	type_name	= None
-	name		= None
-	value		= None
 	
 	WRAP_WIDTH	= 100
 	
@@ -96,6 +87,29 @@ class ParamSetItem(list):
 		self.type_name = "%s %s" % (self.type, self.name)
 		self.append(self.type_name)
 		self.append(self.value)
+	
+	def getSize(self, vl=None):
+		sz = 0
+		
+		if vl==None:
+			vl=self.value
+			sz+=100	# Rough overhead for encoded paramset item
+		
+		if type(vl) in (list,tuple):
+			for v in vl:
+				sz += self.getSize(vl=v)
+		
+		if type(vl) is str:
+			sz += len(vl)
+		if type(vl) is float:
+			sz += 14
+		if type(vl) is int:
+			if vl==0:
+				sz+=1
+			else:
+				sz += math.floor( math.log10(abs(vl)) ) + 1
+		
+		return sz
 	
 	def list_wrap(self, lst, cnt, type='f'):
 		fcnt = float(cnt)
@@ -116,7 +130,7 @@ class ParamSetItem(list):
 			elif type == 'i':
 				str = ' '.join(['%i'%i for i in lst])
 		return str
-	
+
 	def to_string(self):
 		fs_num = '"%s %s" [%s]'
 		fs_str = '"%s %s" ["%s"]'
@@ -132,7 +146,10 @@ class ParamSetItem(list):
 		if self.type == "integer":
 			return fs_num % ('integer', self.name, '%i' % self.value)
 		if self.type == "string":
-			return fs_str % ('string', self.name, self.value.replace('\\', '\\\\'))
+			if type(self.value) is list:
+				return fs_num % ('string', self.name, '\n'.join(['"%s"'%v for v in self.value]))
+			else:
+				return fs_str % ('string', self.name, self.value.replace('\\', '\\\\'))
 		if self.type == "vector":
 			lst = self.list_wrap(self.value, self.WRAP_WIDTH, 'f')
 			return fs_num % ('vector', self.name, lst)
@@ -156,7 +173,22 @@ class ParamSetItem(list):
 
 class ParamSet(list):
 	
-	names = []
+	def __init__(self):
+		self.names = []
+		self.item_sizes = {}
+	
+	def increase_size(self, param_name, sz):
+		self.item_sizes[param_name] = sz
+	
+	def getSize(self):
+		sz = 0
+		item_sizes_keys = self.item_sizes.keys()
+		for p in self:
+			if p.name in item_sizes_keys:
+				sz += self.item_sizes[p.name]
+			else:
+				sz += p.getSize()
+		return sz
 	
 	def update(self, other):
 		for p in other:
@@ -188,7 +220,10 @@ class ParamSet(list):
 		return self
 	
 	def add_string(self, name, value):
-		self.add('string', name, str(value))
+		if type(value) is list:
+			self.add('string', name, [str(v) for v in value])
+		else:
+			self.add('string', name, str(value))
 		return self
 	
 	def add_vector(self, name, value):
@@ -257,6 +292,18 @@ def object_anim_matrix(scene, obj, frame_offset=1, ignore_scale=False):
 	else:
 		return False
 
+# hack for the matrix order api change in r42816
+# TODO remove this when obsolete
+def fix_matrix_order_old(matrix):
+	return matrix.transposed()
+def fix_matrix_order_new(matrix):
+	return matrix
+
+if bpy.app.build_revision >= '42816':
+	fix_matrix_order = fix_matrix_order_new
+else:
+	fix_matrix_order = fix_matrix_order_old
+
 def matrix_to_list(matrix, apply_worldscale=False):
 	'''
 	matrix		  Matrix
@@ -271,14 +318,34 @@ def matrix_to_list(matrix, apply_worldscale=False):
 		sm = get_worldscale()
 		matrix *= sm
 		sm = get_worldscale(as_scalematrix = False)
-		matrix[3][0] *= sm
-		matrix[3][1] *= sm
-		matrix[3][2] *= sm
-		
+		matrix = fix_matrix_order(matrix) # matrix indexing hack
+		matrix[0][3] *= sm
+		matrix[1][3] *= sm
+		matrix[2][3] *= sm
+	else:
+		matrix = fix_matrix_order(matrix) # matrix indexing hack
+
 	
-	l = [	matrix[0][0], matrix[0][1], matrix[0][2], matrix[0][3],\
-			matrix[1][0], matrix[1][1], matrix[1][2], matrix[1][3],\
-			matrix[2][0], matrix[2][1], matrix[2][2], matrix[2][3],\
-			matrix[3][0], matrix[3][1], matrix[3][2], matrix[3][3] ]
+	l = [	matrix[0][0], matrix[1][0], matrix[2][0], matrix[3][0],\
+		matrix[0][1], matrix[1][1], matrix[2][1], matrix[3][1],\
+		matrix[0][2], matrix[1][2], matrix[2][2], matrix[3][2],\
+		matrix[0][3], matrix[1][3], matrix[2][3], matrix[3][3] ]
 	
 	return [float(i) for i in l]
+
+def process_filepath_data(scene, obj, file_path, paramset, parameter_name):
+	file_basename		= os.path.basename(file_path)
+	library_filepath	= obj.library.filepath if obj.library else ''
+	file_library_path	= efutil.filesystem_path(bpy.path.abspath(file_path, library_filepath))
+	file_relative		= efutil.filesystem_path(file_library_path) if obj.library else efutil.filesystem_path(file_path)
+	
+	if scene.luxrender_engine.allow_file_embed():
+		paramset.add_string(parameter_name, file_basename)
+		encoded_data, encoded_size = bencode_file2string_with_size(file_relative)
+		paramset.increase_size('%s_data' % parameter_name, encoded_size)
+		paramset.add_string('%s_data' % parameter_name, encoded_data.splitlines() )
+	else:
+		paramset.add_string(parameter_name, file_relative)
+
+def get_output_filename(scene):
+	return '%s.%s.%05d' % (efutil.scene_filename(), bpy.path.clean_name(scene.name), scene.frame_current)

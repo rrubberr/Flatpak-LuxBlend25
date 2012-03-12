@@ -29,6 +29,8 @@ import bpy, bl_ui
 from extensions_framework.ui import property_group_renderer
 
 from .. import LuxRenderAddon
+from .lamps import lamps_panel
+from .materials import luxrender_material_base
 
 class world_panel(bl_ui.properties_world.WorldButtonsPanel, property_group_renderer):
 	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
@@ -45,8 +47,7 @@ class world(world_panel):
 		( ('scene',), 'luxrender_world' )
 	]
 
-@LuxRenderAddon.addon_register_class
-class volumes(world_panel):
+class volumes_base(object):
 	'''
 	Interior/Exterior Volumes Settings
 	'''
@@ -72,34 +73,88 @@ class volumes(world_panel):
 			menu_text = '-- Choose preset --'
 		
 		cl=self.layout.column(align=True)
-		cl.menu('LUXRENDER_MT_ior_presets', text=menu_text)
+		cl.menu('LUXRENDER_MT_ior_presets_volumes', text=menu_text)
 	
 	# overridden in order to draw the selected luxrender_volume_data property group
 	def draw(self, context):
 		super().draw(context)
 		
-		if context.world:
-			row = self.layout.row(align=True)
-			row.menu("LUXRENDER_MT_presets_volume", text=bpy.types.LUXRENDER_MT_presets_volume.bl_label)
-			row.operator("luxrender.preset_volume_add", text="", icon="ZOOMIN")
-			row.operator("luxrender.preset_volume_add", text="", icon="ZOOMOUT").remove_active = True
-			
-			if len(context.scene.luxrender_volumes.volumes) > 0:
-				current_vol_ind = context.scene.luxrender_volumes.volumes_index
-				current_vol = context.scene.luxrender_volumes.volumes[current_vol_ind]
-				# 'name' is not a member of current_vol.properties,
-				# so we draw it explicitly
-				self.layout.prop(
-					current_vol, 'name'
+		#row = self.layout.row(align=True)
+		#row.menu("LUXRENDER_MT_presets_volume", text=bpy.types.LUXRENDER_MT_presets_volume.bl_label)
+		#row.operator("luxrender.preset_volume_add", text="", icon="ZOOMIN")
+		#row.operator("luxrender.preset_volume_add", text="", icon="ZOOMOUT").remove_active = True
+		
+		if len(context.scene.luxrender_volumes.volumes) > 0:
+			current_vol_ind = context.scene.luxrender_volumes.volumes_index
+			current_vol = context.scene.luxrender_volumes.volumes[current_vol_ind]
+			# 'name' is not a member of current_vol.properties,
+			# so we draw it explicitly
+			self.layout.prop(
+				current_vol, 'name'
+			)
+			# Here we draw the currently selected luxrender_volumes_data property group
+			for control in current_vol.controls:
+				self.draw_column(
+					control,
+					self.layout,
+					current_vol,
+					context,
+					property_group = current_vol
 				)
-				# Here we draw the currently selected luxrender_volumes_data property group
-				for control in current_vol.controls:
-					self.draw_column(
-						control,
-						self.layout,
-						current_vol,
-						context,
-						property_group = current_vol
-					)
-		else:
-			self.layout.label('No active World available!')
+
+@LuxRenderAddon.addon_register_class
+class volumes_world(volumes_base, world_panel):
+	pass
+
+@LuxRenderAddon.addon_register_class
+class volumes_material(volumes_base, luxrender_material_base):
+	@classmethod
+	def poll(cls, context):
+		return super().poll(context) and ( \
+			context.material.luxrender_material.Interior_volume != '' \
+			or \
+			context.material.luxrender_material.Exterior_volume != ''
+		)
+
+class lightgroups_base(object):
+	'''
+	Light Groups Settings
+	'''
+	
+	bl_label = 'LuxRender Light Groups'
+	
+	display_property_groups = [
+		( ('scene',), 'luxrender_lightgroups' )
+	]
+	
+	# overridden in order to draw a 'non-standard' panel
+	def draw(self, context):
+		super().draw(context)
+		
+		for lg_index in range(len(context.scene.luxrender_lightgroups.lightgroups)):
+			lg = context.scene.luxrender_lightgroups.lightgroups[lg_index]
+			row = self.layout.row()
+			row.prop(lg, 'lg_enabled', text="")
+			subrow=row.row()
+			subrow.enabled = lg.lg_enabled
+			subrow.prop(lg, 'name', text="")
+			# Here we draw the currently selected luxrender_volumes_data property group
+			for control in lg.controls:
+				self.draw_column(
+					control,
+					subrow.column(),
+					lg,
+					context,
+					property_group = lg
+				)
+			row.operator('luxrender.lightgroup_remove', text="", icon="ZOOMOUT").lg_index=lg_index
+
+@LuxRenderAddon.addon_register_class
+class lightgroups_world(lightgroups_base, world_panel):
+	pass
+
+@LuxRenderAddon.addon_register_class
+class lightgroups_lamps(lightgroups_base, lamps_panel):
+	@classmethod
+	def poll(cls, context):
+		return super().poll(context) and context.lamp.luxrender_lamp.lightgroup != ''

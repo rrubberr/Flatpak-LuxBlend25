@@ -43,8 +43,10 @@ def LuxLog(*args, popup=False):
 # CHOOSE API TYPE
 # Write conventional lx* files and use pylux to manage lux process or external process
 from ..outputs import file_api
-# Access lux via a remote LuxFire slave
-from ..outputs import luxfire_client
+# Write material definitions to LBM2 format
+from ..outputs import lbm2_api
+# Write material definitions to LXM format
+from ..outputs import lxm_api
 # Access lux only through pylux bindings
 from ..outputs import pure_api
 
@@ -75,28 +77,37 @@ class LuxFilmDisplay(TimerThread):
 			
 			if not bpy.app.background or render_end:
 				
+				xres = yres = -1
+				
 				if 'lux_context' in self.LocalStorage.keys() and self.LocalStorage['lux_context'].statistics('sceneIsReady') > 0.0:
 					self.LocalStorage['lux_context'].updateFramebuffer()
-					# px = self.lux_context.framebuffer()
 					xres = int(self.LocalStorage['lux_context'].getAttribute('film', 'xResolution'))
 					yres = int(self.LocalStorage['lux_context'].getAttribute('film', 'yResolution'))
 					p_stats = ' - %s' % self.LocalStorage['lux_context'].printableStatistics(True)
 					direct_transfer = 'blenderCombinedDepthRects' in dir(self.LocalStorage['lux_context'])
 					direct_transfer &= 'integratedimaging' in self.LocalStorage.keys() and self.LocalStorage['integratedimaging']
-				elif 'resolution' in self.LocalStorage.keys():
+				
+				if 'resolution' in self.LocalStorage.keys():
 					xres, yres = self.LocalStorage['resolution']
-				else:
+				
+				if xres==-1 or yres==-1:
 					err_msg = 'ERROR: Cannot not load render result: resolution unknown. LuxFilmThread will terminate'
 					LuxLog(err_msg)
 					self.stop()
 					return
-			
+				
 				if render_end:
 					LuxLog('Final render result (%ix%i%s)' % (xres,yres,p_stats))
 				else:
 					LuxLog('Updating render result (%ix%i%s)' % (xres,yres,p_stats))
 				
-				result = self.LocalStorage['RE'].begin_result(0, 0, int(xres), int(yres))
+				result = self.LocalStorage['RE'].begin_result(0, 0, xres, yres)
+				
+				if result == None:
+					err_msg = 'ERROR: Cannot not load render result: begin_result() returned None. LuxFilmThread will terminate'
+					LuxLog(err_msg)
+					self.stop()
+					return
 				
 				lay = result.layers[0]
 				
@@ -134,6 +145,9 @@ class LuxManager(object):
 	def SetActive(LM):
 		LuxManager.ActiveManager = LM
 	@staticmethod
+	def GetActive():
+		return LuxManager.ActiveManager
+	@staticmethod
 	def ClearActive():
 		LuxManager.ActiveManager = None
 	
@@ -170,10 +184,12 @@ class LuxManager(object):
 		
 		if api_type == 'FILE':
 			Context = file_api.Custom_Context
-		elif api_type == 'LUXFIRE_CLIENT':
-			Context = luxfire_client.Client_Locator
 		elif api_type == 'API':
 			Context = pure_api.Custom_Context
+		elif api_type == 'LBM2':
+			Context = lbm2_api.Custom_Context
+		elif api_type == 'LXM':
+			Context = lxm_api.Custom_Context
 		else:
 			raise Exception('Unknown exporter API type "%s"' % api_type)
 		
@@ -181,7 +197,7 @@ class LuxManager(object):
 		self.lux_context = Context('LuxContext %04i%s' % (LuxManager.get_context_number(), manager_name))
 		
 		self.reset()
-
+	
 	def start(self):
 		'''
 		Start the pylux.Context object rendering. This is achieved

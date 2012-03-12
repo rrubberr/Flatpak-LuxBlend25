@@ -29,10 +29,11 @@ from ...ui.textures import luxrender_texture_base
 
 @LuxRenderAddon.addon_register_class
 class ui_texture_transform(luxrender_texture_base):
-	bl_label = 'LuxRender Texture Transform'
+	bl_label = 'LuxRender 3D Texture Transform'
 	bl_options = {'DEFAULT_CLOSED'}
 	
-	LUX_COMPAT = {'BLENDER', 'brick', 'checkerboard', 'fbm', 'marble', 'windy', 'wrinkled'}
+	LUX_COMPAT	= {'BLENDER', 'brick', 'checkerboard', 'fbm', 'marble', 'windy', 'wrinkled'}
+	BL_COMPAT	= {'BLEND','CLOUDS','DISTORTED_NOISE','MAGIC','MARBLE','MUSGRAVE','STUCCI','VORONOI','WOOD'}
 	
 	display_property_groups = [
 		( ('texture', 'luxrender_texture'), 'luxrender_tex_transform' )

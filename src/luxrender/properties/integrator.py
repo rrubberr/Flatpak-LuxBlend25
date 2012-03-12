@@ -31,19 +31,7 @@ from .. import LuxRenderAddon
 from ..export import ParamSet
 from ..outputs import LuxLog
 from ..outputs.pure_api import LUXRENDER_VERSION
-
-def volumeintegrator_types():
-	items = [
-		('emission', 'Emission', 'emission'),
-		('single', 'Single', 'single'),
-	]
-	
-	if LUXRENDER_VERSION >= '0.8':
-		items.append(
-			('multi', 'Multi', 'multi'),
-		)
-		
-	return items
+#from .engine import check_renderer_settings
 
 @LuxRenderAddon.addon_register_class
 class luxrender_volumeintegrator(declarative_property_group):
@@ -54,8 +42,13 @@ class luxrender_volumeintegrator(declarative_property_group):
 	ef_attach_to = ['Scene']
 	
 	controls = [
-		'volumeintegrator', 'stepsize'
+		[0.7, 'volumeintegrator', 'advanced'],
+		'stepsize',
 	]
+	
+	visibility = {
+		'stepsize':							{ 'advanced': True },
+	}
 	
 	properties = [
 		{
@@ -63,22 +56,36 @@ class luxrender_volumeintegrator(declarative_property_group):
 			'attr': 'volumeintegrator',
 			'name': 'Volume Integrator',
 			'description': 'Volume Integrator',
-			'default': 'single' if LUXRENDER_VERSION < '0.8' else 'multi',
-			'items': volumeintegrator_types(),
+			'default': 'multi',
+			'items': [
+				('emission', 'Emission', 'Calculate absorption and light-emission only'),
+				('single', 'Single', 'Calculate single scattering as well as absorption and light-emission'),
+				('multi', 'Multi', 'Calculate all volumetric effects, including multiple scattering, absorption, and light-emission'),
+			],
 			'save_in_preset': True
 		},
 		{
 			'type': 'float',
 			'attr': 'stepsize',
 			'name': 'Step Size',
-			'description': 'Volume Integrator Step Size',
+			'description': 'Ray-marching step size. Only used for smoke simulations',
 			'default': 1.0,
 			'min': 0.0,
 			'soft_min': 0.0,
 			'max': 100.0,
 			'soft_max': 100.0,
+			'sub_type': 'DISTANCE',
+			'unit': 'LENGTH',
 			'save_in_preset': True
-		}
+		},
+		{
+			'type': 'bool',
+			'attr': 'advanced',
+			'name': 'Advanced',
+			'description': 'Configure advanced volume integrator settings',
+			'default': False,
+			'save_in_preset': True
+		},
 	]
 	
 	def api_output(self):
@@ -103,16 +110,17 @@ class luxrender_integrator(declarative_property_group):
 	ef_attach_to = ['Scene']
 	
 	controls = [
-		[ 0.7, 'surfaceintegrator', 'advanced'],
-		
+		'advanced',
 		'lightstrategy',
 		
 		# bidir +
 		['eyedepth', 'lightdepth'],
 		['eyerrthreshold', 'lightrrthreshold'],
+		'bidirstrategy',
 		
 		# dl +
 		'maxdepth',
+		'shadowraycount',
 		
 		# dp
 		['lbl_direct',
@@ -149,22 +157,27 @@ class luxrender_integrator(declarative_property_group):
 		'glossyrefractreject_threshold'],
 		
 		# epm
-		'maxphotondepth',
+		['maxeyedepth', 'maxphotondepth'],
+		#Exphotonmap uses maxdepth, not maxeyedepth. However, it uses maxeyedepth in the GUI to allow a double-box for both itself and SPPM
+		#This is because maxdepth cannot be used in a double box, since path, igi, and direct use maxdepth by itself.
+		#The value of maxeyedepth is exported for the "maxdepth" entry in the lxs when using exphotonmap, see export section
 		'directphotons',
 		'causticphotons',
 		'indirectphotons',
 		'radiancephotons',
 		'nphotonsused',
 		'maxphotondist',
+		'renderingmode',
 		'finalgather',
 		'finalgathersamples',
 		'gatherangle',
-		'renderingmode',
+		'distancethreshold',
 		'rrstrategy',
 		'rrcontinueprob',
 		# epm advanced
-		'distancethreshold',
 		'photonmapsfile',
+		# epm debug
+		'debugmode',
 		'dbg_enabledirect',
 		'dbg_enableradiancemap',
 		'dbg_enableindircaustic',
@@ -176,20 +189,36 @@ class luxrender_integrator(declarative_property_group):
 		'nlights',
 		'mindist',
 		
+		#sppm
+		'photonperpass',
+		['startradius', 'alpha'],
+		'sppmdirectlight',
+		#sppm advanced
+		'glossythreshold',
+		'wavelengthstratificationpasses',
+		'lookupaccel',
+		'parallelhashgridspare',
+		'pixelsampler',
+		'photonsampler',
+		'useproba',
+				
 		# path
+		'directlightsampling',
 		'includeenvironment',
 	]
 	
 	visibility = {
 		# bidir +
-		'lightstrategy':					{ 'advanced': True, 'surfaceintegrator': LO({'!=': 'bidirectional'}) },
 		'eyedepth':							{ 'surfaceintegrator': 'bidirectional' },
 		'lightdepth':						{ 'surfaceintegrator': 'bidirectional' },
 		'eyerrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		'lightrrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
+		'bidirstrategy':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		
 		# dl +
-		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path', 'arpath', 'ardirectlighting']) },
+		'lightstrategy':					{ 'advanced': True, 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'arpath', 'ardirectlighting'])},
+		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'igi', 'path', 'arpath', 'ardirectlighting']) },
+		'shadowraycount':					{ 'advanced': True, 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'path', 'arpath', 'ardirectlighting']) },
 		
 		# dp
 		'lbl_direct':						{ 'surfaceintegrator': 'distributedpath' },
@@ -225,28 +254,32 @@ class luxrender_integrator(declarative_property_group):
 		'glossyrefractreject':				{ 'surfaceintegrator': 'distributedpath' },
 		'glossyrefractreject_threshold':	{ 'glossyrefractreject': True, 'surfaceintegrator': 'distributedpath' },
 		
-		# epm
-		'maxphotondepth':					{ 'surfaceintegrator': 'exphotonmap' },
+		# expm
+		'maxeyedepth':						{ 'surfaceintegrator': O(['exphotonmap', 'sppm']) },
+		'maxphotondepth':					{ 'surfaceintegrator': O(['exphotonmap', 'sppm']) },
 		'directphotons':					{ 'surfaceintegrator': 'exphotonmap' },
 		'causticphotons':					{ 'surfaceintegrator': 'exphotonmap' },
 		'indirectphotons':					{ 'surfaceintegrator': 'exphotonmap' },
 		'radiancephotons':					{ 'surfaceintegrator': 'exphotonmap' },
 		'nphotonsused':						{ 'surfaceintegrator': 'exphotonmap' },
 		'maxphotondist':					{ 'surfaceintegrator': 'exphotonmap' },
-		'finalgather':						{ 'surfaceintegrator': 'exphotonmap' },
-		'finalgathersamples':				{ 'finalgather': True, 'surfaceintegrator': 'exphotonmap' },
-		'gatherangle':						{ 'finalgather': True, 'surfaceintegrator': 'exphotonmap' },
 		'renderingmode':					{ 'surfaceintegrator': 'exphotonmap' },
+		'finalgather':						{ 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
+		'finalgathersamples':				{ 'finalgather': True, 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
+		'gatherangle':						{ 'finalgather': True, 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
 		'rrstrategy':						{ 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath']) },
-		'rrcontinueprob':					{ 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath']) },
-		# epm advanced
-		'distancethreshold':				{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
+		'rrcontinueprob':					{ 'rrstrategy': 'probability', 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath']) },
+		'distancethreshold':				{ 'renderingmode': 'path', 'surfaceintegrator': 'exphotonmap' },
+		# expm advanced
 		'photonmapsfile':					{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
-		'dbg_enabledirect':					{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
-		'dbg_enableradiancemap':			{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
-		'dbg_enableindircaustic':			{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
-		'dbg_enableindirdiffuse':			{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
-		'dbg_enableindirspecular':			{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
+		
+		# expm debug
+		'debugmode':						{ 'surfaceintegrator': 'exphotonmap' },
+		'dbg_enabledirect':					{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
+		'dbg_enableradiancemap':			{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
+		'dbg_enableindircaustic':			{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
+		'dbg_enableindirdiffuse':			{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
+		'dbg_enableindirspecular':			{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
 		
 		# igi
 		'nsets':							{ 'surfaceintegrator': 'igi' },
@@ -254,10 +287,30 @@ class luxrender_integrator(declarative_property_group):
 		'mindist':							{ 'surfaceintegrator': 'igi' },
 		
 		# path
-		'includeenvironment':				{ 'surfaceintegrator': O(['path', 'arpath']) },
+		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath']) },
+		'directlightsampling':				{ 'surfaceintegrator': O(['path', 'arpath']) },
+		
+		# sppm
+		'photonperpass':					{ 'surfaceintegrator': 'sppm' },
+		'startk':							{ 'surfaceintegrator': 'sppm' },
+		'alpha':							{ 'surfaceintegrator': 'sppm' },
+		'startradius':						{ 'surfaceintegrator': 'sppm' },
+		'sppmdirectlight':					{ 'surfaceintegrator': 'sppm' },
+
+		# sppm advanced
+		'glossythreshold':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'wavelengthstratificationpasses': 	{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'lookupaccel':						{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'parallelhashgridspare':			{ 'advanced': True, 'lookupaccel': 'parallelhashgrid', 'surfaceintegrator': 'sppm' },
+		'pixelsampler':						{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'photonsampler':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'useproba':						{ 'advanced': True, 'surfaceintegrator': 'sppm' },
 	}
 	
+	alert = {}
+	
 	properties = [
+		#This parameter is fed to the "integrator' context, and holds the actual surface integrator setting. The user does not interact with it directly, and it does not appear in the panels
 		{
 			'type': 'enum', 
 			'attr': 'surfaceintegrator',
@@ -265,15 +318,17 @@ class luxrender_integrator(declarative_property_group):
 			'description': 'Surface Integrator',
 			'default': 'bidirectional',
 			'items': [
-				('bidirectional', 'Bi-Directional', 'bidirectional'),
+				('bidirectional', 'Bidirectional', 'bidirectional'),
 				('path', 'Path', 'path'),
 				('directlighting', 'Direct Lighting', 'directlighting'),
 				('distributedpath', 'Distributed Path', 'distributedpath'),
 				('igi', 'Instant Global Illumination', 'igi',),
 				('exphotonmap', 'Ex-Photon Map', 'exphotonmap'),
+				('sppm', 'SPPM', 'sppm'),
 				('arpath', 'Augmented Reality Path Tracing', 'arpath'),
 				('ardirectlighting', 'Augmented Reality Direct Lighting', 'ardirectlighting'),
 			],
+			#'update': lambda s,c: check_renderer_settings(c),
 			'save_in_preset': True
 		},
 		{
@@ -282,6 +337,7 @@ class luxrender_integrator(declarative_property_group):
 			'name': 'Advanced',
 			'description': 'Configure advanced integrator settings',
 			'default': False,
+			#'update': lambda s,c: check_renderer_settings(c),
 			'save_in_preset': True
 		},
 		{
@@ -299,6 +355,21 @@ class luxrender_integrator(declarative_property_group):
 				('allpowerimp', 'All Power', 'allpowerimp'),
 				('logpowerimp', 'Log Power', 'logpowerimp')
 			],
+			#'update': lambda s,c: check_renderer_settings(c),
+			'save_in_preset': True
+		},
+		{
+			'type': 'enum',
+			'attr': 'bidirstrategy',
+			'name': 'Light Strategy',
+			'description': 'Light Sampling Strategy',
+			'default': 'auto',
+			'items': [
+				('auto', 'Auto', 'auto'),
+				('one', 'One', 'one'),
+				('all', 'All', 'all')
+			],
+			#'update': lambda s,c: check_renderer_settings(c),
 			'save_in_preset': True
 		},
 		{
@@ -306,8 +377,8 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'eyedepth',
 			'name': 'Eye Depth',
 			'description': 'Max recursion depth for ray casting from eye',
-			'default': 16,
-			'min': 0,
+			'default': 48,
+			'min': 1,
 			'max': 2048,
 			'save_in_preset': True
 		},
@@ -316,8 +387,8 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'lightdepth',
 			'name': 'Light Depth',
 			'description': 'Max recursion depth for ray casting from light',
-			'default': 16,
-			'min': 0,
+			'default': 48,
+			'min': 1,
 			'max': 2048,
 			'save_in_preset': True
 		},
@@ -326,6 +397,9 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'eyerrthreshold',
 			'name': 'Eye RR Threshold',
 			'default': 0.0,
+			'min': 0.0,
+			'max': 1.0,
+			'slider': True,
 			'save_in_preset': True
 		},
 		{
@@ -333,16 +407,28 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'lightrrthreshold',
 			'name': 'Light RR Threshold',
 			'default': 0.0,
+			'min': 0.0,
+			'max': 1.0,
+			'slider': True,
 			'save_in_preset': True
 		},
 		{
 			'type': 'int',
 			'attr': 'maxdepth',
 			'name': 'Max. depth',
-			'default': 8,
+			'description': 'Max recursion depth for ray casting from eye',
+			'default': 48,
+			'min': 1,
+			'max': 2048,
 			'save_in_preset': True
 		},
-		
+		{
+			'type': 'int',
+			'attr': 'shadowraycount',
+			'name': 'Shadow Ray Count',
+			'default': 1,
+			'save_in_preset': True
+		},
 		{
 			'type': 'text',
 			'attr': 'lbl_direct',
@@ -421,6 +507,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'diffusereflectdepth',
 			'name': 'Reflection depth',
 			'default': 3,
+			'min': 0,
 			'save_in_preset': True
 		},
 		{
@@ -428,6 +515,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'diffusereflectsamples',
 			'name': 'Reflection samples',
 			'default': 1,
+			'min': 0,
 			'save_in_preset': True
 		},
 		{
@@ -435,6 +523,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'diffuserefractdepth',
 			'name': 'Refraction depth',
 			'default': 5,
+			'min': 0,
 			'save_in_preset': True
 		},
 		{
@@ -442,6 +531,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'diffuserefractsamples',
 			'name': 'Refraction samples',
 			'default': 1,
+			'min': 0,
 			'save_in_preset': True
 		},
 		
@@ -455,6 +545,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'glossyreflectdepth',
 			'name': 'Reflection depth',
 			'default': 2,
+			'min': 0,
 			'save_in_preset': True
 		},
 		{
@@ -462,6 +553,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'glossyreflectsamples',
 			'name': 'Reflection samples',
 			'default': 1,
+			'min': 0,
 			'save_in_preset': True
 		},
 		{
@@ -469,6 +561,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'glossyrefractdepth',
 			'name': 'Refraction depth',
 			'default': 5,
+			'min': 0,
 			'save_in_preset': True
 		},
 		{
@@ -476,6 +569,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'glossyrefractsamples',
 			'name': 'Refraction samples',
 			'default': 1,
+			'min': 0,
 			'save_in_preset': True
 		},
 		
@@ -489,6 +583,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'specularreflectdepth',
 			'name': 'Reflection depth',
 			'default': 3,
+			'min': 0,
 			'save_in_preset': True
 		},
 		{
@@ -496,6 +591,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'specularrefractdepth',
 			'name': 'Refraction depth',
 			'default': 5,
+			'min': 0,
 			'save_in_preset': True
 		},
 		
@@ -565,13 +661,17 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'maxphotondepth',
 			'name': 'Max. photon depth',
-			'default': 10,
+			'description': 'Max recursion depth for photon tracing',
+			'default': 48,
+			'min': 1,
+			'max': 2048,
 			'save_in_preset': True
 		},
 		{
 			'type': 'int',
 			'attr': 'directphotons',
 			'name': 'Direct photons',
+			'description': 'Target number of direct light photons',
 			'default': 1000000,
 			'save_in_preset': True
 		},
@@ -579,6 +679,7 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'causticphotons',
 			'name': 'Caustic photons',
+			'description': 'Target number of caustic photons',
 			'default': 20000,
 			'save_in_preset': True
 		},
@@ -586,6 +687,7 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'indirectphotons',
 			'name': 'Indirect photons',
+			'description': 'Target number of soft-indirect photons',
 			'default': 200000,
 			'save_in_preset': True
 		},
@@ -593,6 +695,7 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'radiancephotons',
 			'name': 'Radiance photons',
+			'description': 'Target number of final gather photons',
 			'default': 200000,
 			'save_in_preset': True
 		},
@@ -601,6 +704,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'nphotonsused',
 			'name': 'Number of photons used',
 			'default': 50,
+			'min': 1,
 			'save_in_preset': True
 		},
 		{
@@ -608,6 +712,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'maxphotondist',
 			'name': 'Max. photon distance',
 			'default': 0.1,
+			'min': 0.01,
 			'save_in_preset': True
 		},
 		{
@@ -621,6 +726,7 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'finalgathersamples',
 			'name': 'Final gather samples',
+			'description': 'Number of final gather samples to shoot for each ray',
 			'default': 32,
 			'save_in_preset': True
 		},
@@ -628,19 +734,18 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'float',
 			'attr': 'gatherangle',
 			'name': 'Gather angle',
+			'description': 'Reject final gather rays beyond this angle. Adjusts final gather accuracy',
 			'default': 10.0,
 			'save_in_preset': True
 		},
 		{
 			'type': 'enum',
 			'attr': 'renderingmode',
-			'name': 'Rendering mode',
+			'name': 'Eye-Pass Mode',
 			'default': 'directlighting',
 			'items': [
-				('directlighting', 'directlighting', 'directlighting'),
-				('path', 'path', 'path'),
-				('arpath', 'Augmented Reality Path Tracing', 'arpath'),
-				('ardirectlighting', 'Augmented Reality Direct Lighting', 'ardirectlighting'),
+				('directlighting', 'Direct Lighting', 'directlighting'),
+				('path', 'Path', 'path'),
 			],
 			'save_in_preset': True
 		},
@@ -648,7 +753,8 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'float',
 			'attr': 'distancethreshold',
 			'name': 'Distance threshold',
-			'default': 0.75,
+			'description': 'Fallbacks to path tracing when rendering corners in order to avoid photon leaks', #<--- that's what the wiki says it does.
+			'default': 0.5, #same as maxphotondist, this is how core defaults according to wiki
 			'save_in_preset': True
 		},
 		{
@@ -657,6 +763,13 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'photonmapsfile',
 			'name': 'Photonmaps file',
 			'default': '',
+			'save_in_preset': True
+		},
+		{
+			'type': 'bool',
+			'attr': 'debugmode',
+			'name': 'Enable Debug Mode',
+			'default': False,
 			'save_in_preset': True
 		},
 		{
@@ -720,6 +833,9 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'rrcontinueprob',
 			'name': 'RR continue probability',
 			'default': 0.65,
+			'min': 0.0,
+			'max': 1.0,
+			'slider': True,
 			'save_in_preset': True
 		},
 		{
@@ -728,9 +844,9 @@ class luxrender_integrator(declarative_property_group):
 			'name': 'RR strategy',
 			'default': 'efficiency',
 			'items': [
-				('efficiency', 'efficiency', 'efficiency'),
-				('probability', 'probability', 'probability'),
-				('none', 'none', 'none'),
+				('efficiency', 'Efficiency', 'efficiency'),
+				('probability', 'Probability', 'probability'),
+				('none', 'None', 'none'),
 			],
 			'save_in_preset': True
 		},
@@ -741,9 +857,147 @@ class luxrender_integrator(declarative_property_group):
 			'default': True,
 			'save_in_preset': True
 		},
+		{
+			'type': 'bool',
+			'attr': 'directlightsampling',
+			'name': 'Direct Light Sampling',
+			'description': 'Turn this off to use brute force path tracing (faster with only "infinite" light (HDRI))',
+			'default': True,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'maxeyedepth',
+			'name': 'Max. eye depth',
+			'default': 48,
+			'description': 'Max recursion depth for ray casting from eye',
+			'min': 1,
+			'max': 2048,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'photonperpass',
+			'name': 'Photons per pass',
+			'description': 'Number of photons to gather before going on to next pass',
+			'default': 1000000,
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'startradius',
+			'name': 'Starting radius',
+			'description': 'Photon radius used for initial pass. Try lowering this if the first pass renders very slowly',
+			'default': 2.0,
+			'min': 0.0001,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'startk',
+			'name': 'Starting K',
+			'description': 'Adjust starting photon radius to get this many photons. Higher values clear faster but are less accurate. 0=use initial radius',
+			'default': 30,
+			'min': 0,
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'alpha',
+			'name': 'Alpha',
+			'description': 'Tighten photon search radius by this factor on subsequent passes',
+			'default': 0.7,
+			'min': 0.01,
+			'max': 1.0,
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'glossythreshold',
+			'name': 'Glossy Threshold',
+			'description': 'Maximum specularity (PDF) that will store photons. 0=only matte materials store photons',
+			'min': 0,
+			'default': 100,
+			'save_in_preset': True
+		},
+		{
+			'type': 'enum',
+			'attr': 'lookupaccel',
+			'name': 'Lookup accelerator',
+			'description': 'Acceleration structure for hitpoints (not scene geometry)',
+			'default': 'hybridhashgrid',
+			'items': [
+				('hashgrid', 'Hash Grid', 'hashgrid'),
+				('kdtree', 'KD Tree', 'kdtree'),
+				('parallelhashgrid', 'Parallel Hash Grid', 'parallelhashgrid'),
+				('hybridhashgrid', 'Hybrid Hash Grid', 'hybridhashgrid'),
+			],
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'parallelhashgridspare',
+			'name': 'Parallel Hash Grid Spare',
+			'description': 'Higher values are faster but can use more memory',
+			'default': 1.0,
+			'save_in_preset': True
+		},
+		{
+			'type': 'enum',
+			'attr': 'pixelsampler',
+			'name': 'Pixel sampler',
+			'default': 'hilbert',
+			'description': 'Sampling pattern used during the eye pass',
+			'items': [
+				('linear', 'Linear', 'Scan top-to-bottom, one pixel line at a time'),
+				('tile', 'Tile', 'Scan in 32x32 blocks'),
+				('vegas', 'Vegas', 'Random sample distribution'),
+				('hilbert', 'Hilbert', 'Scan in a hilbert curve'),
+			],
+			'save_in_preset': True
+		},
+		{
+			'type': 'enum',
+			'attr': 'photonsampler',
+			'name': 'Photon sampler',
+			'default': 'halton',
+			'description': 'Sampling method for photons',
+			'items': [
+				('amc', 'Adaptive Markov Chain', 'Use adapative markov chain monte carlo sampling'),
+				('halton', 'Halton', 'Use a permuted halton sequence'),
+			],
+			'save_in_preset': True
+		},
+		#SPPM direct light sampling is a seperate parameter from Path's, due to the need for a different default and tooltip
+		{
+			'type': 'bool',
+			'attr': 'sppmdirectlight',
+			'name': 'Direct Light Sampling',
+			'description': 'Use direct light sampling during the eye pass. Can improve efficiency with simple lighting',
+			'default': False,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'wavelengthstratificationpasses',
+			'name': 'Wavelength Stratification Passes',
+			'description': 'Use non-random wavelengths for this many passes. Can help with wierd initial coloration due to unsampled wavelengths',
+			'default': 8,
+			'min': 0,
+			'max': 64,
+			'save_in_preset': True
+		},
+		{
+			'type': 'bool',
+			'attr': 'useproba',
+			'name': 'Use PPM Probability',
+			'description': 'Use PPM probability for search radius reduction.',
+			'default': False,
+			'save_in_preset': True
+		},
 	]
 	
-	def api_output(self, engine_properties):
+	def api_output(self, scene=None):
 		'''
 		Format this class's members into a LuxRender ParamSet
 		
@@ -752,27 +1006,61 @@ class luxrender_integrator(declarative_property_group):
 		
 		params = ParamSet()
 		
-		if engine_properties.renderer == 'hybrid':
-			if self.surfaceintegrator != 'path':
-				LuxLog('Incompatible surface integrator for Hybrid renderer (use "path").')
-				raise Exception('Incompatible render settings')
-			if self.lightstrategy != 'one':
-				LuxLog('Incompatible lightstrategy for Hybrid renderer (use "one").')
-				raise Exception('Incompatible render settings')
+		#Check to make sure all settings are correct when hybrid is selected. Keep this up to date as hybrid gets new options in 0.9
+		
+		if scene.luxrender_rendermode.renderer == 'hybrid':
+			#Check each integrator seperately so they don't mess with each other!
+			if self.surfaceintegrator == 'path' and self.advanced == True:
+				if self.lightstrategy not in ('one', 'all', 'auto'):
+					LuxLog('Incompatible lightstrategy for Hybrid Path (use "auto", "all", or "one").')
+					raise Exception('Incompatible render settings')
+			if self.surfaceintegrator == 'arpath' and self.advanced == True:
+				if self.lightstrategy not in ('one', 'all', 'auto'):
+					LuxLog('Incompatible lightstrategy for Hybrid ARPath (use "auto", "all", or "one").')
+					raise Exception('Incompatible render settings')
+			if self.surfaceintegrator == 'bidirectional':
+				if self.bidirstrategy != ('one'):
+					LuxLog('Incompatible lightstrategy for Hybrid Bidir (use "one").')
+					raise Exception('Incompatible render settings')
+		
+		#Exphotonmap is not compatible with light groups, warn here instead of light export code so this warning only shows once instead of per lamp
+		if scene.luxrender_lightgroups.ignore == False and self.surfaceintegrator == 'exphotonmap':
+			LuxLog('WARNING: Ex-Photon Map does not support light groups, exporting all lights in the default group.')
+				
+		#Safety checks for settings end here
 		
 		if self.surfaceintegrator == 'bidirectional':
 			params.add_integer('eyedepth', self.eyedepth) \
-				  .add_integer('lightdepth', self.lightdepth)
+				  .add_integer('lightdepth', self.lightdepth) \
+				  .add_string('strategy', self.bidirstrategy)
+			#Always export bidir strategy to make working with hybrid bidir easier (the rendermode menu sets the strat to one automatically)
 			if self.advanced:
 				params.add_float('eyerrthreshold', self.eyerrthreshold)
 				params.add_float('lightrrthreshold', self.lightrrthreshold)
 		
 		if self.surfaceintegrator == 'directlighting':
-			params.add_integer('maxdepth', self.maxdepth)
-		
-		if self.surfaceintegrator == 'ardirectlighting':
-			params.add_integer('maxdepth', self.maxdepth)
+			params.add_integer('maxdepth', self.maxdepth) \
 
+		if self.surfaceintegrator == 'ardirectlighting':
+			params.add_integer('maxdepth', self.maxdepth) \
+			
+		if self.surfaceintegrator == 'sppm':
+			params.add_integer('maxeyedepth', self.maxeyedepth) \
+				  .add_integer('maxphotondepth', self.maxphotondepth) \
+				  .add_integer('photonperpass', self.photonperpass) \
+ 				  .add_float('startradius', self.startradius) \
+				  .add_float('alpha', self.alpha) \
+				  .add_bool('includeenvironment', self.includeenvironment) \
+				  .add_bool('directlightsampling', self.sppmdirectlight)
+			if self.advanced:
+				params.add_float('glossythreshold', self.glossythreshold) \
+					  .add_bool('useproba', self.useproba)\
+					  .add_integer('wavelengthstratificationpasses', self.wavelengthstratificationpasses) \
+					  .add_string('lookupaccel', self.lookupaccel) \
+					  .add_float('parallelhashgridspare', self.parallelhashgridspare) \
+					  .add_string('pixelsampler', self.pixelsampler) \
+					  .add_string('photonsampler', self.photonsampler)
+		
 		if self.surfaceintegrator == 'distributedpath':
 			params.add_bool('directsampleall', self.directsampleall) \
 				  .add_integer('directsamples', self.directsamples) \
@@ -802,7 +1090,7 @@ class luxrender_integrator(declarative_property_group):
 				  .add_float('glossyrefractreject_threshold', self.glossyrefractreject_threshold)
 		
 		if self.surfaceintegrator == 'exphotonmap':
-			params.add_integer('maxdepth', self.maxdepth) \
+			params.add_integer('maxdepth', self.maxeyedepth) \
 				  .add_integer('maxphotondepth', self.maxphotondepth) \
 				  .add_integer('directphotons', self.directphotons) \
 				  .add_integer('causticphotons', self.causticphotons) \
@@ -816,10 +1104,12 @@ class luxrender_integrator(declarative_property_group):
 				  .add_float('gatherangle', self.gatherangle) \
 				  .add_string('rrstrategy', self.rrstrategy) \
 				  .add_float('rrcontinueprob', self.rrcontinueprob)
+				  #Export maxeyedepth as maxdepth, since that is actually the switch the scene file accepts
 			if self.advanced:
 				params.add_float('distancethreshold', self.distancethreshold) \
-					  .add_string('photonmapsfile', self.photonmapsfile) \
-					  .add_bool('dbg_enabledirect', self.dbg_enabledirect) \
+					  .add_string('photonmapsfile', self.photonmapsfile) 
+			if self.debugmode:
+				params.add_bool('dbg_enabledirect', self.dbg_enabledirect) \
 					  .add_bool('dbg_enableradiancemap', self.dbg_enableradiancemap) \
 					  .add_bool('dbg_enableindircaustic', self.dbg_enableindircaustic) \
 					  .add_bool('dbg_enableindirdiffuse', self.dbg_enableindirdiffuse) \
@@ -835,15 +1125,18 @@ class luxrender_integrator(declarative_property_group):
 			params.add_integer('maxdepth', self.maxdepth) \
 				  .add_float('rrcontinueprob', self.rrcontinueprob) \
 				  .add_string('rrstrategy', self.rrstrategy) \
-				  .add_bool('includeenvironment', self.includeenvironment)
+				  .add_bool('includeenvironment', self.includeenvironment) \
+				  .add_bool('directlightsampling', self.directlightsampling)
 
 		if self.surfaceintegrator == 'arpath':
 			params.add_integer('maxdepth', self.maxdepth) \
 				  .add_float('rrcontinueprob', self.rrcontinueprob) \
 				  .add_string('rrstrategy', self.rrstrategy) \
-				  .add_bool('includeenvironment', self.includeenvironment)
+				  .add_bool('includeenvironment', self.includeenvironment) \
+				  .add_bool('directlightsampling', self.directlightsampling)
 		
-		if self.advanced and self.surfaceintegrator != 'bidirectional':
-			params.add_string('lightstrategy', self.lightstrategy)
+		if self.advanced and self.surfaceintegrator not in ('bidirectional', 'sppm'):
+			params.add_string('lightstrategy', self.lightstrategy) \
+				.add_integer('shadowraycount', self.shadowraycount)
 		
 		return self.surfaceintegrator, params
