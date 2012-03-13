@@ -46,6 +46,7 @@ class luxrender_rendermode(declarative_property_group):
 		'raybuffersize',
 		'statebuffercount',
 		'workgroupsize',
+		'qbvhstacksize',
 		'deviceselection',
 		]
 	
@@ -56,6 +57,7 @@ class luxrender_rendermode(declarative_property_group):
 		'raybuffersize':			{ 'opencl_prefs': True, 'renderer': 'hybrid' },
 		'statebuffercount':			{ 'opencl_prefs': True, 'renderer': 'hybrid' },
 		'workgroupsize':			{ 'opencl_prefs': True, 'renderer': 'hybrid' },
+		'qbvhstacksize':			{ 'opencl_prefs': True, 'renderer': 'hybrid' },
 		'deviceselection':			{ 'opencl_prefs': True, 'renderer': 'hybrid' },
 		'usegpus':					{ 'renderer': 'hybrid' },
 		}
@@ -75,13 +77,6 @@ class luxrender_rendermode(declarative_property_group):
 			self.renderer = 'sppm'
 		else:
 			self.renderer = 'sampler'
-
-		#Also set light strategy for hybrid bidir, so the user doesn't need to
-		if self.rendermode == 'hybridbidir':
-			context.scene.luxrender_integrator.bidirstrategy = 'one'
-		#And set if back if they choose regular bidir
-		if self.rendermode == 'bidirectional':
-			context.scene.luxrender_integrator.bidirstrategy = 'auto'
 	
 	properties = [
 		{
@@ -177,11 +172,21 @@ class luxrender_rendermode(declarative_property_group):
 			'attr': 'workgroupsize',
 			'name': 'OpenCL work group size',
 			'description': 'Size of OpenCL work group. Use 0 for auto',
-			'default': 0,
+			'default': 64,
 			'min': 0,
 			'soft_min': 0,
 			'max': 1024,
 			'soft_max': 1024,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'qbvhstacksize',
+			'name': 'QBVH Stack Size',
+			'description': 'Max depth of GPU QBVH stack. Lower this if you get an out-of-resources error',
+			'default': 32,
+			'min': 16,
+			'max': 64,
 			'save_in_preset': True
 		},
 		{
@@ -212,6 +217,7 @@ class luxrender_rendermode(declarative_property_group):
 			renderer_params.add_integer('raybuffersize', self.raybuffersize)
 			renderer_params.add_integer('statebuffercount', self.statebuffercount)
 			renderer_params.add_integer('opencl.gpu.workgroup.size', self.workgroupsize)
+			renderer_params.add_integer('accelerator.qbvh.stacksize.max', self.qbvhstacksize)
 			renderer_params.add_string('opencl.devices.select', self.deviceselection)
 		
 		return self.renderer, renderer_params

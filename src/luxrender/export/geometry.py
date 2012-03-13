@@ -27,6 +27,7 @@
 import os, struct
 
 import bpy, mathutils, math
+from bpy.app.handlers import persistent
 
 from extensions_framework import util as efutil
 
@@ -50,7 +51,24 @@ class MeshExportProgressThread(ExportProgressThread):
 class DupliExportProgressThread(ExportProgressThread):
 	message = '...  %i%% ...'
 
+# hack for bmesh
+# TODO remove this when obsolete
+def get_uv_textures_old(mesh):
+	return mesh.uv_textures
+def get_uv_textures_new(mesh):
+	return mesh.tessface_uv_textures
+
+if bpy.app.version[1] >= 62 and bpy.app.version[2] > 0: # bmesh adaption
+	get_uv_textures = get_uv_textures_new
+else:
+	get_uv_textures = get_uv_textures_old
+
 class GeometryExporter(object):
+	
+	# for partial mesh export
+	KnownExportedObjects = set()
+	KnownModifiedObjects = set()
+	NewExportedObjects = set()
 	
 	def __init__(self, lux_context, visibility_scene):
 		self.lux_context = lux_context
@@ -61,6 +79,9 @@ class GeometryExporter(object):
 		self.ExportedPLYs = ExportCache('ExportedPLYs')
 		self.AnimationDataCache = ExportCache('AnimationData')
 		self.ExportedObjectsDuplis = ExportCache('ExportedObjectsDuplis')
+		
+		# start fresh
+		GeometryExporter.NewExportedObjects = set()
 		
 		self.objects_used_as_duplis = set()
 		
@@ -157,7 +178,6 @@ class GeometryExporter(object):
 		attributeBegin..attributeEnd scope, depending if instancing is allowed.
 		The actual geometry will be dumped to a binary ply file.
 		"""
-		
 		try:
 			mesh_definitions = []
 			mesh = obj.to_mesh(self.geometry_scene, True, 'RENDER')
@@ -210,10 +230,15 @@ class GeometryExporter(object):
 					self.ExportedPLYs.add(ply_path, None)
 					
 					# skip writing the PLY file if the box is checked
-					if not (os.path.exists(ply_path) and self.visibility_scene.luxrender_engine.partial_ply):
-						if len(mesh.uv_textures) > 0:
-							if mesh.uv_textures.active and mesh.uv_textures.active.data:
-								uv_layer = mesh.uv_textures.active.data
+					skip_exporting = obj in self.KnownExportedObjects and not obj in self.KnownModifiedObjects
+					if not os.path.exists(ply_path) or not (self.visibility_scene.luxrender_engine.partial_ply and skip_exporting):
+						
+						GeometryExporter.NewExportedObjects.add(obj)
+						
+						uv_textures = get_uv_textures(mesh)
+						if len(uv_textures) > 0:
+							if mesh.uv_textures.active and uv_textures.active.data:
+								uv_layer = uv_textures.active.data
 						else:
 							uv_layer = None
 						
@@ -321,6 +346,8 @@ class GeometryExporter(object):
 							del face_vert_indices
 						
 						LuxLog('Binary PLY file written: %s' % (ply_path))
+					else:
+						LuxLog('Skipping already exported PLY: %s' % mesh_name)
 					
 					# Export the shape definition to LXO
 					shape_params = ParamSet().add_string(
@@ -402,9 +429,10 @@ class GeometryExporter(object):
 					if self.visibility_scene.luxrender_testing.object_analysis: print('  -> Material index: %d' % i)
 					if self.visibility_scene.luxrender_testing.object_analysis: print('  -> derived mesh name: %s' % mesh_name)
 					
-					if len(mesh.uv_textures) > 0:
-						if mesh.uv_textures.active and mesh.uv_textures.active.data:
-							uv_layer = mesh.uv_textures.active.data
+					uv_textures = get_uv_textures(mesh)
+					if len(uv_textures) > 0:
+						if uv_textures.active and uv_textures.active.data:
+							uv_layer = uv_textures.active.data
 					else:
 						uv_layer = None
 					
@@ -1013,4 +1041,39 @@ class GeometryExporter(object):
 		
 		self.objects_used_as_duplis.clear()
 		
+		# update known exported objects for partial export
+		GeometryExporter.KnownModifiedObjects -= GeometryExporter.NewExportedObjects
+		GeometryExporter.KnownExportedObjects |= GeometryExporter.NewExportedObjects
+		GeometryExporter.NewExportedObjects = set()
+		
 		return self.have_emitting_object
+
+
+
+# Update handlers
+
+@persistent
+def lux_scene_update(context):
+	if bpy.data.objects.is_updated:
+		for ob in bpy.data.objects:
+			if ob == None:
+				continue
+			#if ob.is_updated_data:
+			#	print('updated_data', ob.name)
+			#if ob.data.is_updated:
+			#	print('updated', ob.name)
+			
+			# only flag as updated if either modifiers or 
+			# mesh data is updated
+			if ob.is_updated_data or ob.data.is_updated:
+				GeometryExporter.KnownModifiedObjects.add(ob)
+
+@persistent
+def lux_scene_load(context):
+	# clear known list on scene load
+	GeometryExporter.KnownExportedObjects = set()
+
+if hasattr(bpy.app, 'handlers') and hasattr(bpy.app.handlers, 'scene_update_post'):
+	bpy.app.handlers.scene_update_post.append(lux_scene_update)
+	bpy.app.handlers.load_post.append(lux_scene_load)
+	LuxLog('Installed scene post-update handler')

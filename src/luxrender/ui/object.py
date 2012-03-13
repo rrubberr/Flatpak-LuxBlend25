@@ -54,7 +54,7 @@ class ui_camera_setting(bl_ui.properties_object.ObjectButtonsPanel, property_gro
 	Camera Settings
 	'''
 	
-	bl_label = 'LuxRender Camera  Settings'
+	bl_label = 'LuxRender Camera Settings'
 	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
 	
 	@classmethod
