@@ -61,7 +61,7 @@ class LuxAPIStats(TimerThread):
 	
 	def kick(self):
 		ctx = self.LocalStorage['lux_context']
-		self.stats_string = ctx.printableStatistics(True)
+		self.stats_string = ctx.getAttribute('renderer_statistics_formatted', '_recommended_string_short')
 	
 class LuxFilmDisplay(TimerThread):
 	'''
@@ -83,7 +83,7 @@ class LuxFilmDisplay(TimerThread):
 					self.LocalStorage['lux_context'].updateFramebuffer()
 					xres = int(self.LocalStorage['lux_context'].getAttribute('film', 'xResolution'))
 					yres = int(self.LocalStorage['lux_context'].getAttribute('film', 'yResolution'))
-					p_stats = ' - %s' % self.LocalStorage['lux_context'].printableStatistics(True)
+					p_stats = ' - %s' % self.LocalStorage['lux_context'].getAttribute('renderer_statistics_formatted', '_recommended_string_short')
 					direct_transfer = 'blenderCombinedDepthRects' in dir(self.LocalStorage['lux_context'])
 					direct_transfer &= 'integratedimaging' in self.LocalStorage.keys() and self.LocalStorage['integratedimaging']
 				
