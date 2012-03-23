@@ -66,11 +66,14 @@ class luxrender_rendermode(declarative_property_group):
 	def update_rendering_mode(self, context):
 		if self.rendermode == 'hybridpath':
 			context.scene.luxrender_integrator.surfaceintegrator = 'path'
+#		elif self.rendermode == 'hybridarpath':
+#			context.scene.luxrender_integrator.surfaceintegrator = 'arpath'
 		elif self.rendermode == 'hybridbidir':
 			context.scene.luxrender_integrator.surfaceintegrator = 'bidirectional'
 		else:
 			context.scene.luxrender_integrator.surfaceintegrator = self.rendermode
-		
+
+#		if self.rendermode in ('hybridpath', 'hybridbidir', 'hybridarpath'):		
 		if self.rendermode in ('hybridpath', 'hybridbidir'):
 			self.renderer = 'hybrid'
 		elif self.rendermode == 'sppm':
@@ -94,6 +97,7 @@ class luxrender_rendermode(declarative_property_group):
 				('distributedpath', 'Distributed Path', 'Distributed path tracer'),
 				('igi', 'Instant Global Illumination', 'Instant global illumination renderer',),
 				('exphotonmap', 'Ex-Photon Map', 'Traditional photon mapping integrator'),
+#				('hybridarpath', 'Hybrid ARPath', 'Experimental OpenCL-acclerated Augmented Reality  path tracer'),
 				('hybridbidir', 'Hybrid Bidirectional', 'Experimental OpenCL-acclerated bidirectional path tracer'),
 				('hybridpath', 'Hybrid Path', 'OpenCL-accelerated simple (eye-only) path tracer'),
 				('sppm', 'SPPM', 'Experimental stochastic progressive photon mapping integrator'),
