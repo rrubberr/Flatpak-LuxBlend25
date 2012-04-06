@@ -330,7 +330,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				time.sleep(0.05)
 			
 			def is_finished(ctx):
-				return ctx.statistics('enoughSamples') == 1.0
+				return ctx.getAttribute('film', 'enoughSamples')
 			
 			def interruptible_sleep(sec, increment=0.05):
 				sec_elapsed = 0.0
@@ -351,10 +351,11 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				# progressively update the preview
 				time.sleep(0.2) # safety-sleep
 				
-				if LUXRENDER_VERSION < '0.8' or preview_context.statistics('samplesPx') > 24:
+				if LUXRENDER_VERSION < '0.8' or preview_context.getAttribute('renderer_statistics', 'samplesPerPixel') > 24:
 					interruptible_sleep(1.8) # up to HALTSPP every 2 seconds in sum
 					
-				LuxLog('Updating preview (%ix%i - %s)' % (xres, yres, preview_context.printableStatistics(False)))
+				preview_context.updateStatisticsWindow()
+				LuxLog('Updating preview (%ix%i - %s)' % (xres, yres, preview_context.getAttribute('renderer_statistics_formatted_short', '_recommended_string')))
 				
 				result = self.begin_result(0, 0, xres, yres)
 				lay = result.layers[0]
@@ -673,13 +674,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		
 		self.update_stats('', 'LuxRender: Rendering %s' % self.LuxManager.stats_thread.stats_string)
 		
-		if hasattr(self, 'update_progress') and LC.statistics('percentComplete') > 0:
+		if hasattr(self, 'update_progress') and LC.getAttribute('renderer_statistics', 'percentComplete') > 0:
 			prg = LC.statistics('percentComplete') / 100.0
 			self.update_progress(prg)
 		
 		if self.test_break() or \
 			LC.statistics('filmIsReady') == 1.0 or \
 			LC.statistics('terminated') == 1.0 or \
-			LC.statistics('enoughSamples') == 1.0:
+			LC.getAttribute('film', 'enoughSamples') == True:
 			self.LuxManager.reset()
 			self.update_stats('', '')
