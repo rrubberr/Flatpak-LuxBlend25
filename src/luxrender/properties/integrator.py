@@ -292,8 +292,8 @@ class luxrender_integrator(declarative_property_group):
 		'startk':							{ 'surfaceintegrator': 'sppm' },
 		'alpha':							{ 'surfaceintegrator': 'sppm' },
 		'startradius':						{ 'surfaceintegrator': 'sppm' },
-		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath]) },
-		'directlightsampling':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath]) },
+		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath']) },
+		'directlightsampling':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath']) },
 		
 		# sppm advanced
 		'storeglossy':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
