@@ -111,7 +111,6 @@ class luxrender_integrator(declarative_property_group):
 	
 	controls = [
 		'advanced',
-		'lightstrategy',
 		
 		# bidir +
 		['eyedepth', 'lightdepth'],
@@ -190,20 +189,22 @@ class luxrender_integrator(declarative_property_group):
 		#sppm
 		'photonperpass',
 		['startradius', 'alpha'],
-		'sppmdirectlight',
+		['directlightsampling', 'includeenvironment'],
 		#sppm advanced
-		'glossythreshold',
+		'storeglossy',
 		'wavelengthstratificationpasses',
 		'lookupaccel',
 		'parallelhashgridspare',
 		'pixelsampler',
 		'photonsampler',
 		'useproba',
+
 				
 		# path
 		'shadowraycount',
-		'directlightsampling',
-		'includeenvironment',
+		
+		'lightstrategy', #Append light strategy at the end, so non-advanced options don't shift down when light strat menu appears (when advanced is checked)
+
 	]
 	
 	visibility = {
@@ -284,19 +285,24 @@ class luxrender_integrator(declarative_property_group):
 		'mindist':							{ 'surfaceintegrator': 'igi' },
 		
 		# path
+<<<<<<< local
 		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath']) },
 		'directlightsampling':				{ 'surfaceintegrator': O(['path', 'arpath']) },
 		'shadowraycount':					{ 'advanced': True, 'surfaceintegrator': O(['path', 'arpath']) },
+=======
+		'shadowraycount':					{ 'advanced': True, 'surfaceintegrator': 'path' },
+>>>>>>> other
 		
 		# sppm
 		'photonperpass':					{ 'surfaceintegrator': 'sppm' },
 		'startk':							{ 'surfaceintegrator': 'sppm' },
 		'alpha':							{ 'surfaceintegrator': 'sppm' },
 		'startradius':						{ 'surfaceintegrator': 'sppm' },
-		'sppmdirectlight':					{ 'surfaceintegrator': 'sppm' },
-
+		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path']) },
+		'directlightsampling':				{ 'surfaceintegrator': O(['sppm', 'path']) },
+		
 		# sppm advanced
-		'glossythreshold':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'storeglossy':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
 		'wavelengthstratificationpasses': 	{ 'advanced': True, 'surfaceintegrator': 'sppm' },
 		'lookupaccel':						{ 'advanced': True, 'surfaceintegrator': 'sppm' },
 		'parallelhashgridspare':			{ 'advanced': True, 'lookupaccel': 'parallelhashgrid', 'surfaceintegrator': 'sppm' },
@@ -908,12 +914,11 @@ class luxrender_integrator(declarative_property_group):
 			'save_in_preset': True
 		},
 		{
-			'type': 'float',
-			'attr': 'glossythreshold',
-			'name': 'Glossy Threshold',
-			'description': 'Maximum specularity (PDF) that will store photons. 0=only matte materials store photons',
-			'min': 0,
-			'default': 100,
+			'type': 'bool',
+			'attr': 'storeglossy',
+			'name': 'Store on glossy',
+			'description': 'Use the photon pass to render glossy and metal surfaces. Can introduce noise, but is needed for some corner cases',
+			'default': False,
 			'save_in_preset': True
 		},
 		{
@@ -964,15 +969,6 @@ class luxrender_integrator(declarative_property_group):
 			],
 			'save_in_preset': True
 		},
-		#SPPM direct light sampling is a seperate parameter from Path's, due to the need for a different default and tooltip
-		{
-			'type': 'bool',
-			'attr': 'sppmdirectlight',
-			'name': 'Direct Light Sampling',
-			'description': 'Use direct light sampling during the eye pass. Can improve efficiency with simple lighting',
-			'default': False,
-			'save_in_preset': True
-		},
 		{
 			'type': 'int',
 			'attr': 'wavelengthstratificationpasses',
@@ -988,7 +984,7 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'useproba',
 			'name': 'Use PPM Probability',
 			'description': 'Use PPM probability for search radius reduction.',
-			'default': False,
+			'default': True,
 			'save_in_preset': True
 		},
 	]
@@ -1045,9 +1041,9 @@ class luxrender_integrator(declarative_property_group):
  				  .add_float('startradius', self.startradius) \
 				  .add_float('alpha', self.alpha) \
 				  .add_bool('includeenvironment', self.includeenvironment) \
-				  .add_bool('directlightsampling', self.sppmdirectlight)
+				  .add_bool('directlightsampling', self.directlightsampling)
 			if self.advanced:
-				params.add_float('glossythreshold', self.glossythreshold) \
+				params.add_bool('storeglossy', self.storeglossy) \
 					  .add_bool('useproba', self.useproba)\
 					  .add_integer('wavelengthstratificationpasses', self.wavelengthstratificationpasses) \
 					  .add_string('lookupaccel', self.lookupaccel) \
