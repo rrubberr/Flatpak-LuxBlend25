@@ -285,21 +285,15 @@ class luxrender_integrator(declarative_property_group):
 		'mindist':							{ 'surfaceintegrator': 'igi' },
 		
 		# path
-<<<<<<< local
-		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath']) },
-		'directlightsampling':				{ 'surfaceintegrator': O(['path', 'arpath']) },
 		'shadowraycount':					{ 'advanced': True, 'surfaceintegrator': O(['path', 'arpath']) },
-=======
-		'shadowraycount':					{ 'advanced': True, 'surfaceintegrator': 'path' },
->>>>>>> other
 		
 		# sppm
 		'photonperpass':					{ 'surfaceintegrator': 'sppm' },
 		'startk':							{ 'surfaceintegrator': 'sppm' },
 		'alpha':							{ 'surfaceintegrator': 'sppm' },
 		'startradius':						{ 'surfaceintegrator': 'sppm' },
-		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path']) },
-		'directlightsampling':				{ 'surfaceintegrator': O(['sppm', 'path']) },
+		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath]) },
+		'directlightsampling':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath]) },
 		
 		# sppm advanced
 		'storeglossy':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },

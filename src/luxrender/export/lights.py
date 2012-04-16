@@ -65,10 +65,10 @@ def attr_light(scene, lux_context, light, name, group, light_type, params, trans
 	
 	mirrorTransform = light.type == 'HEMI' and light.luxrender_lamp.luxrender_lamp_hemi.type == 'infinite'
 #Aldo tirou	
-#	if mirrorTransform:
-#		# correct worldmap orientation
-#		lux_context.transformBegin(file=Files.MAIN)
-#		lux_context.scale(-1, 1, 1) 
+	if mirrorTransform:
+		# correct worldmap orientation
+		lux_context.transformBegin(file=Files.MAIN)
+		lux_context.scale(-1, 1, 1) 
 	
 	if light.luxrender_lamp.Exterior_volume != '':
 		lux_context.exterior(light.luxrender_lamp.Exterior_volume)
@@ -77,8 +77,8 @@ def attr_light(scene, lux_context, light, name, group, light_type, params, trans
 	
 	lux_context.lightSource(light_type, params)
 #Aldo tirou
-#	if mirrorTransform:
-#		lux_context.transformEnd()
+	if mirrorTransform:
+		lux_context.transformEnd()
 	
 	for portal in portals:
 		lux_context.portalInstance(portal)
