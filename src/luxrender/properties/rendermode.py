@@ -90,6 +90,7 @@ class luxrender_rendermode(declarative_property_group):
 			'default': 'bidirectional',
 			'items': [
 				('arpath', 'ARPath', 'Augmented Reality Path Tracing'),
+				('envpath', 'EnvPath', 'Augmented Reality Environment Path Tracing'),
 				('ardirectlighting', 'ARDirectlighting', 'Augmented Reality Direct Lighting'),
 				('bidirectional', 'Bidirectional', 'Bidirectional path tracer'),
 				('path', 'Path', 'Simple (eye-only) path tracer'),

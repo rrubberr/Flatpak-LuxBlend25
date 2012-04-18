@@ -216,7 +216,7 @@ class luxrender_integrator(declarative_property_group):
 		'lightstrategy':					{ 'advanced': True, 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'bidirectional'])},
 		
 		# dl +
-		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'igi', 'path', 'arpath', 'ardirectlighting']) },
+		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'igi', 'path', 'arpath', 'ardirectlighting', 'envpath']) },
 		
 		# dp
 		'lbl_direct':						{ 'surfaceintegrator': 'distributedpath' },
@@ -265,8 +265,8 @@ class luxrender_integrator(declarative_property_group):
 		'finalgather':						{ 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
 		'finalgathersamples':				{ 'finalgather': True, 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
 		'gatherangle':						{ 'finalgather': True, 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
-		'rrstrategy':						{ 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath']) },
-		'rrcontinueprob':					{ 'rrstrategy': 'probability', 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath']) },
+		'rrstrategy':						{ 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath', 'envpath']) },
+		'rrcontinueprob':					{ 'rrstrategy': 'probability', 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath', 'envpath']) },
 		'distancethreshold':				{ 'renderingmode': 'path', 'surfaceintegrator': 'exphotonmap' },
 		# expm advanced
 		'photonmapsfile':					{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
@@ -285,15 +285,15 @@ class luxrender_integrator(declarative_property_group):
 		'mindist':							{ 'surfaceintegrator': 'igi' },
 		
 		# path
-		'shadowraycount':					{ 'advanced': True, 'surfaceintegrator': O(['path', 'arpath']) },
+		'shadowraycount':					{ 'advanced': True, 'surfaceintegrator': O(['path', 'arpath', 'envpath']) },
 		
 		# sppm
 		'photonperpass':					{ 'surfaceintegrator': 'sppm' },
 		'startk':							{ 'surfaceintegrator': 'sppm' },
 		'alpha':							{ 'surfaceintegrator': 'sppm' },
 		'startradius':						{ 'surfaceintegrator': 'sppm' },
-		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath']) },
-		'directlightsampling':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath']) },
+		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath', 'envpath']) },
+		'directlightsampling':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath', 'envpath']) },
 		
 		# sppm advanced
 		'storeglossy':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
@@ -324,6 +324,7 @@ class luxrender_integrator(declarative_property_group):
 				('exphotonmap', 'Ex-Photon Map', 'exphotonmap'),
 				('sppm', 'SPPM', 'sppm'),
 				('arpath', 'Augmented Reality Path Tracing', 'arpath'),
+				('envpath', 'A.R. Environment Path Tracing', 'envpath'),
 				('ardirectlighting', 'Augmented Reality Direct Lighting', 'ardirectlighting'),
 			],
 			#'update': lambda s,c: check_renderer_settings(c),
@@ -1004,6 +1005,10 @@ class luxrender_integrator(declarative_property_group):
 				if self.lightstrategy not in ('one', 'all', 'auto'):
 					LuxLog('Incompatible lightstrategy for Hybrid ARPath (use "auto", "all", or "one").')
 					raise Exception('Incompatible render settings')
+			if self.surfaceintegrator == 'envpath' and self.advanced == True:
+				if self.lightstrategy not in ('one', 'all', 'auto'):
+					LuxLog('Incompatible lightstrategy for Hybrid EnvPath (use "auto", "all", or "one").')
+					raise Exception('Incompatible render settings')
 			if self.surfaceintegrator == 'bidirectional':
 				if self.lightstrategy != ('one'):
 					LuxLog('Incompatible lightstrategy for Hybrid Bidir (use "one").')
@@ -1115,6 +1120,14 @@ class luxrender_integrator(declarative_property_group):
 				  .add_integer('shadowraycount', self.shadowraycount)
 
 		if self.surfaceintegrator == 'arpath':
+			params.add_integer('maxdepth', self.maxdepth) \
+				  .add_float('rrcontinueprob', self.rrcontinueprob) \
+				  .add_string('rrstrategy', self.rrstrategy) \
+				  .add_bool('includeenvironment', self.includeenvironment) \
+				  .add_bool('directlightsampling', self.directlightsampling) \
+				  .add_integer('shadowraycount', self.shadowraycount)
+
+		if self.surfaceintegrator == 'envpath':
 			params.add_integer('maxdepth', self.maxdepth) \
 				  .add_float('rrcontinueprob', self.rrcontinueprob) \
 				  .add_string('rrstrategy', self.rrstrategy) \
