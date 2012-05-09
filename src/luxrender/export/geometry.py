@@ -51,28 +51,6 @@ class MeshExportProgressThread(ExportProgressThread):
 class DupliExportProgressThread(ExportProgressThread):
 	message = '...  %i%% ...'
 
-# hack for bmesh
-# TODO remove this when obsolete
-def get_uv_textures_old(mesh):
-	return mesh.uv_textures
-def get_uv_textures_new(mesh):
-	return mesh.tessface_uv_textures
-
-if bpy.app.version[1] >= 62 and bpy.app.version[2] > 0: # bmesh adaption
-	get_uv_textures = get_uv_textures_new
-else:
-	get_uv_textures = get_uv_textures_old
-
-def get_mesh_faces_old(mesh):
-	return mesh.faces
-def get_mesh_faces_new(mesh):
-	return mesh.tessfaces
-
-if bpy.app.version[1] >= 62 and bpy.app.version[2] > 1: # bmesh adaption
-	get_mesh_faces = get_mesh_faces_new
-else:
-	get_mesh_faces = get_mesh_faces_old
-
 class GeometryExporter(object):
 	
 	# for partial mesh export
@@ -196,7 +174,7 @@ class GeometryExporter(object):
 			
 			# collate faces by mat index
 			ffaces_mats = {}
-			mesh_faces = get_mesh_faces(mesh)
+			mesh_faces = mesh.tessfaces if bpy.app.version > (2, 62, 1 ) else mesh.faces # bmesh
 			for f in mesh_faces:
 				mi = f.material_index
 				if mi not in ffaces_mats.keys(): ffaces_mats[mi] = []
@@ -246,7 +224,7 @@ class GeometryExporter(object):
 						
 						GeometryExporter.NewExportedObjects.add(obj)
 						
-						uv_textures = get_uv_textures(mesh)
+						uv_textures = mesh.tessface_uv_textures if bpy.app.version > (2, 62, 0 ) else mesh.uv_textures # bmesh
 						if len(uv_textures) > 0:
 							if mesh.uv_textures.active and uv_textures.active.data:
 								uv_layer = uv_textures.active.data
@@ -411,7 +389,7 @@ class GeometryExporter(object):
 			
 			# collate faces by mat index
 			ffaces_mats = {}
-			mesh_faces = get_mesh_faces(mesh)
+			mesh_faces = mesh.tessfaces if bpy.app.version > (2, 62, 1 ) else mesh.faces # bmesh
 			for f in mesh_faces:
 				mi = f.material_index
 				if mi not in ffaces_mats.keys(): ffaces_mats[mi] = []
@@ -441,7 +419,7 @@ class GeometryExporter(object):
 					if self.visibility_scene.luxrender_testing.object_analysis: print('  -> Material index: %d' % i)
 					if self.visibility_scene.luxrender_testing.object_analysis: print('  -> derived mesh name: %s' % mesh_name)
 					
-					uv_textures = get_uv_textures(mesh)
+					uv_textures = mesh.tessface_uv_textures if bpy.app.version > (2, 62, 0 ) else mesh.uv_textures # bmesh
 					if len(uv_textures) > 0:
 						if uv_textures.active and uv_textures.active.data:
 							uv_layer = uv_textures.active.data
@@ -1077,7 +1055,7 @@ def lux_scene_update(context):
 			
 			# only flag as updated if either modifiers or 
 			# mesh data is updated
-			if ob.is_updated_data or ob.data.is_updated:
+			if ob.is_updated_data or (ob.data != None and ob.data.is_updated):
 				GeometryExporter.KnownModifiedObjects.add(ob)
 
 @persistent

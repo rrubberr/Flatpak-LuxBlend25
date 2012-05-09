@@ -109,8 +109,8 @@ TF_d					= FloatTextureParameter('d', 'Absorption depth (nm)',				add_float_valu
 TF_film					= FloatTextureParameter('film', 'Thin film thickness (nm)',			add_float_value=True, min=0.0, default=0.0, max=2500.0 ) # default 0.0 for OFF
 TF_filmindex			= FloatTextureParameter('filmindex', 'Film IOR',					add_float_value=True, default=1.3333, min=1.0, max=6.0 ) # default 1.3333 for a coating of a water-based solution
 TF_index				= FloatTextureParameter('index', 'IOR',								add_float_value=True, min=0.0, max=25.0, default=1.520) #default of something other than 1.0 so glass and roughglass render propery with defaults
-TF_M1					= FloatTextureParameter('M1', 'M1',									add_float_value=True, default=0.350, min=0.0001, max=1.0 ) #carpaint defaults set for a basic gray clearcoat paint job, as a "setting suggestion"
-TF_M2					= FloatTextureParameter('M2', 'M2',									add_float_value=True, default=0.150, min=0.0001, max=1.0 ) #set m1-3 min to .0001, carpaint will take 0.0 as being max (1.0)
+TF_M1					= FloatTextureParameter('M1', 'M1',									add_float_value=True, default=0.250, min=0.0001, max=1.0 ) #carpaint defaults set for a basic gray clearcoat paint job, as a "setting suggestion"
+TF_M2					= FloatTextureParameter('M2', 'M2',									add_float_value=True, default=0.100, min=0.0001, max=1.0 ) #set m1-3 min to .0001, carpaint will take 0.0 as being max (1.0)
 TF_M3					= FloatTextureParameter('M3', 'M3',									add_float_value=True, default=0.015, min=0.0001, max=1.0 )
 TF_R1					= FloatTextureParameter('R1', 'R1',									add_float_value=True, min=0.00001, max=1.0, default=0.950 )
 TF_R2					= FloatTextureParameter('R2', 'R2',									add_float_value=True, min=0.00001, max=1.0, default=0.90 )
@@ -139,9 +139,9 @@ TC_Ka					= ColorTextureParameter('Ka', 'Absorption color',					default=(0.0,0.0
 TC_Kd					= ColorTextureParameter('Kd', 'Diffuse color',						default=(0.64,0.64,0.64) )
 TC_Kr					= ColorTextureParameter('Kr', 'Reflection color',					default=(0.7,0.7,0.7) ) # 1.0 reflection color is not sane for mirror or shinymetal, 0.7 does not signifcantly affect glass or roughglass
 TC_Ks					= ColorTextureParameter('Ks', 'Specular color',						default=(0.04,0.04,0.04) )
-TC_Ks1					= ColorTextureParameter('Ks1', 'Specular color 1',					default=(0.06,0.06,0.06) )
-TC_Ks2					= ColorTextureParameter('Ks2', 'Specular color 2',					default=(0.08,0.08,0.08) )
-TC_Ks3					= ColorTextureParameter('Ks3', 'Specular color 3',					default=(0.012,0.012,0.012) )
+TC_Ks1					= ColorTextureParameter('Ks1', 'Specular color 1',					default=(0.05,0.05,0.05) )
+TC_Ks2					= ColorTextureParameter('Ks2', 'Specular color 2',					default=(0.07,0.07,0.07) )
+TC_Ks3					= ColorTextureParameter('Ks3', 'Specular color 3',					default=(0.04,0.04,0.04) )
 TC_Kt					= ColorTextureParameter('Kt', 'Transmission color',					default=(1.0,1.0,1.0) )
 TC_backface_Ka			= ColorTextureParameter('backface_Ka', 'Backface Absorption color',	default=(0.0,0.0,0.0) )
 TC_backface_Ks			= ColorTextureParameter('backface_Ks', 'Backface Specular color',	default=(0.02,0.02,0.02) ) #.02 = 1.333, the IOR of water
@@ -242,9 +242,9 @@ class luxrender_material(declarative_property_group):
 		'Exterior',
 #		'generatetangents' TODO: Make this checkbox actually do something (it has to write a line to the mesh definition)
 	] + \
-	TF_bumpmap.controls + \
-	TF_normalmap.controls +\
-	TC_Sc.controls 
+	TF_normalmap.controls + \
+	TF_bumpmap.controls +\
+	TC_Sc.controls
 	
 	visibility = dict_merge({}, TF_bumpmap.visibility, TF_normalmap.visibility, TC_Sc.visibility)
 	
@@ -419,6 +419,7 @@ class luxrender_material(declarative_property_group):
 							params.add_string('filtertype', src_texture.filtertype)
 							params.add_float('maxanisotropy', src_texture.maxanisotropy)
 							params.add_float('gamma', 1.0) #Don't gamma correct normal maps
+							params.add_string('wrap', src_texture.wrap)
 							params.update( lux_texture.luxrender_tex_mapping.get_paramset(LuxManager.CurrentScene) )
 							
 							ExportedTextures.texture(
@@ -449,7 +450,7 @@ class luxrender_material(declarative_property_group):
 						else:
 							LuxLog('Texture %s is not a normal map! Greyscale height maps should be applied to the bump channel.' % texture_name)
 						
-					bumpmap_texturename = self.bumpmap_floattexturename
+					bumpmap_texturename = self.bumpmap_floattexturename if self.bumpmap_usefloattexture else ''
 					
 					#Get the bump map
 					texture_name = getattr(material.luxrender_material, 'bumpmap_floattexturename')
@@ -2724,7 +2725,7 @@ class luxrender_mat_metal2(declarative_property_group):
 				lux_context,
 				'%s_nk' % material.name,
 				'fresnel',
-				'fresnelname',
+				'preset',
 				fresnelname_params
 			)
 			ExportedTextures.export_new(lux_context)
