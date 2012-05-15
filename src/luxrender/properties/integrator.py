@@ -326,6 +326,7 @@ class luxrender_integrator(declarative_property_group):
 				('sppm', 'SPPM', 'sppm'),
 				('arpath', 'Augmented Reality Path Tracing', 'arpath'),
 				('envpath', 'A.R. Environment Path Tracing', 'envpath'),
+				('depthfield', 'Depth Field', 'depthfield'),
 				('ardirectlighting', 'Augmented Reality Direct Lighting', 'ardirectlighting'),
 			],
 			#'update': lambda s,c: check_renderer_settings(c),

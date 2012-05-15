@@ -28,7 +28,7 @@ import bpy
 
 from extensions_framework import declarative_property_group
 import extensions_framework.util as efutil
-from extensions_framework.validate import Logic_Operator as LO
+from extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 
 from .. import LuxRenderAddon
 from ..export import ParamSet
@@ -519,6 +519,7 @@ class luxrender_lamp_hemi(declarative_property_group):
 	controls = [
 		'type',
 		'infinite_map',
+		'contribution_map',
 		'sampling_method',
 		'mapping_type',
 		'nsamples',
@@ -529,11 +530,13 @@ class luxrender_lamp_hemi(declarative_property_group):
 	]
 	
 	visibility = {
-		'infinite_map':		{ 'type': 'infinite' },
-		'mapping_type':		{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
-		'hdri_multiply':	{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
-		'gamma':			{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
-		'nsamples':			{ 'type': 'infinite', 'infinite_map': LO({'!=': ''}) },
+		'infinite_map':		{ 'type': O(('infinite','environment')) },
+		'contribution_map':		{ 'type': 'environment' },
+		'sampling_method':	{ 'type': O(('infinite','distant')) },
+		'mapping_type':		{ 'type': O(('infinite','environment')), 'infinite_map': LO({'!=': ''}) },
+		'hdri_multiply':	{ 'type': O(('infinite','environment')), 'infinite_map': LO({'!=': ''}) },
+		'gamma':			{ 'type': O(('infinite','environment')), 'infinite_map': LO({'!=': ''}) },
+		'nsamples':			{ 'type': O(('infinite','environment')), 'infinite_map': LO({'!=': ''}) },
 	}
 	
 	properties = TC_L.properties[:] + [
@@ -544,6 +547,7 @@ class luxrender_lamp_hemi(declarative_property_group):
 			'items': [
 				('infinite', 'Infinite', 'infinite'),
 				('distant', 'Distant', 'distant'),
+				('environment', 'Environment', 'environment'),
 			],
 			'expand': True
 		},
@@ -560,6 +564,14 @@ class luxrender_lamp_hemi(declarative_property_group):
 			'attr': 'infinite_map',
 			'name': 'HDRI Map',
 			'description': 'HDR image to use for lighting',
+			'default': ''
+		},
+		{
+			'type': 'string',
+			'subtype': 'FILE_PATH',
+			'attr': 'contribution_map',
+			'name': 'HDR Contribution Map',
+			'description': 'HDR factor image to use for lighting',
 			'default': ''
 		},
 		{
@@ -619,7 +631,7 @@ class luxrender_lamp_hemi(declarative_property_group):
 	def get_paramset(self, lamp_object):
 		params = ParamSet()
 		
-		if self.type == 'infinite':
+		if self.type in ('infinite','environment'):
 			if self.infinite_map != '':
 				if lamp_object.library is not None:
 					hdri_path = bpy.path.abspath(self.infinite_map, lamp_object.library.filepath)
@@ -632,6 +644,14 @@ class luxrender_lamp_hemi(declarative_property_group):
 				
 			if self.infinite_map == '' or self.hdri_multiply:
 				params.add_color('L', self.L_color)
+
+			if self.type == 'environment':
+				if lamp_object.library is not None:
+					contrib_path = bpy.path.abspath(self.contribution_map, lamp_object.library.filepath)
+				else:
+					contrib_path = self.contribution_map
+					params.add_string('contributionmap', efutil.path_relative_to_export(contrib_path) )
+
 		else:
 			params.add_color('L', self.L_color)
 

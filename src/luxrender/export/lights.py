@@ -142,8 +142,13 @@ def exportLight(scene, lux_context, ob, matrix, portals = []):
 		if hemi_type == 'distant':
 			light_params.add_point('from', (0,0,0))
 			light_params.add_point('to', (0,0,-1))
-		else:
+
+		elif hemi_type == 'infinite':
 			hemi_type = light.luxrender_lamp.luxrender_lamp_hemi.sampling_method	
+
+		else: # hemi_type == 'environment':
+			pass
+
 		attr_light(scene, lux_context, light, ob.name, light_group, hemi_type, light_params, transform=matrix_to_list(matrix, apply_worldscale=True), portals=portals)
 		return True
 	

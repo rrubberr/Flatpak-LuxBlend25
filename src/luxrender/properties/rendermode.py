@@ -91,6 +91,7 @@ class luxrender_rendermode(declarative_property_group):
 			'items': [
 				('arpath', 'ARPath', 'Augmented Reality Path Tracing'),
 				('envpath', 'EnvPath', 'Augmented Reality Environment Path Tracing'),
+				('depthfield', 'DepthField', 'Preprocessing of HDR with depth maps'),
 				('ardirectlighting', 'ARDirectlighting', 'Augmented Reality Direct Lighting'),
 				('bidirectional', 'Bidirectional', 'Bidirectional path tracer'),
 				('path', 'Path', 'Simple (eye-only) path tracer'),

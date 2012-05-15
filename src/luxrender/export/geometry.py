@@ -125,8 +125,7 @@ class GeometryExporter(object):
 				ext_params.add_string('filename', efutil.path_relative_to_export(obj.luxrender_object.external_mesh))
 				ext_params.add_bool('smooth', obj.luxrender_object.use_smoothing)
 
-				if obj.data.luxrender_mesh.AR_enabled:
-					ply_params.add_bool('support', obj.data.luxrender_mesh.AR_enabled)
+				ply_params.add_string('type', obj.data.luxrender_mesh.type)
 				if obj.data.luxrender_mesh.projection:
 					ply_params.add_bool('projection', obj.data.luxrender_mesh.projection)
 					if obj.data.luxrender_mesh.ccam:
@@ -135,7 +134,7 @@ class GeometryExporter(object):
 					else:
 						ply_params.add_point('cam', obj.data.luxrender_mesh.ucam)
 				
-				mesh_definition = (ext_mesh_name, obj.active_material.name, obj.luxrender_object.external_mesh[-3:] + 'mesh', obj.data.luxrender_mesh.get_shape_IsSupport(), ext_params)
+				mesh_definition = (ext_mesh_name, obj.active_material.name, obj.luxrender_object.external_mesh[-3:] + 'mesh', obj.data.luxrender_mesh.get_shape_IsSpecial(), ext_params)
 				mesh_definitions.append( mesh_definition )
 				
 				# Only export objectBegin..objectEnd and cache this mesh_definition if we plan to use instancing
@@ -351,7 +350,7 @@ class GeometryExporter(object):
 						mesh_name,
 						i,
 						'plymesh',
-						obj.data.luxrender_mesh.get_shape_IsSupport(),
+						obj.data.luxrender_mesh.get_shape_IsSpecial(),
 						shape_params
 					)
 					mesh_definitions.append( mesh_definition )
@@ -507,7 +506,7 @@ class GeometryExporter(object):
 						mesh_name,
 						i,
 						'mesh',
-						obj.data.luxrender_mesh.get_shape_IsSupport(),
+						obj.data.luxrender_mesh.get_shape_IsSpecial(),
 						shape_params
 					)
 					mesh_definitions.append( mesh_definition )
@@ -571,11 +570,11 @@ class GeometryExporter(object):
 
 		# Aldo: Resolve possible problem on [2:5] index
 		me_name = mesh_definition[0]
-		me_shape_type, me_shape_IsSupport, me_shape_params = mesh_definition[2:5]
+		me_shape_type, me_shape_IsSpecial, me_shape_params = mesh_definition[2:5]
 		
 		if len(me_shape_params) == 0: return
 
-		if me_shape_IsSupport: return			
+		if me_shape_IsSpecial: return
 		# Shape is the only thing to go into the ObjectBegin..ObjectEnd definition
 		# Everything else is set on a per-instance basis
 		self.lux_context.objectBegin(me_name)
@@ -647,7 +646,7 @@ class GeometryExporter(object):
 				self.lux_context.transformEnd()
 		
 		use_inner_scope = len(mesh_definitions) > 1
-		for me_name, me_mat_index, me_shape_type, me_shape_IsSupport, me_shape_params in mesh_definitions:
+		for me_name, me_mat_index, me_shape_type, me_shape_IsSpecial, me_shape_params in mesh_definitions:
 			me_shape_params.add_string('name', obj.name)
 			if use_inner_scope: self.lux_context.attributeBegin()
 			
@@ -701,7 +700,7 @@ class GeometryExporter(object):
 			self.have_emitting_object |= object_is_emitter
 			
 			# If the object emits, don't export instance or motioninstance, just the Shape
-			if (not self.allow_instancing(mat_object)) or object_is_emitter or me_shape_IsSupport:
+			if (not self.allow_instancing(mat_object)) or object_is_emitter or me_shape_IsSpecial:
 				self.lux_context.shape(me_shape_type, me_shape_params)
 			# motionInstance for motion blur
 			elif is_object_animated:

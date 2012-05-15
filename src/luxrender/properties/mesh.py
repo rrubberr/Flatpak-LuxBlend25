@@ -72,7 +72,7 @@ class luxrender_mesh(declarative_property_group):
 		'instancing_mode',
 		'portal',
 		'generatetangents',
-		'AR_enabled',
+		'type',
 #		'projection',
 	] + \
 		TC_artexture.controls + \
@@ -190,12 +190,16 @@ class luxrender_mesh(declarative_property_group):
 			'max': 1000,
 			'soft_max': 1000
 		},
-		{ 
-			'type': 'bool',
-			'attr': 'AR_enabled',
-			'name': 'Is an AR surface',
-			'description': 'Using for declare the object as support object in Augmented Reality Scene',
-			'default': False,
+		{
+			'type': 'enum',
+			'attr': 'type',
+			'name': 'Type',
+			'default': 'native',
+			'items': [
+				('native', 'Native', 'native'),
+				('support', 'Support', 'support'),
+				('environment', 'Environment', 'environment')
+			]
 		},
 #		{
 #			'type': 'bool',
@@ -245,8 +249,8 @@ class luxrender_mesh(declarative_property_group):
 	] + \
 		TC_artexture.properties
 
-	def get_shape_IsSupport(self):
-		return self.AR_enabled
+	def get_shape_IsSpecial(self):
+		return self.type != 'native'
 	
 	def get_paramset(self, scene):
 		params = ParamSet()
@@ -273,8 +277,8 @@ class luxrender_mesh(declarative_property_group):
 			params.add_float('dmscale', self.dmscale)
 			params.add_float('dmoffset', self.dmoffset)
 
-		if self.AR_enabled:
-			params.add_bool('support', self.AR_enabled)
+		if self.get_shape_IsSpecial():
+			params.add_string('type', self.type)
 
 		export_proj = TC_artexture.get_paramset(self)
 		if self.projmap_colortexturename != '' and len(export_proj) > 0:
