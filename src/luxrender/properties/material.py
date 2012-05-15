@@ -101,8 +101,8 @@ class SubGroupColorTextureParameter(ColorTextureParameter):
 		return lambda s,c: c.luxrender_material
 
 # Float Textures
-TF_bumpmap				= SubGroupFloatTextureParameter('bumpmap', 'Bump Map',				add_float_value=True, min=-1.0, max=1.0, default=0.0, precision=6, multiply_float=True, ignore_unassigned=True, sub_type='DISTANCE', unit='LENGTH' )
-TF_normalmap			= SubGroupFloatTextureParameter('normalmap', 'Normal Map',			add_float_value=False)
+TF_bumpmap			= SubGroupFloatTextureParameter('bumpmap', 'Bump Map',			add_float_value=True, min=-5.0, max=5.0, default=1.0, precision=6, multiply_float=True, ignore_unassigned=True, sub_type='DISTANCE', unit='LENGTH' )
+TF_normalmap			= SubGroupFloatTextureParameter('normalmap', 'Normal Map',		add_float_value=True, min=-5.0, max=5.0, default=1.0, precision=6, multiply_float=False, ignore_unassigned=True)
 TF_amount				= FloatTextureParameter('amount', 'Mix amount',						add_float_value=True, min=0.0, default=0.5, max=1.0)
 TF_cauchyb				= FloatTextureParameter('cauchyb', 'Cauchy B',						add_float_value=True, default=0.0, min=0.0, max=1.0 ) # default 0.0 for OFF
 TF_d					= FloatTextureParameter('d', 'Absorption depth (nm)',				add_float_value=True, default=0.0, min=0.0, max=2500.0 ) # default 0.0 for OFF
@@ -404,7 +404,8 @@ class luxrender_material(declarative_property_group):
 					
 					#Get the normal map
 					texture_name = getattr(material.luxrender_material, 'normalmap_floattexturename')
-					if texture_name != '':
+
+					if texture_name != '' and self.normalmap_usefloattexture:
 						texture = get_texture_from_scene(LuxManager.CurrentScene, texture_name)
 						lux_texture = texture.luxrender_texture
 						if lux_texture.type in ('normalmap', 'imagemap'):
@@ -451,6 +452,7 @@ class luxrender_material(declarative_property_group):
 							LuxLog('Texture %s is not a normal map! Greyscale height maps should be applied to the bump channel.' % texture_name)
 						
 					bumpmap_texturename = self.bumpmap_floattexturename if self.bumpmap_usefloattexture else ''
+					normalmap_floattexturename = self.normalmap_floattexturename if self.normalmap_usefloattexture else ''
 					
 					#Get the bump map
 					texture_name = getattr(material.luxrender_material, 'bumpmap_floattexturename')
@@ -463,10 +465,17 @@ class luxrender_material(declarative_property_group):
 					#Build the multi-mix tex of the summed bump and normal maps
 					mm_params = ParamSet() \
 						.add_texture('tex1', bumpmap_texturename) \
-						.add_texture('tex2', self.normalmap_floattexturename)
+						.add_texture('tex2', normalmap_floattexturename)
 					
-					weights = [self.bumpmap_floatvalue, 1]
-	
+					if self.bumpmap_multiplyfloat:
+						weights = [self.bumpmap_floatvalue, 1.0]
+					elif self.normalmap_multiplyfloat:
+						weights = [1.0, self.normalmap_floatvalue]
+					elif self.bumpmap_multiplyfloat and self.normalmap_multiplyfloat:
+						weights = [self.bumpmap_floatvalue, self.normalmap_floatvalue]
+					else:
+						weights = [1.0, 1.0]
+
 					# In API mode need to tell Lux how many slots explicity
 					if LuxManager.GetActive().lux_context.API_TYPE == 'PURE':
 						mm_params.add_integer('nweights', 2)
