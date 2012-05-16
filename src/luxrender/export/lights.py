@@ -63,7 +63,7 @@ def attr_light(scene, lux_context, light, name, group, light_type, params, trans
 	
 	lux_context.lightGroup(group, [])
 	
-	mirrorTransform = light.type == 'HEMI' and light.luxrender_lamp.luxrender_lamp_hemi.type == 'infinite'
+	mirrorTransform = light.type == 'HEMI' and light.luxrender_lamp.luxrender_lamp_hemi.type in ('infinite', 'environment')
 #Aldo tirou	
 	if mirrorTransform:
 		# correct worldmap orientation

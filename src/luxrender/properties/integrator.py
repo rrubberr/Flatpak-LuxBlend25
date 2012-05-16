@@ -214,10 +214,10 @@ class luxrender_integrator(declarative_property_group):
 		'lightdepth':						{ 'surfaceintegrator': 'bidirectional' },
 		'eyerrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		'lightrrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
-		'lightstrategy':					{ 'advanced': True, 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'bidirectional'])},
+		'lightstrategy':					{ 'advanced': True, 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'bidirectional', 'arpath', 'ardirectlighting', 'envpath', 'depthfield'])},
 		
 		# dl +
-		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'igi', 'path', 'arpath', 'ardirectlighting', 'envpath']) },
+		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'igi', 'path', 'arpath', 'ardirectlighting', 'envpath', 'depthfield']) },
 		
 		# dp
 		'lbl_direct':						{ 'surfaceintegrator': 'distributedpath' },
@@ -1033,6 +1033,9 @@ class luxrender_integrator(declarative_property_group):
 			params.add_integer('maxdepth', self.maxdepth) \
 
 		if self.surfaceintegrator == 'ardirectlighting':
+			params.add_integer('maxdepth', self.maxdepth) \
+
+		if self.surfaceintegrator == 'depthfield':
 			params.add_integer('maxdepth', self.maxdepth) \
 			
 		if self.surfaceintegrator == 'sppm':
