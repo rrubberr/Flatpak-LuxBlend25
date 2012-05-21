@@ -25,13 +25,14 @@
 # ***** END GPL LICENCE BLOCK *****
 #
 import bl_ui
+import bpy
 
 from extensions_framework.ui import property_group_renderer
 
 from .. import LuxRenderAddon
 
 class camera_panel(bl_ui.properties_data_camera.CameraButtonsPanel, property_group_renderer):
-	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
+	COMPAT_ENGINES = 'LUXRENDER_RENDER'
 
 @LuxRenderAddon.addon_register_class
 class camera(camera_panel):
@@ -40,13 +41,13 @@ class camera(camera_panel):
 	display_property_groups = [
 		( ('camera',), 'luxrender_camera' )
 	]
+	if bpy.app.version < (2, 63, 5 ):
+		def draw(self, context):
+			if context.camera.type == 'PERSP':
+				row = self.layout.row()
+				row.prop(context.camera.luxrender_camera, 'type')
 	
-	def draw(self, context):
-		if context.camera.type == 'PERSP':
-			row = self.layout.row()
-			row.prop(context.camera.luxrender_camera, 'type')
-		
-		super().draw(context)
+			super().draw(context)
 
 @LuxRenderAddon.addon_register_class
 class film(camera_panel):

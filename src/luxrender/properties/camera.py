@@ -67,15 +67,9 @@ class luxrender_camera(declarative_property_group):
 	
 	ef_attach_to = ['Camera']
 	
-	controls = [
-		# type is drawn in the UI class manually, and only for perspective camera type
-		#'type',
-		
+	controls = [		
 		'Exterior',
-		['autofocus', 'use_dof', 'use_clipping'],
 		'fstop',
-		'blades',
-		['distribution', 'power'],
 		'sensitivity',
 		'exposure_mode',
 		'exposure_start', 'exposure_end_norm', 'exposure_end_abs',
@@ -85,9 +79,13 @@ class luxrender_camera(declarative_property_group):
 		'shutterdistribution', 
 		['cammblur', 'objectmblur'],
 		'background',	
+		[0.3, 'use_dof','autofocus',  'use_clipping'],
+		'blades',
+		['distribution', 'power'],
 	]
 	
 	visibility = {
+		'autofocus':				{ 'use_dof': True },
 		'blades':					{ 'use_dof': True },
 		'distribution':				{ 'use_dof': True },
 		'power':					{ 'use_dof': True },
@@ -114,14 +112,14 @@ class luxrender_camera(declarative_property_group):
 			'type': 'bool',
 			'attr': 'use_dof',
 			'name': 'DOF',
-			'description': 'Use DOF effect',
+			'description': 'Use depth of field',
 			'default': False,
 		},
 		{
 			'type': 'bool',
 			'attr': 'autofocus',
 			'name': 'Auto focus',
-			'description': 'Use auto focus',
+			'description': 'Auto-focus for depth of field, DOF target object will be ignored',
 			'default': True,
 		},
 		{
@@ -444,7 +442,7 @@ class luxrender_camera(declarative_property_group):
 		
 		ws = get_worldscale(as_scalematrix=False)
 		
-		if self.autofocus:
+		if self.autofocus and self.use_dof:
 			params.add_bool('autofocus', True)
 		else:
 			if cam.dof_object is not None:
@@ -463,7 +461,7 @@ class luxrender_camera(declarative_property_group):
 			if self.cammblur and is_cam_animated:
 				params.add_string('endtransform', 'CameraEndTransform')
 		
-		cam_type = 'orthographic' if cam.type == 'ORTHO' else self.type
+		cam_type = 'orthographic' if cam.type == 'ORTHO' else self.type if bpy.app.version < (2, 63, 5 ) else 'environment' if cam.type == 'PANO' else 'perspective'
 		return cam_type, params
 
 @LuxRenderAddon.addon_register_class
