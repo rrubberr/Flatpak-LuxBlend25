@@ -111,16 +111,20 @@ _register_elm(bl_ui.properties_data_lamp.DATA_PT_context_lamp)
 
 # Add use_clipping button to lens panel
 def lux_use_clipping(self, context):
+
     if context.scene.render.engine == 'LUXRENDER_RENDER':
+
         self.layout.split().column().prop(context.camera.luxrender_camera, "use_clipping", text="Export Clipping")
 
 _register_elm(bl_ui.properties_data_camera.DATA_PT_lens.append(lux_use_clipping))
 
 # Add lux dof elements to blender dof panel
 def lux_use_dof(self, context):
+
     if context.scene.render.engine == 'LUXRENDER_RENDER':
         row = self.layout.row()
-        row.prop(context.camera.luxrender_camera, "use_dof", text="DOF")
+
+        row.prop(context.camera.luxrender_camera, "use_dof", text="Use Depth of Field")
         if context.camera.luxrender_camera.use_dof == True:
             row.prop(context.camera.luxrender_camera, "autofocus", text="Auto Focus")
 
