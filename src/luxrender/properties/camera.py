@@ -110,7 +110,7 @@ class luxrender_camera(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'use_dof',
-			'name': 'DOF',
+			'name': 'Depth of Field',
 			'description': 'Use depth of field',
 			'default': False,
 		},

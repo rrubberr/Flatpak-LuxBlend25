@@ -124,7 +124,7 @@ def lux_use_dof(self, context):
     if context.scene.render.engine == 'LUXRENDER_RENDER':
         row = self.layout.row()
 
-        row.prop(context.camera.luxrender_camera, "use_dof", text="DOF")
+        row.prop(context.camera.luxrender_camera, "use_dof", text="Use Depth of Field")
         if context.camera.luxrender_camera.use_dof == True:
             row.prop(context.camera.luxrender_camera, "autofocus", text="Auto Focus")
 
