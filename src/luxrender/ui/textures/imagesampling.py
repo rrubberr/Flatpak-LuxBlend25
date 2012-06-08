@@ -25,30 +25,15 @@
 # ***** END GPL LICENCE BLOCK *****
 #
 from ... import LuxRenderAddon
-from ...ui.materials import luxrender_material_sub
+from ...ui.textures import luxrender_texture_base
 
 @LuxRenderAddon.addon_register_class
-class ui_material_glossy_lossy(luxrender_material_sub):
-	bl_label = 'LuxRender Glossy (Lossy) Material'
+class ui_texture_imagesampling(luxrender_texture_base):
+	bl_label = 'Image Sampling'
 	
-	LUX_COMPAT = {'glossy_lossy'}
-	
+	LUX_COMPAT = {'BLENDER'}
+	BL_COMPAT	= {'IMAGE'}
+		
 	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_glossy_lossy' )
+		( ('texture', 'luxrender_texture'), 'luxrender_tex_imagesampling' )
 	]
-
-	def draw_ior_menu(self, context):
-		"""
-		This is a draw callback from property_group_renderer, due
-		to ef_callback item in luxrender_mat_<mat>.properties
-		"""
-		
-		lmg = context.material.luxrender_material.luxrender_mat_glossy_lossy
-		
-		if lmg.index_floatvalue == lmg.index_presetvalue:
-			menu_text = lmg.index_presetstring
-		else:
-			menu_text = '-- Choose preset --'
-		
-		cl=self.layout.column(align=True)
-		cl.menu('LUXRENDER_MT_ior_presets', text=menu_text)

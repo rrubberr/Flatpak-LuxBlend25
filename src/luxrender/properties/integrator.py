@@ -42,7 +42,7 @@ class luxrender_volumeintegrator(declarative_property_group):
 	ef_attach_to = ['Scene']
 	
 	controls = [
-		[0.7, 'volumeintegrator', 'advanced'],
+		'volumeintegrator',
 		'stepsize',
 	]
 	
@@ -98,7 +98,8 @@ class luxrender_volumeintegrator(declarative_property_group):
 		
 		params = ParamSet()
 		
-		params.add_float('stepsize', self.stepsize)
+		if self.volumeintegrator != 'none':
+			params.add_float('stepsize', self.stepsize)
 		
 		return self.volumeintegrator, params
 
@@ -109,6 +110,12 @@ class luxrender_integrator(declarative_property_group):
 	'''
 	
 	ef_attach_to = ['Scene']
+	
+	def advanced_switch(self, context):
+		context.scene.luxrender_sampler.advanced = self.advanced
+		context.scene.luxrender_volumeintegrator.advanced = self.advanced
+		context.scene.luxrender_filter.advanced = self.advanced
+		context.scene.luxrender_accelerator.advanced = self.advanced
 	
 	controls = [
 		'advanced',
@@ -204,7 +211,7 @@ class luxrender_integrator(declarative_property_group):
 		# path
 		'shadowraycount',
 		
-		'lightstrategy', #Append light strategy at the end, so non-advanced options don't shift down when light strat menu appears (when advanced is checked)
+		'lightstrategy'
 
 	]
 	
@@ -214,7 +221,7 @@ class luxrender_integrator(declarative_property_group):
 		'lightdepth':						{ 'surfaceintegrator': 'bidirectional' },
 		'eyerrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		'lightrrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
-		'lightstrategy':					{ 'advanced': True, 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'bidirectional', 'arpath', 'ardirectlighting', 'envpath', 'depthfield'])},
+		'lightstrategy':					{ 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'bidirectional', 'arpath', 'ardirectlighting', 'envpath', 'depthfield'])},
 		
 		# dl +
 		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'igi', 'path', 'arpath', 'ardirectlighting', 'envpath', 'depthfield']) },
@@ -336,7 +343,8 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'bool',
 			'attr': 'advanced',
 			'name': 'Advanced',
-			'description': 'Configure advanced integrator settings',
+			'description': 'Configure advanced render settings',
+			'update': advanced_switch,
 			'default': False,
 			#'update': lambda s,c: check_renderer_settings(c),
 			'save_in_preset': True
@@ -348,13 +356,13 @@ class luxrender_integrator(declarative_property_group):
 			'description': 'Light Sampling Strategy',
 			'default': 'auto',
 			'items': [
-				('auto', 'Auto', 'auto'),
-				('one', 'One', 'one'),
-				('all', 'All', 'all'),
-				('importance', 'Importance', 'importance'),
-				('powerimp', 'Power', 'powerimp'),
-				('allpowerimp', 'All Power', 'allpowerimp'),
-				('logpowerimp', 'Log Power', 'logpowerimp')
+				('auto', 'Auto', 'Automatically choose between one or all depending on number of lights'),
+				('one', 'One', 'Each ray samples a single lamp, chosen at random'),
+				('all', 'All', 'Each ray samples all lamps'),
+				('importance', 'Importance', 'Each ray samples a single lamp chosen by importance value'),
+				('powerimp', 'Power', 'Each ray samples a single lamp, chosen by importance value and output power'),
+				('allpowerimp', 'All Power', 'Each ray samples all lamps at least once, extra samples are given to lamps with higher importance and output power'),
+				('logpowerimp', 'Log Power', 'Each ray samples a single lamp, chosen by importance value and logarithmic output power')
 			],
 			#'update': lambda s,c: check_renderer_settings(c),
 			'save_in_preset': True
@@ -1140,7 +1148,7 @@ class luxrender_integrator(declarative_property_group):
 				  .add_bool('directlightsampling', self.directlightsampling) \
 				  .add_integer('shadowraycount', self.shadowraycount)
 		
-		if self.advanced and self.surfaceintegrator != 'sppm':
+		if self.surfaceintegrator != 'sppm':
 			params.add_string('lightstrategy', self.lightstrategy) \
 		
 		return self.surfaceintegrator, params

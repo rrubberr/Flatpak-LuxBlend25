@@ -51,6 +51,31 @@ class MeshExportProgressThread(ExportProgressThread):
 class DupliExportProgressThread(ExportProgressThread):
 	message = '...  %i%% ...'
 
+def get_ar_layer(mesh):
+	# when luxblend25 fully uses bmesh
+	# we can integrate this with the rest
+	# in the mean time we pre-create a list
+	# with all the data of a layer
+
+	import bmesh
+	bm = bmesh.new()
+	bm.from_mesh(mesh)
+	x = bm.loops.layers.float.get('X')
+	y = bm.loops.layers.float.get('Y')
+	z = bm.loops.layers.float.get('Z')
+
+	ar_layer = x and y and z
+
+	if ar_layer:
+		ar_layer = [None] * len(bm.verts)
+
+		for vert in bm.verts:
+			for loop in vert.link_loops:
+				layer[vert.index] = (loop[x], loop[y], loop[z])
+
+	del bm
+	return ar_layer
+
 class GeometryExporter(object):
 	
 	# for partial mesh export
@@ -229,6 +254,9 @@ class GeometryExporter(object):
 								uv_layer = uv_textures.active.data
 						else:
 							uv_layer = None
+
+						# AR Custom data layer
+						ar_layer = get_ar_layer(mesh)
 						
 						# Here we work out exactly which vert+normal combinations
 						# we need to export. This is done first, and the export
@@ -237,7 +265,7 @@ class GeometryExporter(object):
 						# and that number is not known before this is done.
 						
 						# Export data
-						co_no_uv_cache = []
+						co_no_uv_ar_cache = []
 						face_vert_indices = {}		# mapping of face index to list of exported vert indices for that face
 						
 						# Caches
@@ -251,16 +279,14 @@ class GeometryExporter(object):
 								v = mesh.vertices[vertex]
 								
 								if face.use_smooth:
-									
-									if uv_layer:
-										vert_data = (v.co[:], v.normal[:], uv_layer[face.index].uv[j][:])
-									else:
-										vert_data = (v.co[:], v.normal[:])
+									vert_data = (v.co[:], v.normal[:], \
+									uv_layer[face.index].uv[j][:] if uv_layer else None, \
+									ar_layer[face.index] if ar_layer else None)
 									
 									if vert_data not in vert_use_vno:
 										vert_use_vno.add( vert_data )
 										
-										co_no_uv_cache.append( vert_data )
+										co_no_uv_ar_cache.append( vert_data )
 										
 										vert_vno_indices[vert_data] = vert_index
 										fvi.append(vert_index)
@@ -271,14 +297,13 @@ class GeometryExporter(object):
 									
 								else:
 									
-									if uv_layer:
-										vert_data = (v.co[:], face.normal[:], uv_layer[face.index].uv[j][:])
-									else:
-										vert_data = (v.co[:], face.normal[:])
+									vert_data = (v.co[:], face.normal[:], \
+									uv_layer[face.index].uv[j][:] if uv_layer else None, \
+									ar_layer[v.index] if ar_layer else None)
 									
 									# All face-vert-co-no are unique, we cannot
 									# cache them
-									co_no_uv_cache.append( vert_data )
+									co_no_uv_ar_cache.append( vert_data )
 									
 									fvi.append(vert_index)
 									
@@ -307,22 +332,27 @@ class GeometryExporter(object):
 							if uv_layer:
 								ply.write(b'property float s\n')
 								ply.write(b'property float t\n')
-							
+
+							if ar_layer:
+								ply.write(b'property float px\n')
+								ply.write(b'property float py\n')
+								ply.write(b'property float pz\n')
+														
 							ply.write( ('element face %d\n' % len(ffaces_mats[i])).encode() )
 							ply.write(b'property list uchar uint vertex_indices\n')
 							
 							ply.write(b'end_header\n')
 							
 							# dump cached co/no/uv
-							if uv_layer:
-								for co,no,uv in co_no_uv_cache:
-									ply.write( struct.pack('<3f', *co) )
-									ply.write( struct.pack('<3f', *no) )
+							for co,no,uv,ar in co_no_uv_ar_cache:
+								ply.write( struct.pack('<3f', *co) )
+								ply.write( struct.pack('<3f', *no) )
+
+								if uv_layer:
 									ply.write( struct.pack('<2f', *uv) )
-							else:
-								for co,no in co_no_uv_cache:
-									ply.write( struct.pack('<3f', *co) )
-									ply.write( struct.pack('<3f', *no) )
+
+								if ar_layer:
+									ply.write( struct.pack('<3f', *ar) )
 							
 							# dump face vert indices
 							for face in ffaces_mats[i]:
@@ -330,7 +360,7 @@ class GeometryExporter(object):
 								ply.write( struct.pack('<B', lfvi) )
 								ply.write( struct.pack('<%dI'%lfvi, *face_vert_indices[face.index]) )
 							
-							del co_no_uv_cache
+							del co_no_uv_ar_cache
 							del face_vert_indices
 						
 						LuxLog('Binary PLY file written: %s' % (ply_path))
@@ -425,10 +455,14 @@ class GeometryExporter(object):
 					else:
 						uv_layer = None
 					
+					# environment data
+					ar_layer = get_ar_layer(mesh)
+
 					# Export data
 					points = []
 					normals = []
 					uvs = []
+					ars = []
 					ntris = 0
 					face_vert_indices = []		# list of face vert indices
 					
@@ -444,10 +478,9 @@ class GeometryExporter(object):
 							
 							if face.use_smooth:
 								
-								if uv_layer:
-									vert_data = (v.co[:], v.normal[:], uv_layer[face.index].uv[j][:] )
-								else:
-									vert_data = (v.co[:], v.normal[:], tuple() )
+								vert_data = (v.co[:], v.normal[:], \
+														uv_layer[face.index].uv[j][:] if uv_layer else tuple(), \
+														ar_layer[v.index] if ar_layer else tuple())
 								
 								if vert_data not in vert_use_vno:
 									vert_use_vno.add(vert_data)
@@ -455,6 +488,7 @@ class GeometryExporter(object):
 									points.extend( vert_data[0] )
 									normals.extend( vert_data[1] )
 									uvs.extend( vert_data[2] )
+									ars.extend( vert_data[3] )
 									
 									vert_vno_indices[vert_data] = vert_index
 									fvi.append(vert_index)
@@ -469,6 +503,7 @@ class GeometryExporter(object):
 								points.extend( v.co[:] )
 								normals.extend( face.normal[:] )
 								if uv_layer: uvs.extend( uv_layer[face.index].uv[j][:] )
+								if ar_layer: ars.extend( ar_layer[v.index][:] )
 								
 								fvi.append(vert_index)
 								
@@ -498,7 +533,10 @@ class GeometryExporter(object):
 					
 					if uv_layer:
 						shape_params.add_float('uv', uvs)
-					
+
+					if ar_layer:
+						shape_params.add_point('WUV', ars)
+										
 					# Add other properties from LuxRender Mesh panel
 					shape_params.update( obj.data.luxrender_mesh.get_paramset(self.visibility_scene) )
 					
@@ -607,7 +645,7 @@ class GeometryExporter(object):
 				# several motionInstances for non-linear motion blur
 				STEPS = self.geometry_scene.camera.data.luxrender_camera.motion_blur_samples
 	
-				for i in range(STEPS,0,-1):
+				for i in range(1, STEPS+1):
 					fcurve_matrix = object_anim_matrix(self.geometry_scene, obj, frame_offset=i/float(STEPS))
 					if fcurve_matrix == False:
 						break
@@ -629,21 +667,33 @@ class GeometryExporter(object):
 		
 		self.lux_context.attributeBegin(comment=obj.name, file=Files.GEOM)
 		
+		is_object_animated, next_matrices = self.is_object_animated(obj, matrix)
+		
 		# object translation/rotation/scale
+		if is_object_animated:
+			num_steps = len(next_matrices)
+			fsps = float(num_steps) * self.visibility_scene.render.fps
+			step_times = [(i) / fsps for i in range(0, num_steps+1)]
+			self.lux_context.motionBegin(step_times)
+			# then export first matrix as normal
+		
 		if matrix is not None:
 			self.lux_context.transform( matrix_to_list(matrix[0], apply_worldscale=True) )
 		else:
 			self.lux_context.transform( matrix_to_list(obj.matrix_world, apply_worldscale=True) )
 		
-		is_object_animated, next_matrices = self.is_object_animated(obj, matrix)
-		
+		# export rest of the frames matrices
 		if is_object_animated:
-			for i, next_matrix in enumerate(next_matrices):
-				self.lux_context.transformBegin(comment=obj.name)
-				self.lux_context.identity()
+			for next_matrix in next_matrices:
+				#fni = float(num_instances) * self.visibility_scene.render.fps
+				#self.lux_context.motionInstance(me_name, i/fni, (i+1)/fni, '%s_motion_%i' % (obj.name, i))
+				#self.lux_context.transformBegin(comment=obj.name)
+				#self.lux_context.identity()
+				#self.lux_context.transform(matrix_to_list(next_matrix, apply_worldscale=True))
+				#self.lux_context.coordinateSystem('%s_motion_%i' % (obj.name, i))
+				#self.lux_context.transformEnd()
 				self.lux_context.transform(matrix_to_list(next_matrix, apply_worldscale=True))
-				self.lux_context.coordinateSystem('%s_motion_%i' % (obj.name, i))
-				self.lux_context.transformEnd()
+			self.lux_context.motionEnd()
 		
 		use_inner_scope = len(mesh_definitions) > 1
 		for me_name, me_mat_index, me_shape_type, me_shape_IsSpecial, me_shape_params in mesh_definitions:
@@ -703,11 +753,8 @@ class GeometryExporter(object):
 			if (not self.allow_instancing(mat_object)) or object_is_emitter or me_shape_IsSpecial:
 				self.lux_context.shape(me_shape_type, me_shape_params)
 			# motionInstance for motion blur
-			elif is_object_animated:
-				num_instances = len(next_matrices)
-				for i in range(num_instances):
-					fni = float(num_instances) * self.visibility_scene.render.fps
-					self.lux_context.motionInstance(me_name, i/fni, (i+1)/fni, '%s_motion_%i' % (obj.name, i))
+			#elif is_object_animated:
+			# handled by ordinary object instance
 			# ordinary mesh instance
 			else:
 				self.lux_context.objectInstance(me_name)

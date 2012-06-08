@@ -61,13 +61,13 @@ from ..ui import (
 
 from ..ui.materials import (
 	main as mat_main, compositing, carpaint, glass, glass2, roughglass, glossytranslucent,
-	glossy_lossy, glossycoating, glossy, layered, matte, mattetranslucent, metal, metal2, mirror, mix as mat_mix, null,
+	glossycoating, glossy, layered, matte, mattetranslucent, metal, metal2, mirror, mix as mat_mix, null,
 	scatter, shinymetal, velvet
 )
 
 from ..ui.textures import (
 	main as tex_main, band, blender, bilerp, blackbody, brick, cauchy, constant, colordepth,
-	checkerboard, dots, equalenergy, fbm, fresnelcolor, fresnelname, gaussian, harlequin, imagemap, normalmap,
+	checkerboard, dots, equalenergy, fbm, fresnelcolor, fresnelname, gaussian, harlequin, imagemap, imagesampling, normalmap,
 	lampspectrum, luxpop, marble, mix as tex_mix, multimix, sellmeier, scale, sopra, uv,
 	uvmask, windy, wrinkled, mapping, tabulateddata, transform
 )
@@ -87,7 +87,6 @@ def _register_elm(elm, required=False):
 _register_elm(bl_ui.properties_render.RENDER_PT_render, required=True)
 _register_elm(bl_ui.properties_render.RENDER_PT_dimensions, required=True)
 _register_elm(bl_ui.properties_render.RENDER_PT_output, required=True)
-_register_elm(bl_ui.properties_render.RENDER_PT_post_processing)
 _register_elm(bl_ui.properties_render.RENDER_PT_stamp)
 
 _register_elm(bl_ui.properties_scene.SCENE_PT_scene, required=True)
@@ -105,6 +104,37 @@ _register_elm(bl_ui.properties_material.MATERIAL_PT_preview)
 _register_elm(bl_ui.properties_texture.TEXTURE_PT_preview)
 
 _register_elm(bl_ui.properties_data_lamp.DATA_PT_context_lamp)
+
+### Some additions to Blender panels for better allocation in context
+### use this example for such overrides
+
+# Add use_clipping button to lens panel
+def lux_use_clipping(self, context):
+
+    if context.scene.render.engine == 'LUXRENDER_RENDER':
+
+        self.layout.split().column().prop(context.camera.luxrender_camera, "use_clipping", text="Export Clipping")
+
+_register_elm(bl_ui.properties_data_camera.DATA_PT_lens.append(lux_use_clipping))
+
+# Add lux dof elements to blender dof panel
+def lux_use_dof(self, context):
+
+    if context.scene.render.engine == 'LUXRENDER_RENDER':
+        row = self.layout.row()
+
+        row.prop(context.camera.luxrender_camera, "use_dof", text="Use Depth of Field")
+        if context.camera.luxrender_camera.use_dof == True:
+            row.prop(context.camera.luxrender_camera, "autofocus", text="Auto Focus")
+
+            row = self.layout.row()
+            row.prop(context.camera.luxrender_camera, "blades", text="Blades")
+
+            row = self.layout.row(align=True)
+            row.prop(context.camera.luxrender_camera, "distribution", text="Distribution")
+            row.prop(context.camera.luxrender_camera, "power", text="Power")
+
+_register_elm(bl_ui.properties_data_camera.DATA_PT_camera_dof.append(lux_use_dof))
 
 @classmethod
 def blender_texture_poll(cls, context):
