@@ -111,30 +111,44 @@ _register_elm(bl_ui.properties_data_lamp.DATA_PT_context_lamp)
 # Add use_clipping button to lens panel
 def lux_use_clipping(self, context):
 
-    if context.scene.render.engine == 'LUXRENDER_RENDER':
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
 
-        self.layout.split().column().prop(context.camera.luxrender_camera, "use_clipping", text="Export Clipping")
+		self.layout.split().column().prop(context.camera.luxrender_camera, "use_clipping", text="Export Clipping")
 
 _register_elm(bl_ui.properties_data_camera.DATA_PT_lens.append(lux_use_clipping))
 
 # Add lux dof elements to blender dof panel
 def lux_use_dof(self, context):
 
-    if context.scene.render.engine == 'LUXRENDER_RENDER':
-        row = self.layout.row()
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
+		row = self.layout.row()
 
-        row.prop(context.camera.luxrender_camera, "use_dof", text="Use Depth of Field")
-        if context.camera.luxrender_camera.use_dof == True:
-            row.prop(context.camera.luxrender_camera, "autofocus", text="Auto Focus")
+		row.prop(context.camera.luxrender_camera, "use_dof", text="Use Depth of Field")
+		if context.camera.luxrender_camera.use_dof == True:
+			row.prop(context.camera.luxrender_camera, "autofocus", text="Auto Focus")
 
-            row = self.layout.row()
-            row.prop(context.camera.luxrender_camera, "blades", text="Blades")
+			row = self.layout.row()
+			row.prop(context.camera.luxrender_camera, "blades", text="Blades")
 
-            row = self.layout.row(align=True)
-            row.prop(context.camera.luxrender_camera, "distribution", text="Distribution")
-            row.prop(context.camera.luxrender_camera, "power", text="Power")
+			row = self.layout.row(align=True)
+			row.prop(context.camera.luxrender_camera, "distribution", text="Distribution")
+			row.prop(context.camera.luxrender_camera, "power", text="Power")
 
 _register_elm(bl_ui.properties_data_camera.DATA_PT_camera_dof.append(lux_use_dof))
+
+def render_start_options(self, context):
+
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
+		col = self.layout.column()
+		
+		col.prop(context.scene.luxrender_engine, "export_type", text="Export type")
+		if context.scene.luxrender_engine.export_type == 'EXT':
+			col.prop(context.scene.luxrender_engine, "binary_name", text="Render using")
+			col.prop(context.scene.luxrender_engine, "install_path", text="Path to LuxRender Installation")
+		if context.scene.luxrender_engine.export_type == 'INT':
+			col.prop(context.scene.luxrender_engine, "write_files", text="Write to Disk")
+
+_register_elm(bl_ui.properties_render.RENDER_PT_render.append(render_start_options))
 
 @classmethod
 def blender_texture_poll(cls, context):
