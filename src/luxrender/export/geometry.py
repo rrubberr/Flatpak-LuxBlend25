@@ -71,7 +71,7 @@ def get_ar_layer(mesh):
 
 		for vert in bm.verts:
 			for loop in vert.link_loops:
-				layer[vert.index] = (loop[x], loop[y], loop[z])
+				ar_layer[vert.index] = (loop[x], loop[y], loop[z])
 
 	del bm
 	return ar_layer
