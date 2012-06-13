@@ -329,7 +329,7 @@ class FloatTextureParameter(TextureParameterBase):
 #	texture_only		= False
 	multiply_float		= False
 	ignore_unassigned	= False
-	sub_type			= 'NONE'
+	subtype			= 'NONE'
 	unit				= 'NONE'
 		
 	def __init__(self,
@@ -338,7 +338,7 @@ class FloatTextureParameter(TextureParameterBase):
 			multiply_float = False,		# Specify that when texture is in use, it should be scaled by the float value
 			ignore_unassigned = False,	# Don't export this parameter if the texture slot is unassigned
 			real_attr = None,			# translate self.attr into something else at export time (overcome 31 char RNA limit)
-			sub_type = 'NONE',
+			subtype = 'NONE',
 			unit = 'NONE',
 			default = 0.0, min = 0.0, max = 1.0, precision=6
 		):
@@ -347,7 +347,7 @@ class FloatTextureParameter(TextureParameterBase):
 		self.texture_only = (not add_float_value)
 		self.multiply_float = multiply_float
 		self.ignore_unassigned = ignore_unassigned
-		self.sub_type = sub_type
+		self.subtype = subtype
 		self.unit = unit
 		self.real_attr = real_attr
 		self.default = default
@@ -427,7 +427,7 @@ class FloatTextureParameter(TextureParameterBase):
 			{
 				'attr': '%s_floatvalue' % self.attr,
 				'type': 'float',
-				'subtype': self.sub_type,
+				'subtype': self.subtype,
 				'unit': self.unit,
 				'name': self.name,
 				'description': '%s value' % self.name,
@@ -443,7 +443,7 @@ class FloatTextureParameter(TextureParameterBase):
 			{
 				'attr': '%s_presetvalue' % self.attr,
 				'type': 'float',
-				'subtype': self.sub_type,
+				'subtype': self.subtype,
 				'default': self.default,
 				'update': refresh_preview,
 				'save_in_preset': True
@@ -1318,6 +1318,7 @@ class luxrender_tex_brick(declarative_property_group):
 		'mortartex_floatvalue':			{ 'variant': 'float' },
 		'mortartex_floattexture':		{ 'variant': 'float', 'mortartex_usefloattexture': True },
 		'mortartex_multiplyfloat':		{ 'variant': 'float', 'mortartex_usefloattexture': True },
+		'brickrun':						O([{ 'brickbond': 'running' }, { 'brickbond': 'flemish' }]),
 	}
 	
 	properties = [
@@ -1359,14 +1360,14 @@ class luxrender_tex_brick(declarative_property_group):
 			'attr': 'brickrun',
 			'type': 'float',
 			'name': 'Brick run',
-			'default': 0.75,
-			'min': -10.0,
-			'soft_min': -10.0,
-			'max': 10.0,
-			'soft_max': 10.0,
-			'precision': 6,
-			'sub_type': 'DISTANCE',
-			'unit': 'LENGTH',
+			'default': 50.0,
+			'min': 0.0,
+			'soft_min': 0.0,
+			'max': 100.0,
+			'soft_max': 100.0,
+			'precision': 2,
+			'subtype': 'PERCENTAGE',
+			'unit': 'NONE',
 			'save_in_preset': True
 		},
 		{
@@ -1379,7 +1380,7 @@ class luxrender_tex_brick(declarative_property_group):
 			'max': 1.0,
 			'soft_max': 1.0,
 			'precision': 6,
-			'sub_type': 'DISTANCE',
+			'subtype': 'DISTANCE',
 			'unit': 'LENGTH',
 			'save_in_preset': True
 		},
@@ -1393,7 +1394,7 @@ class luxrender_tex_brick(declarative_property_group):
 			'max': 10.0,
 			'soft_max': 10.0,
 			'precision': 3,
-			'sub_type': 'DISTANCE',
+			'subtype': 'DISTANCE',
 			'unit': 'LENGTH',
 			'save_in_preset': True
 		},
@@ -1407,7 +1408,7 @@ class luxrender_tex_brick(declarative_property_group):
 			'max': 10.0,
 			'soft_max': 10.0,
 			'precision': 3,
-			'sub_type': 'DISTANCE',
+			'subtype': 'DISTANCE',
 			'unit': 'LENGTH',
 			'save_in_preset': True
 		},
@@ -1421,7 +1422,7 @@ class luxrender_tex_brick(declarative_property_group):
 			'max': 10.0,
 			'soft_max': 10.0,
 			'precision': 3,
-			'sub_type': 'DISTANCE',
+			'subtype': 'DISTANCE',
 			'unit': 'LENGTH',
 			'save_in_preset': True
 		},
@@ -1440,7 +1441,7 @@ class luxrender_tex_brick(declarative_property_group):
 			.add_float('brickdepth', self.brickdepth) \
 			.add_float('brickheight', self.brickheight) \
 			.add_float('brickwidth', self.brickwidth) \
-			.add_float('brickrun', self.brickrun) \
+			.add_float('brickrun', self.brickrun / 100) \
 			.add_float('mortarsize', self.mortarsize)
 		
 		if LuxManager.GetActive() is not None:
@@ -1753,7 +1754,7 @@ class luxrender_tex_colordepth(declarative_property_group):
 			'max': 1000.0,
 			'soft_max': 1000.0,
 			'precision': 6,
-			'sub_type': 'DISTANCE',
+			'subtype': 'DISTANCE',
 			'unit': 'LENGTH',
 			'save_in_preset': True
 		}

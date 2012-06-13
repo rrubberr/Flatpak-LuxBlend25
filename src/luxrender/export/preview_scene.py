@@ -28,7 +28,7 @@ import bpy
 
 from ..export import ParamSet
 from ..export.geometry import GeometryExporter
-from ..export.materials import ExportedTextures, convert_texture, get_material_volume_defs
+from ..export.materials import ExportedTextures, convert_texture, get_material_volume_defs, get_preview_flip, get_preview_zoom
 from ..outputs import LuxLog, LuxManager
 from ..outputs.pure_api import LUXRENDER_VERSION
 
@@ -57,18 +57,32 @@ def export_preview_texture(lux_context, texture):
 		
 	elif lux_tex_variant != 'color':
 		LuxLog('WARNING: Texture %s is wrong variant; needed %s, got %s' % (texture_name, 'color', lux_tex_variant))
-		
+
 	return texture_name
 
 def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
+
+	mat_preview_xz = get_preview_flip(mat)
+	preview_zoom = get_preview_zoom(mat)
+
 	if mat.preview_render_type == 'FLAT':
 		HALTSPP = 32
 	else:
 		HALTSPP = 256
 
 	# Camera
-	lux_context.lookAt(0.0,-3.0,0.5, 0.0,-2.0,0.5, 0.0,0.0,1.0)
-	camera_params = ParamSet().add_float('fov', 22.5)
+	if tex != None: # texture preview is always topview
+		lux_context.lookAt(0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0) 
+		camera_params = ParamSet().add_float('fov', 22.5)
+
+	elif mat.preview_render_type == 'FLAT' and mat_preview_xz == False and tex == None: # mat preview XZ-flip
+		lux_context.lookAt(0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+		camera_params = ParamSet().add_float('fov', 22.5/preview_zoom)
+
+	else:
+		lux_context.lookAt(0.0,-3.0,0.5, 0.0,-2.0,0.5, 0.0,0.0,1.0) # standard sideview
+		camera_params = ParamSet().add_float('fov', 22.5/preview_zoom)
+
 	lux_context.camera('perspective', camera_params)
 	
 	# Film
@@ -162,13 +176,35 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 	
 	# Light
 	lux_context.attributeBegin()
-	if mat.preview_render_type == 'FLAT':
+	if mat.preview_render_type == 'FLAT' and mat_preview_xz == True:
 		lux_context.transform([
 			0.5, 0.0, 0.0, 0.0,
 			0.0, 0.5, 0.0, 0.0,
 			0.0, 0.0, 0.5, 0.0,
 			2.5, -2.5, 2.5, 1.0
 		])
+		light_bb_params = ParamSet().add_float('temperature', 6500.0)
+		lux_context.texture('pL', 'color', 'blackbody', light_bb_params)
+		light_params = ParamSet() \
+			.add_texture('L', 'pL') \
+			.add_float('gain', 1.5) \
+			.add_float('importance', 1.0)
+
+	elif mat.preview_render_type == 'FLAT' and mat_preview_xz == False:
+		lux_context.transform([
+							   0.5, 0.0, 0.0, 0.0,
+							   0.0, 0.5, 0.0, 0.0,
+							   0.0, 0.0, 0.5, 0.0,
+							   2.5, -2.5, 4.5, 0.3
+							   ])
+		lux_context.translate(-2, 1, 5)
+		light_bb_params = ParamSet().add_float('temperature', 6500.0)
+		lux_context.texture('pL', 'color', 'blackbody', light_bb_params)
+		light_params = ParamSet() \
+			.add_texture('L', 'pL') \
+			.add_float('gain', 7.0) \
+			.add_float('importance', 1.0)
+
 	else:
 		lux_context.transform([
 			0.5996068120002747, 0.800294816493988, 2.980232594040899e-08, 0.0,
@@ -176,12 +212,12 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 			0.5227733850479126, -0.3916787803173065, 0.7571629285812378, 0.0,
 			4.076245307922363, -3.0540552139282227, 5.903861999511719, 1.0
 		])
-	light_bb_params = ParamSet().add_float('temperature', 6500.0)
-	lux_context.texture('pL', 'color', 'blackbody', light_bb_params)
-	light_params = ParamSet() \
-		.add_texture('L', 'pL') \
-		.add_float('gain', 1.0) \
-		.add_float('importance', 1.0)
+		light_bb_params = ParamSet().add_float('temperature', 6500.0)
+		lux_context.texture('pL', 'color', 'blackbody', light_bb_params)
+		light_params = ParamSet() \
+			.add_texture('L', 'pL') \
+			.add_float('gain', 1.0) \
+			.add_float('importance', 1.0)
 	
 	if bl_scene.luxrender_world.default_exterior_volume != '':
 		lux_context.exterior(bl_scene.luxrender_world.default_exterior_volume)
@@ -211,7 +247,7 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 	lux_context.lightSource('infinite', ParamSet().add_float('gain', inf_gain).add_float('importance', inf_gain))
 	
 	# back drop
-	if mat.preview_render_type == 'FLAT':
+	if mat.preview_render_type == 'FLAT' and mat_preview_xz == True and tex == None:
 		lux_context.attributeBegin()
 		lux_context.transform([
 			5.0, 0.0, 0.0, 0.0,
@@ -257,7 +293,7 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 				0.000000, 0.000000,
 			])
 		lux_context.shape('loopsubdiv', bd_shape_params)
-	else:
+	else: # sideview
 		lux_context.attributeBegin()
 		lux_context.transform([
 			5.0, 0.0, 0.0, 0.0,
@@ -265,6 +301,9 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 			0.0, 0.0, 5.0, 0.0,
 			0.0, 0.0, 0.0, 1.0
 		])
+		if mat.preview_render_type == 'FLAT':
+			lux_context.translate(-0.31, -0.22, -1.2)
+
 		lux_context.scale(4,1,1)
 		checks_pattern_params = ParamSet() \
 			.add_integer('dimension', 2) \
@@ -336,34 +375,36 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 			0.0, 0.0, 0.5, 1.0
 		]
 		pv_export_shape = True
-		
+
 		if mat.preview_render_type == 'FLAT':
-			if tex == None:
-				lux_context.scale(1, 1, 8)
-				lux_context.rotate(90, 1,0,0)
-				pv_transform = [
-					0.1, 0.0, 0.0, 0.0,
-					0.0, 0.1, 0.0, 0.0,
-					0.0, 0.0, 0.2, 0.0,
-					0.0, 0.06, -1, 1.0
-				]
+			if tex == None :
+				if mat_preview_xz == True:
+					lux_context.scale(1, 1, 8)
+					lux_context.rotate(90, 1,0,0)
+					pv_transform = [
+						0.1, 0.0, 0.0, 0.0,
+						0.0, 0.1, 0.0, 0.0,
+						0.0, 0.0, 0.2, 0.0,
+						0.0, 0.06, -1, 1.0
+					]
+				else:
+					lux_context.scale(0.25, 2.0, 2.0)
+					lux_context.translate(0, 0, -0.99)
 			else:
-				lux_context.translate(0, -1, 0.5)
-				lux_context.rotate(90, 1,0,0)
-				lux_context.rotate(90, 0,0,1)
-				lux_context.scale(2.0/3.0, 2.0/3.0, 2.0/3.0)
+				lux_context.rotate(90, 0,0,1) # keep tex pre always same 
+				lux_context.scale(2.0, 2.0, 2.0)
+				lux_context.translate(0, 0, -1)
 
 		if mat.preview_render_type == 'SPHERE':
 			pv_transform = [
-				0.09, 0.0, 0.0, 0.0,
-				0.0, 0.09, 0.0, 0.0,
-				0.0, 0.0, 0.09, 0.0,
+				0.1, 0.0, 0.0, 0.0,
+				0.0, 0.1, 0.0, 0.0,
+				0.0, 0.0, 0.1, 0.0,
 				0.0, 0.0, 0.5, 1.0
 			]
 		if mat.preview_render_type == 'CUBE':
-			lux_context.scale(0.75, 0.75, 0.75)
-			lux_context.rotate(-45, -0.5, -0.2, 1)
-			lux_context.translate(0 , 0, 0.3)
+			lux_context.scale(0.8, 0.8, 0.8)
+			lux_context.rotate(-35, 0,0,1)
 		if mat.preview_render_type == 'MONKEY':
 			pv_transform = [
 				1.0573405027389526, 0.6340668201446533, 0.0, 0.0,

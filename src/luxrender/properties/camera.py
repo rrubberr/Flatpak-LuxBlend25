@@ -308,7 +308,6 @@ class luxrender_camera(declarative_property_group):
 			'default': '',
 #			'save_in_preset': True
 		},
-		
 	]
 	
 	def lookAt(self, camera):
@@ -1310,7 +1309,7 @@ class luxrender_tonemapping(declarative_property_group):
 			'attr': 'ywa',
 			'name': 'Ywa',
 			'description': 'World adaption luminance',
-			'default': 0.1,
+			'default': 1.0,
 			'min': 0.0,
 			'soft_min': 0.0,
 			'max': 2e5,

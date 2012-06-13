@@ -75,7 +75,7 @@ class luxrender_volumeintegrator(declarative_property_group):
 			'soft_min': 0.0,
 			'max': 100.0,
 			'soft_max': 100.0,
-			'sub_type': 'DISTANCE',
+			'subtype': 'DISTANCE',
 			'unit': 'LENGTH',
 			'save_in_preset': True
 		},
@@ -123,6 +123,7 @@ class luxrender_integrator(declarative_property_group):
 		# bidir +
 		['eyedepth', 'lightdepth'],
 		['eyerrthreshold', 'lightrrthreshold'],
+		'lightpathstrategy',
 		
 		# dl +
 		'maxdepth',
@@ -219,6 +220,7 @@ class luxrender_integrator(declarative_property_group):
 		# bidir +
 		'eyedepth':							{ 'surfaceintegrator': 'bidirectional' },
 		'lightdepth':						{ 'surfaceintegrator': 'bidirectional' },
+		'lightpathstrategy':				{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		'eyerrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		'lightrrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		'lightstrategy':					{ 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'bidirectional', 'arpath', 'ardirectlighting', 'envpath', 'depthfield'])},
@@ -415,6 +417,23 @@ class luxrender_integrator(declarative_property_group):
 			'default': 48,
 			'min': 1,
 			'max': 2048,
+			'save_in_preset': True
+		},
+		{
+			'type': 'enum',
+			'attr': 'lightpathstrategy',
+			'name': 'Light Path Strategy',
+			'description': 'Strategy for choosing which lamp to start a light path from',
+			'default': 'auto',
+			'items': [
+				('auto', 'Auto', 'Automatically choose between one or all depending on number of lamps'),
+				('one', 'One', 'A light path is started from a single lamp'),
+				('all', 'All', 'All lamps start a light path (can be slow)'),
+				('importance', 'Importance', 'A single light path is started from a lamp chosen by importance value'),
+				('powerimp', 'Power', 'A single light path is started from a lamp chosen by importance value and output power'),
+				('allpowerimp', 'All Power', 'Each ray samples all lamps at least once, extra samples are given to lamps with higher importance and output power'),
+				('logpowerimp', 'Log Power', 'A single light path is started from a lamp chosen by importance value and output power')
+			],
 			'save_in_preset': True
 		},
 		{
@@ -1007,18 +1026,7 @@ class luxrender_integrator(declarative_property_group):
 		
 		if scene.luxrender_rendermode.renderer == 'hybrid':
 			#Check each integrator seperately so they don't mess with each other!
-			if self.surfaceintegrator == 'path' and self.advanced == True:
-				if self.lightstrategy not in ('one', 'all', 'auto'):
-					LuxLog('Incompatible lightstrategy for Hybrid Path (use "auto", "all", or "one").')
-					raise Exception('Incompatible render settings')
-			if self.surfaceintegrator == 'arpath' and self.advanced == True:
-				if self.lightstrategy not in ('one', 'all', 'auto'):
-					LuxLog('Incompatible lightstrategy for Hybrid ARPath (use "auto", "all", or "one").')
-					raise Exception('Incompatible render settings')
-			if self.surfaceintegrator == 'envpath' and self.advanced == True:
-				if self.lightstrategy not in ('one', 'all', 'auto'):
-					LuxLog('Incompatible lightstrategy for Hybrid EnvPath (use "auto", "all", or "one").')
-					raise Exception('Incompatible render settings')
+
 			if self.surfaceintegrator == 'bidirectional':
 				if self.lightstrategy != ('one'):
 					LuxLog('Incompatible lightstrategy for Hybrid Bidir (use "one").')
@@ -1033,9 +1041,12 @@ class luxrender_integrator(declarative_property_group):
 		if self.surfaceintegrator == 'bidirectional':
 			params.add_integer('eyedepth', self.eyedepth) \
 				  .add_integer('lightdepth', self.lightdepth)
+			if not self.advanced:
+				params.add_string('lightpathstrategy', self.lightstrategy) #Export the regular light strategy setting for lightpath strat when in non-advanced mode, advanced mode allows them to be set independently
 			if self.advanced:
 				params.add_float('eyerrthreshold', self.eyerrthreshold) \
-					  .add_float('lightrrthreshold', self.lightrrthreshold)
+					  .add_float('lightrrthreshold', self.lightrrthreshold) \
+					  .add_string('lightpathstrategy', self.lightpathstrategy)
 		
 		if self.surfaceintegrator == 'directlighting':
 			params.add_integer('maxdepth', self.maxdepth) \

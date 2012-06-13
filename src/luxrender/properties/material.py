@@ -101,7 +101,7 @@ class SubGroupColorTextureParameter(ColorTextureParameter):
 		return lambda s,c: c.luxrender_material
 
 # Float Textures
-TF_bumpmap			= SubGroupFloatTextureParameter('bumpmap', 'Bump Map',			add_float_value=True, min=-5.0, max=5.0, default=1.0, precision=6, multiply_float=True, ignore_unassigned=True, sub_type='DISTANCE', unit='LENGTH' )
+TF_bumpmap			= SubGroupFloatTextureParameter('bumpmap', 'Bump Map',			add_float_value=True, min=-5.0, max=5.0, default=1.0, precision=6, multiply_float=True, ignore_unassigned=True, subtype='DISTANCE', unit='LENGTH' )
 TF_normalmap			= SubGroupFloatTextureParameter('normalmap', 'Normal Map',		add_float_value=True, min=-5.0, max=5.0, default=1.0, precision=6, multiply_float=False, ignore_unassigned=True)
 TF_amount				= FloatTextureParameter('amount', 'Mix amount',						add_float_value=True, min=0.0, default=0.5, max=1.0)
 TF_cauchyb				= FloatTextureParameter('cauchyb', 'Cauchy B',						add_float_value=True, default=0.0, min=0.0, max=1.0 ) # default 0.0 for OFF
@@ -264,6 +264,24 @@ class luxrender_material(declarative_property_group):
 			'update': set_viewport_properties,
 			'save_in_preset': True
 		},
+		{
+		'type': 'bool',
+		'attr': 'mat_preview_flip_xz',
+		'description': 'Flip flat preview xz orientation',
+		'name': 'Flip XZ',
+		'default': False
+		},
+		{
+		'attr': 'preview_zoom',
+		'type': 'float',
+		'name': 'Zoom Factor', # gets corrected in export
+		'min': 1.0,
+		'soft_min': 0.5,
+		'max': 2.0,
+		'soft_max': 2.0,
+		'step': 50,
+		'default': 1.0
+		},
 #		{
 #			'type': 'bool',
 #			'attr': 'generatetangents',
@@ -380,7 +398,7 @@ class luxrender_material(declarative_property_group):
 				
 				material_params = ParamSet()
 				
-				sub_type = getattr(self, 'luxrender_mat_%s'%self.type)
+				subtype = getattr(self, 'luxrender_mat_%s'%self.type)
 				
 				alpha_type = None
 				# find alpha texture if material should be transparent
@@ -492,10 +510,10 @@ class luxrender_material(declarative_property_group):
 					#Overwrite the old maps with the combined map
 					material_params.add_texture('bumpmap', '%s_bump+normal_generated' % material.name)
 				
-				if hasattr(sub_type, 'export'):
-				   sub_type.export(lux_context, material)
+				if hasattr(subtype, 'export'):
+				   subtype.export(lux_context, material)
 				   
-				material_params.update( sub_type.get_paramset(material) )
+				material_params.update( subtype.get_paramset(material) )
 				
 				# DistributedPath compositing
 				if scene.luxrender_integrator.surfaceintegrator == 'distributedpath':
@@ -3099,10 +3117,11 @@ class luxrender_emission(declarative_property_group):
 	controls = [
 		'importance',
 		'lightgroup_chooser',
-		'iesname'
+		'iesname',
 	] + \
 	TC_L.controls + \
 	[
+		'nsamples',
 		'gain',
 		'power',
 		'efficacy',
@@ -3112,6 +3131,7 @@ class luxrender_emission(declarative_property_group):
 		'importance':			{ 'use_emission': True },
 		'lightgroup_chooser':	{ 'use_emission': True },
 		'iesname':				{ 'use_emission': True },
+		'nsamples':				{ 'use_emission': True },
 		'L_colorlabel':			{ 'use_emission': True },
 		'L_color':				{ 'use_emission': True },
 		'L_usecolortexture':	{ 'use_emission': True },
@@ -3155,6 +3175,17 @@ class luxrender_emission(declarative_property_group):
 			'attr': 'iesname',
 			'name': 'IES Data',
 			'description': 'Use IES data for this light\'s distribution'
+		},
+		{
+			'type': 'int',
+			'attr': 'nsamples',
+			'name': 'Shadow ray samples',
+			'description': 'The suggested number of shadow samples',
+			'default': 1 ,
+			'min': 1 ,
+			'soft_min': 1 ,
+			'max': 100,
+			'soft_max': 100,
 		},
 		{
 			'type': 'float',
@@ -3205,7 +3236,8 @@ class luxrender_emission(declarative_property_group):
 				.add_float('importance', self.importance) \
 				.add_float('gain', self.gain*lg_gain) \
 				.add_float('power', self.power) \
-				.add_float('efficacy', self.efficacy)
+				.add_float('efficacy', self.efficacy) \
+				.add_integer('nsamples', self.nsamples)
 		arealightsource_params.update( TC_L.get_paramset(self) )
 		if self.iesname != '':
 			

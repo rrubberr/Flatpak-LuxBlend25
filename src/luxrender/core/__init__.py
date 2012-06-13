@@ -99,7 +99,6 @@ _register_elm(bl_ui.properties_scene.SCENE_PT_custom_props)
 
 _register_elm(bl_ui.properties_world.WORLD_PT_context_world, required=True)
 
-_register_elm(bl_ui.properties_material.MATERIAL_PT_context_material, required=True)
 _register_elm(bl_ui.properties_material.MATERIAL_PT_preview)
 _register_elm(bl_ui.properties_texture.TEXTURE_PT_preview)
 
@@ -108,33 +107,68 @@ _register_elm(bl_ui.properties_data_lamp.DATA_PT_context_lamp)
 ### Some additions to Blender panels for better allocation in context
 ### use this example for such overrides
 
+# Add view buttons for viewcontrol to preview panels
+def lux_use_alternate_matview(self, context):
+
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
+		row = self.layout.row()
+		row.prop(context.material.luxrender_material, "preview_zoom", text="Zoom Factor")
+		if context.material.preview_render_type == 'FLAT':
+			row.prop(context.material.luxrender_material, "mat_preview_flip_xz", text="Flip Flat Preview XZ")
+
+_register_elm(bl_ui.properties_material.MATERIAL_PT_preview.append(lux_use_alternate_matview))
+
+def lux_use_alternate_texview(self, context):
+
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
+		row = self.layout.row()
+		row.prop(context.material.luxrender_material, "preview_zoom", text="Zoom Factor")
+		if context.material.preview_render_type == 'FLAT':
+			row.prop(context.material.luxrender_material, "mat_preview_flip_xz", text="Flip Preview XZ")
+
+_register_elm(bl_ui.properties_texture.TEXTURE_PT_preview.append(lux_use_alternate_texview))
+
 # Add use_clipping button to lens panel
 def lux_use_clipping(self, context):
 
-    if context.scene.render.engine == 'LUXRENDER_RENDER':
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
 
-        self.layout.split().column().prop(context.camera.luxrender_camera, "use_clipping", text="Export Clipping")
+		self.layout.split().column().prop(context.camera.luxrender_camera, "use_clipping", text="Export Clipping")
 
 _register_elm(bl_ui.properties_data_camera.DATA_PT_lens.append(lux_use_clipping))
 
 # Add lux dof elements to blender dof panel
 def lux_use_dof(self, context):
 
-    if context.scene.render.engine == 'LUXRENDER_RENDER':
-        row = self.layout.row()
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
+		row = self.layout.row()
 
-        row.prop(context.camera.luxrender_camera, "use_dof", text="Use Depth of Field")
-        if context.camera.luxrender_camera.use_dof == True:
-            row.prop(context.camera.luxrender_camera, "autofocus", text="Auto Focus")
+		row.prop(context.camera.luxrender_camera, "use_dof", text="Use Depth of Field")
+		if context.camera.luxrender_camera.use_dof == True:
+			row.prop(context.camera.luxrender_camera, "autofocus", text="Auto Focus")
 
-            row = self.layout.row()
-            row.prop(context.camera.luxrender_camera, "blades", text="Blades")
+			row = self.layout.row()
+			row.prop(context.camera.luxrender_camera, "blades", text="Blades")
 
-            row = self.layout.row(align=True)
-            row.prop(context.camera.luxrender_camera, "distribution", text="Distribution")
-            row.prop(context.camera.luxrender_camera, "power", text="Power")
+			row = self.layout.row(align=True)
+			row.prop(context.camera.luxrender_camera, "distribution", text="Distribution")
+			row.prop(context.camera.luxrender_camera, "power", text="Power")
 
 _register_elm(bl_ui.properties_data_camera.DATA_PT_camera_dof.append(lux_use_dof))
+
+def render_start_options(self, context):
+
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
+		col = self.layout.column()
+		
+		col.prop(context.scene.luxrender_engine, "export_type", text="Export type")
+		if context.scene.luxrender_engine.export_type == 'EXT':
+			col.prop(context.scene.luxrender_engine, "binary_name", text="Render using")
+			col.prop(context.scene.luxrender_engine, "install_path", text="Path to LuxRender Installation")
+		if context.scene.luxrender_engine.export_type == 'INT':
+			col.prop(context.scene.luxrender_engine, "write_files", text="Write to Disk")
+
+_register_elm(bl_ui.properties_render.RENDER_PT_render.append(render_start_options))
 
 @classmethod
 def blender_texture_poll(cls, context):
