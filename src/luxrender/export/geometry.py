@@ -281,7 +281,10 @@ class GeometryExporter(object):
 								if face.use_smooth:
 									vert_data = (v.co[:], v.normal[:], \
 									uv_layer[face.index].uv[j][:] if uv_layer else None, \
-									ar_layer[face.index] if ar_layer else None)
+									ar_layer[v.index] if ar_layer else None)
+									
+ 									if vert_data not in vert_use_vno:
+ 										vert_use_vno.add( vert_data )
 									
 									if vert_data not in vert_use_vno:
 										vert_use_vno.add( vert_data )
