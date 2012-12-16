@@ -64,14 +64,14 @@ class luxrender_object(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'hide_proxy_mesh',
-			'name': 'Hide Viewport Proxy',
-			'description': 'Don\'t export this object\'s data',
+			'name': 'Don\'t Render Original',
+			'description': 'Replace Blender proxy object with selected Lux object. Disable to render both objects',
 			'default': True
 		},
 		{
 			'type': 'enum',
 			'attr': 'proxy_type',
-			'name': 'Proxy Object Type',
+			'name': 'Render Object',
 			'items': [
 				('plymesh', 'PLY Mesh', 'Load a PLY mesh file'),
 				('stlmesh', 'STL Mesh', 'Load an STL mesh file'),

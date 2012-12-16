@@ -615,6 +615,7 @@ class luxrender_film(declarative_property_group):
 			'type': 'bool',
 			'attr': 'write_flm',
 			'name': 'Write FLM',
+			'description': 'Write framebuffer (FLM) to disk to allow resuming and adjusting imaging options',
 			'default': False
 		},
 		{
@@ -642,7 +643,7 @@ class luxrender_film(declarative_property_group):
 			'type': 'bool',
 			'attr': 'premultiply_alpha',
 			'name': 'Premultiply Alpha',
-			'description': 'Premultiply alpha channel (happens during film stage, not image output)',
+			'description': 'Premultiply alpha channel. This is applied during splatting, not image output',
 			'default': True
 		},
 		{

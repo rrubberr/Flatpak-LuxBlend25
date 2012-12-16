@@ -43,7 +43,7 @@ class meshes(bl_ui.properties_data_mesh.MeshButtonsPanel, property_group_rendere
 		if context.object.luxrender_object.append_proxy and context.object.luxrender_object.hide_proxy_mesh:
 			msg = ['Mesh options not available when',
 				   'object is used as a render proxy',
-				   'and hide proxy mesh is set.'
+				   'and \"Don\'t Render Original\" is set.'
 				  ]
 			for t in msg:
 				self.layout.label(t)

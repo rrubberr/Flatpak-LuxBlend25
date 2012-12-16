@@ -212,9 +212,9 @@ class luxrender_engine(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'partial_ply',
-			'name': 'Partial PLY Export',
-			'description': 'Skip exporting PLY files that already exist. Try disabling this if you have geometry issues',
-			'default': False,
+			'name': 'Use Cached PLY Files',
+			'description': 'Only export PLY files for new or modified objects',
+			'default': True,
 			'save_in_preset': True
 		},
 		{
