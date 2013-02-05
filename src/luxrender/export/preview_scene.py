@@ -119,7 +119,7 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 		film_params.add_float('linear_exposure', 2.0)
 
 	film_params \
-		.add_bool('write_exr', True) \
+		.add_bool('write_exr', False) \
 		.add_integer('writeinterval', 2)
 	lux_context.film('fleximage', film_params)
 	
