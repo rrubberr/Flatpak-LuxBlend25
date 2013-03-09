@@ -528,11 +528,7 @@ class GeometryExporter(object):
 	
 	is_preview = False
 	
-	def allow_instancing(self, obj):
-		# Some situations require full geometry export
-		if self.visibility_scene.luxrender_rendermode.renderer == 'hybrid':
-			return False
-		
+	def allow_instancing(self, obj):		
 		# Portals are always instances
 		if obj.type == 'MESH' and obj.data.luxrender_mesh.portal:
 			return True
