@@ -51,24 +51,24 @@ from ..outputs.pure_api import LUXRENDER_VERSION
 # Exporter Property Groups need to be imported to ensure initialisation
 from ..properties import (
 	accelerator, camera, engine, filter, integrator, ior_data, lamp, lampspectrum_data,
-	material, mesh, object as prop_object, rendermode, sampler, texture, world
+	material, mesh, object as prop_object, particles, rendermode, sampler, texture, world
 )
 
 # Exporter Interface Panels need to be imported to ensure initialisation
 from ..ui import (
-	render_panels, camera, image, lamps, mesh, object as ui_object, world
+	render_panels, camera, image, lamps, mesh, object as ui_object, particles, world
 )
 
 from ..ui.materials import (
-	main as mat_main, compositing, carpaint, glass, glass2, roughglass, glossytranslucent,
+	main as mat_main, compositing, carpaint, cloth, glass, glass2, roughglass, glossytranslucent,
 	glossycoating, glossy, layered, matte, mattetranslucent, metal, metal2, mirror, mix as mat_mix, null,
 	scatter, shinymetal, velvet
 )
 
 from ..ui.textures import (
-	main as tex_main, band, blender, bilerp, blackbody, brick, cauchy, constant, colordepth,
+	main as tex_main, add, band, blender, bilerp, blackbody, brick, cauchy, constant, colordepth,
 	checkerboard, dots, equalenergy, fbm, fresnelcolor, fresnelname, gaussian, harlequin, imagemap, imagesampling, normalmap,
-	lampspectrum, luxpop, marble, mix as tex_mix, multimix, sellmeier, scale, sopra, uv,
+	lampspectrum, luxpop, marble, mix as tex_mix, multimix, sellmeier, scale, subtract, sopra, uv,
 	uvmask, windy, wrinkled, mapping, tabulateddata, transform
 )
 
@@ -95,6 +95,11 @@ _register_elm(bl_ui.properties_scene.SCENE_PT_physics) #This is the gravity pane
 _register_elm(bl_ui.properties_scene.SCENE_PT_keying_sets)
 _register_elm(bl_ui.properties_scene.SCENE_PT_keying_set_paths)
 _register_elm(bl_ui.properties_scene.SCENE_PT_unit)
+_register_elm(bl_ui.properties_scene.SCENE_PT_color_management)
+
+if bpy.app.version > (2, 65, 8):
+	_register_elm(bl_ui.properties_scene.SCENE_PT_rigid_body_world)
+
 _register_elm(bl_ui.properties_scene.SCENE_PT_custom_props)
 
 _register_elm(bl_ui.properties_world.WORLD_PT_context_world, required=True)
@@ -107,14 +112,63 @@ _register_elm(bl_ui.properties_data_lamp.DATA_PT_context_lamp)
 ### Some additions to Blender panels for better allocation in context
 ### use this example for such overrides
 
+# Add a hint to differentiate blender output and lux output
+def lux_output_hints(self, context):
+	if context.scene.render.engine == 'LUXRENDER_RENDER':
+	
+		pipe_mode = (context.scene.luxrender_engine.export_type == 'INT' and context.scene.luxrender_engine.write_files == False) #In this mode, we don't use use the regular interval write
+
+		if not (pipe_mode): #in this case, none of these buttons do anything, so don't even bother drawing the label
+			col = self.layout.column()
+			col.label("LuxRender Output Formats")
+		row = self.layout.row()
+		if not pipe_mode:
+			row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_png", text="PNG")
+			if context.scene.camera.data.luxrender_camera.luxrender_film.write_png:
+				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_png_16bit", text="Use 16bit PNG")
+			row = self.layout.row()
+			row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_tga", text="TARGA")
+			row = self.layout.row()
+			row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_exr", text="OpenEXR")
+			if context.scene.camera.data.luxrender_camera.luxrender_film.write_exr:
+				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_exr_applyimaging", text="Tonemap EXR")
+				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_exr_halftype", text="Use 16bit EXR")
+				row = self.layout.row()
+				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_exr_compressiontype", text="EXR Compression")
+			if context.scene.camera.data.luxrender_camera.luxrender_film.write_tga or context.scene.camera.data.luxrender_camera.luxrender_film.write_exr:
+				row = self.layout.row()
+				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_zbuf", text="Enable Z-Buffer")
+				if context.scene.camera.data.luxrender_camera.luxrender_film.write_zbuf:
+					row = self.layout.row()
+					row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "zbuf_normalization", text="Z-Buffer Normalization")
+			row = self.layout.row()
+			row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_flm", text="Write FLM")
+			if context.scene.camera.data.luxrender_camera.luxrender_film.write_flm:
+				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "restart_flm", text="Restart FLM")
+				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_flm_direct", text="Write FLM Directly")
+		row = self.layout.row()
+	
+		if not context.scene.luxrender_engine.integratedimaging or context.scene.luxrender_engine.export_type == 'EXT':
+			row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "output_alpha", text="Alpha Channel") # Alpha and coupled premul option for all modes but integrated imaging
+		else:
+			row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "output_alpha", text="Transparent Background") # Integrated imaging always with premul named according Blender usage
+				
+		if (context.scene.camera.data.luxrender_camera.luxrender_film.output_alpha):
+			if not context.scene.luxrender_engine.integratedimaging or context.scene.luxrender_engine.export_type == 'EXT': # Premul only availyble for non integrated imaging
+				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "premultiply_alpha", text="Premultiply Alpha")
+		
+
+_register_elm(bl_ui.properties_render.RENDER_PT_output.append(lux_output_hints))
+
 # Add view buttons for viewcontrol to preview panels
 def lux_use_alternate_matview(self, context):
 
 	if context.scene.render.engine == 'LUXRENDER_RENDER':
 		row = self.layout.row()
-		row.prop(context.material.luxrender_material, "preview_zoom", text="Zoom Factor")
+		row.prop(context.scene.luxrender_world, "preview_object_size", text="Size")
+		row.prop(context.material.luxrender_material, "preview_zoom", text="Zoom")
 		if context.material.preview_render_type == 'FLAT':
-			row.prop(context.material.luxrender_material, "mat_preview_flip_xz", text="Flip Flat Preview XZ")
+			row.prop(context.material.luxrender_material, "mat_preview_flip_xz", text="Flip XZ")
 
 _register_elm(bl_ui.properties_material.MATERIAL_PT_preview.append(lux_use_alternate_matview))
 
@@ -122,9 +176,10 @@ def lux_use_alternate_texview(self, context):
 
 	if context.scene.render.engine == 'LUXRENDER_RENDER':
 		row = self.layout.row()
-		row.prop(context.material.luxrender_material, "preview_zoom", text="Zoom Factor")
+		row.prop(context.scene.luxrender_world, "preview_object_size", text="Size")
+		row.prop(context.material.luxrender_material, "preview_zoom", text="Zoom")
 		if context.material.preview_render_type == 'FLAT':
-			row.prop(context.material.luxrender_material, "mat_preview_flip_xz", text="Flip Preview XZ")
+			row.prop(context.material.luxrender_material, "mat_preview_flip_xz", text="Flip XZ")
 
 _register_elm(bl_ui.properties_texture.TEXTURE_PT_preview.append(lux_use_alternate_texview))
 
@@ -156,17 +211,20 @@ def lux_use_dof(self, context):
 
 _register_elm(bl_ui.properties_data_camera.DATA_PT_camera_dof.append(lux_use_dof))
 
+#Add options by render image/anim buttons
 def render_start_options(self, context):
 
 	if context.scene.render.engine == 'LUXRENDER_RENDER':
 		col = self.layout.column()
+		row = self.layout.row()
 		
 		col.prop(context.scene.luxrender_engine, "export_type", text="Export type")
 		if context.scene.luxrender_engine.export_type == 'EXT':
 			col.prop(context.scene.luxrender_engine, "binary_name", text="Render using")
 			col.prop(context.scene.luxrender_engine, "install_path", text="Path to LuxRender Installation")
 		if context.scene.luxrender_engine.export_type == 'INT':
-			col.prop(context.scene.luxrender_engine, "write_files", text="Write to Disk")
+			row.prop(context.scene.luxrender_engine, "write_files", text="Write to Disk")
+			row.prop(context.scene.luxrender_engine, "integratedimaging", text="Integrated Imaging")
 
 _register_elm(bl_ui.properties_render.RENDER_PT_render.append(render_start_options))
 
@@ -250,9 +308,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				if scene.name == 'preview':
 					self.render_preview(scene)
 					return
-				
-				if scene.render.use_color_management == False:
-					LuxLog('WARNING: Colour Management is switched off, render results may look too dark.')
+
+				if bpy.app.version < (2, 63, 19 ):
+					if scene.render.use_color_management == False:
+						LuxLog('WARNING: Colour Management is switched off, render results may look too dark.')
+				else:
+					if scene.display_settings.display_device != "sRGB":
+						LuxLog('WARNING: Colour Management not set to sRGB, render results may look too dark.')
 				
 				api_type, write_files = self.set_export_path(scene)
 				
@@ -379,7 +441,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			
 			# Don't render the tiny images
 			if xres <= 96:
-				raise Exception('Preview image too small (%ix%i)' % (xres,yres))
+				raise Exception('Skipping material thumbnail update, image too small (%ix%i)' % (xres,yres))
 			
 			preview_scene.preview_scene(scene, preview_context, obj=preview_objects[0], mat=pm, tex=pt)
 			
@@ -409,15 +471,18 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				preview_context.addThread()
 			
 			while not is_finished(preview_context):
-				if self.test_break():
+				if self.test_break() or bpy.context.scene.render.engine != 'LUXRENDER_RENDER':
 					raise Exception('Render interrupted')
 				
 				# progressively update the preview
 				time.sleep(0.2) # safety-sleep
 				
-				if LUXRENDER_VERSION < '0.8' or preview_context.getAttribute('renderer_statistics', 'samplesPerPixel') > 24:
-					interruptible_sleep(1.8) # up to HALTSPP every 2 seconds in sum
-					
+				if preview_context.getAttribute('renderer_statistics', 'samplesPerPixel') > 6:
+					if PREVIEW_TYPE == 'TEXTURE':
+						interruptible_sleep(0.8) # reduce update to every 1.0 sec until haltthreshold kills the render
+					else:
+						interruptible_sleep(1.8) # reduce update to every 2.0 sec until haltthreshold kills the render
+
 				preview_context.updateStatisticsWindow()
 				LuxLog('Updating preview (%ix%i - %s)' % (xres, yres, preview_context.getAttribute('renderer_statistics_formatted_short', '_recommended_string')))
 				
@@ -426,7 +491,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				
 				lay.rect  = preview_context.blenderCombinedDepthRects()[0]
 				
-				self.end_result(result)
+				self.end_result(result, 0) if bpy.app.version > (2, 63, 17 ) else self.end_result(result) # cycles tiles adaption
 		except Exception as exc:
 			LuxLog('Preview aborted: %s' % exc)
 		
@@ -488,7 +553,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		
 		if scene.luxrender_engine.export_type == 'INT':
 			# Set up networking before export so that we get better server usage
-			if scene.luxrender_networking.use_network_servers:
+			if scene.luxrender_networking.use_network_servers and scene.luxrender_networking.servers != '':
 				LM.lux_context.setNetworkServerUpdateInterval( scene.luxrender_networking.serverinterval )
 				for server in scene.luxrender_networking.servers.split(','):
 					LM.lux_context.addServer(server.strip())
@@ -614,7 +679,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		if scene.luxrender_engine.fixed_seed:
 			cmd_args.append('--fixedseed')
 		
-		if scene.luxrender_networking.use_network_servers:
+		if scene.luxrender_networking.use_network_servers and scene.luxrender_networking.servers != '':
 			for server in scene.luxrender_networking.servers.split(','):
 				cmd_args.append('--useserver')
 				cmd_args.append(server.strip())
@@ -668,10 +733,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				
 				self.LuxManager.lux_context.logVerbosity(scene.luxrender_engine.log_verbosity)
 				
-				self.update_stats('', 'LuxRender: Rendering warmup')
+				self.update_stats('', 'LuxRender: Building %s' % scene.luxrender_accelerator.accelerator)
 				self.LuxManager.start()
 				
-				self.LuxManager.fb_thread.LocalStorage['integratedimaging'] = scene.camera.data.luxrender_camera.luxrender_film.integratedimaging
+				self.LuxManager.fb_thread.LocalStorage['integratedimaging'] = scene.luxrender_engine.integratedimaging
 				
 				# Update the image from disk only as often as it is written
 				self.LuxManager.fb_thread.set_kick_period( scene.camera.data.luxrender_camera.luxrender_film.internal_updateinterval )
@@ -742,7 +807,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		self.update_stats('', 'LuxRender: Rendering %s' % self.LuxManager.stats_thread.stats_string)
 		
 		if hasattr(self, 'update_progress') and LC.getAttribute('renderer_statistics', 'percentComplete') > 0:
-			prg = LC.statistics('percentComplete') / 100.0
+			prg = LC.getAttribute('renderer_statistics', 'percentComplete') / 100.0
 			self.update_progress(prg)
 		
 		if self.test_break() or \

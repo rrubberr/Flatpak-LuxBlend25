@@ -7,7 +7,7 @@
 # --------------------------------------------------------------------------
 #
 # Authors:
-# Doug Hammond, Daniel Genrich
+# Doug Hammond, Daniel Genrich, Michael Klemm
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -24,7 +24,7 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
-import os, struct
+import os, struct, math
 
 import bpy, mathutils, math
 from bpy.app.handlers import persistent
@@ -33,11 +33,12 @@ from extensions_framework import util as efutil
 
 from ..outputs import LuxLog
 from ..outputs.file_api import Files
-from ..export import ParamSet, ExportProgressThread, ExportCache, object_anim_matrix
+from ..export import ParamSet, ExportProgressThread, ExportCache, object_anim_matrices
 from ..export import matrix_to_list
 from ..export import fix_matrix_order
 from ..export.materials import get_material_volume_defs
 from ..export import LuxManager
+from ..export import is_obj_visible
 
 class InvalidGeometryException(Exception):
 	pass
@@ -116,7 +117,8 @@ class GeometryExporter(object):
 				'MESH': self.handler_MESH,
 				'SURFACE': self.handler_MESH,
 				'CURVE': self.handler_MESH,
-				'FONT': self.handler_MESH
+				'FONT': self.handler_MESH,
+				'META': self.handler_MESH
 			}
 		}
 		
@@ -139,7 +141,7 @@ class GeometryExporter(object):
 		export_original = True
 		# mesh data name first for portal reasons
 		ext_mesh_name = '%s_%s_ext' % (obj.data.name, self.geometry_scene.name)
-		if obj.luxrender_object.append_external_mesh:
+		if obj.luxrender_object.append_proxy:
 			if obj.luxrender_object.hide_proxy_mesh:
 				export_original = False
 			
@@ -147,19 +149,27 @@ class GeometryExporter(object):
 				mesh_definitions.append( self.ExportedMeshes.get(ext_mesh_name) )
 			else:
 				ext_params = ParamSet()
-				ext_params.add_string('filename', efutil.path_relative_to_export(obj.luxrender_object.external_mesh))
-				ext_params.add_bool('smooth', obj.luxrender_object.use_smoothing)
+				if obj.luxrender_object.proxy_type in {'plymesh', 'stlmesh'}:
+					ext_params.add_string('filename', efutil.path_relative_to_export(obj.luxrender_object.external_mesh))
+					ext_params.add_bool('smooth', obj.luxrender_object.use_smoothing)
+				if obj.luxrender_object.proxy_type in {'sphere', 'cylinder', 'cone', 'disk', 'paraboloid'}:
+					ext_params.add_float('radius', obj.luxrender_object.radius)
+					ext_params.add_float('phimax', obj.luxrender_object.phimax*(180/math.pi))
+				if obj.luxrender_object.proxy_type in {'cylinder', 'paraboloid'}:
+					ext_params.add_float('zmax', obj.luxrender_object.zmax)
+				if obj.luxrender_object.proxy_type == 'cylinder':
+					ext_params.add_float('zmin', obj.luxrender_object.zmin)
 
-				ply_params.add_string('type', obj.data.luxrender_mesh.type)
+				ext_params.add_string('type', obj.data.luxrender_mesh.type)
 				if obj.data.luxrender_mesh.projection:
-					ply_params.add_bool('projection', obj.data.luxrender_mesh.projection)
+					ext_params.add_bool('projection', obj.data.luxrender_mesh.projection)
 					if obj.data.luxrender_mesh.ccam:
 						cam_pos =  self.visibility_scene.camera.data.luxrender_camera.lookAt(self.visibility_scene.camera)
-						ply_params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
+						ext_params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
 					else:
-						ply_params.add_point('cam', obj.data.luxrender_mesh.ucam)
+						ext_params.add_point('cam', obj.data.luxrender_mesh.ucam)
 				
-				mesh_definition = (ext_mesh_name, obj.active_material.name, obj.luxrender_object.external_mesh[-3:] + 'mesh', obj.data.luxrender_mesh.get_shape_IsSpecial(), ext_params)
+				mesh_definition = (ext_mesh_name, obj.active_material.name, obj.luxrender_object.proxy_type, obj.data.luxrender_mesh.get_shape_IsSpecial(), ext_params)
 				mesh_definitions.append( mesh_definition )
 				
 				# Only export objectBegin..objectEnd and cache this mesh_definition if we plan to use instancing
@@ -317,7 +327,7 @@ class GeometryExporter(object):
 						with open(ply_path, 'wb') as ply:
 							ply.write(b'ply\n')
 							ply.write(b'format binary_little_endian 1.0\n')
-							ply.write(b'comment Created by LuxBlend 2.5 exporter for LuxRender - www.luxrender.net\n')
+							ply.write(b'comment Created by LuxBlend 2.6 exporter for LuxRender - www.luxrender.net\n')
 							
 							# vert_index == the number of actual verts needed
 							ply.write( ('element vertex %d\n' % vert_index).encode() )
@@ -374,7 +384,7 @@ class GeometryExporter(object):
 					)
 					
 					# Add subdiv etc options
-					shape_params.update( obj.data.luxrender_mesh.get_paramset(self.visibility_scene) )
+					shape_params.update( obj.data.luxrender_mesh.get_paramset() )
 					
 					mesh_definition = (
 						mesh_name,
@@ -538,7 +548,7 @@ class GeometryExporter(object):
 						shape_params.add_point('WUV', ars)
 										
 					# Add other properties from LuxRender Mesh panel
-					shape_params.update( obj.data.luxrender_mesh.get_paramset(self.visibility_scene) )
+					shape_params.update( obj.data.luxrender_mesh.get_paramset() )
 					
 					mesh_definition = (
 						mesh_name,
@@ -567,11 +577,7 @@ class GeometryExporter(object):
 	
 	is_preview = False
 	
-	def allow_instancing(self, obj):
-		# Some situations require full geometry export
-		if self.visibility_scene.luxrender_rendermode.renderer == 'hybrid':
-			return False
-		
+	def allow_instancing(self, obj):		
 		# Portals are always instances
 		if obj.type == 'MESH' and obj.data.luxrender_mesh.portal:
 			return True
@@ -644,13 +650,10 @@ class GeometryExporter(object):
 				# grab a bunch of fractional-frame fcurve_matrices and export
 				# several motionInstances for non-linear motion blur
 				STEPS = self.geometry_scene.camera.data.luxrender_camera.motion_blur_samples
-	
-				for i in range(1, STEPS+1):
-					fcurve_matrix = object_anim_matrix(self.geometry_scene, obj, frame_offset=i/float(STEPS))
-					if fcurve_matrix == False:
-						break
-					
-					next_matrices.append(fcurve_matrix)
+				
+				# object_anim_matrices returns steps+1 matrices, ie start and end of frame
+				# we don't want the start matrix
+				next_matrices = object_anim_matrices(self.geometry_scene, obj, STEPS)[1:]
 				
 				is_object_animated = len(next_matrices) > 0
 		
@@ -672,7 +675,7 @@ class GeometryExporter(object):
 		# object translation/rotation/scale
 		if is_object_animated:
 			num_steps = len(next_matrices)
-			fsps = float(num_steps) * self.visibility_scene.render.fps
+			fsps = float(num_steps) * self.visibility_scene.render.fps / self.visibility_scene.render.fps_base
 			step_times = [(i) / fsps for i in range(0, num_steps+1)]
 			self.lux_context.motionBegin(step_times)
 			# then export first matrix as normal
@@ -810,101 +813,204 @@ class GeometryExporter(object):
 		if not psys.settings.type == 'HAIR':
 			LuxLog('ERROR: handler_Duplis_PATH can only handle Hair particle systems ("%s")' % psys.name)
 			return
-		
-		# This should force the strand/junction objects to be instanced
-		self.objects_used_as_duplis.add(obj)
-		
+			
+		for mod in obj.modifiers:
+			if mod.type == 'PARTICLE_SYSTEM' and mod.show_render == False:
+				return
+				
 		LuxLog('Exporting Hair system "%s"...' % psys.name)
+
+		size = psys.settings.luxrender_hair.hair_size / 2.0
+		psys.set_resolution(self.geometry_scene, obj, 'RENDER')
+		steps = 2**psys.settings.render_step
+		num_parents = len(psys.particles)
+		num_children = len(psys.child_particles)
 		
-		size = psys.settings.particle_size / 2.0 / 1000.0 # XXX divide by 2 twice ? Also throw in /1000.0 to scale down to millimeters
-		hair_Junction = (
-			(
-				'HAIR_Junction_%s'%psys.name,
-				psys.settings.material - 1,
-				'sphere',
-				ParamSet().add_float('radius', size/2.0)
-			),
-		)
-		hair_Strand = (
-			(
-				'HAIR_Strand_%s'%psys.name,
-				psys.settings.material - 1,
-				'cylinder',
-				ParamSet() \
-					.add_float('radius', size/2.0) \
-					.add_float('zmin', 0.0) \
-					.add_float('zmax', 1.0)
-			),
-		)
-		
-		for sn, si, st, sp in hair_Junction:
-			self.lux_context.objectBegin(sn)
-			self.lux_context.shape(st, sp)
-			self.lux_context.objectEnd()
-		
-		for sn, si, st, sp in hair_Strand:
-			self.lux_context.objectBegin(sn)
-			self.lux_context.shape(st, sp)
-			self.lux_context.objectEnd()
-		
+		partsys_name = '%s_%s'%(obj.name, psys.name)
 		det = DupliExportProgressThread()
-		det.start(len(psys.particles))
-		
-		for particle in psys.particles:
-			if not (particle.is_exist and particle.is_visible): continue
-			
-			det.exported_objects += 1
-			
+		det.start(num_parents + num_children)
+
+		if psys.settings.luxrender_hair.use_binary_output:
+			# Put HAIR_FILES files in frame-numbered subfolders to avoid
+			# clobbering when rendering animations
+			sc_fr = '%s/%s/%s/%05d' % (efutil.export_path, efutil.scene_filename(), bpy.path.clean_name(self.geometry_scene.name), self.visibility_scene.frame_current)
+			if not os.path.exists( sc_fr ):
+				os.makedirs(sc_fr)
+					
+			hair_filename = '%s.hair' % bpy.path.clean_name(partsys_name)
+			hair_file_path = '/'.join([sc_fr, hair_filename])
+
+			segments = []
 			points = []
-			for j in range(len(particle.hair_keys)):
-				points.append(particle.hair_keys[j].co)
-			if psys.settings.use_hair_bspline:
-				temp = []
-				degree = 2
-				dimension = 3
-				for i in range(math.trunc(math.pow(2,psys.settings.render_step))):
-					if i > 0:
-						u = i*(len(points)- degree)/math.trunc(math.pow(2,psys.settings.render_step)-1)-0.0000000000001
-					else:
-						u = i*(len(points)- degree)/math.trunc(math.pow(2,psys.settings.render_step)-1)
-					temp.append(self.BSpline(points, dimension, degree, u))
-				points = temp
+			thickness = []
+			total_segments_count = 0
+			info = 'Created by LuxBlend 2.6 exporter for LuxRender - www.luxrender.net'
+		
+			for pindex in range(num_parents + num_children):			
+				det.exported_objects += 1				
+				segment_count = 0
+		
+				for step in range(0, steps):
+					co = psys.co_hair(obj, mod, pindex, step)				
+					if not co.length_squared == 0:
+						points.append(co)
+						segment_count = segment_count + 1
+
+				segments.append(segment_count)
+				total_segments_count = total_segments_count + segment_count
+			hair_file_path = efutil.path_relative_to_export(hair_file_path)
+			with open(hair_file_path, 'wb') as hair_file:
+				## Binary hair file format from
+				## http://www.cemyuksel.com/research/hairmodels/
+				##
+				##File header
+				hair_file.write(b'HAIR')        #magic number
+				hair_file.write(struct.pack('<I', num_parents+num_children)) #total strand count
+				hair_file.write(struct.pack('<I', len(points))) #total point count 
+				hair_file.write(struct.pack('<I', 1+2))         #bit array for configuration
+				hair_file.write(struct.pack('<I', steps))       #default segments count
+				hair_file.write(struct.pack('<f', size))        #default thickness
+				hair_file.write(struct.pack('<f', 0.0))         #default transparency
+				color = (200.0, 200.0, 200.0)
+				hair_file.write(struct.pack('<3f', *color))     #default color
+				hair_file.write(struct.pack('<88s', info.encode())) #information
+				
+				##hair data
+				hair_file.write(struct.pack('<%dH'%(len(segments)), *segments))
+				for point in points:
+					hair_file.write(struct.pack('<3f', *point))
+					
+			LuxLog('Binary hair file written: %s' % (hair_file_path))
 			
-			for j in range(len(points)-1):
-				# transpose SB so we can extract columns
-				# TODO - change when matrix.col is available
-				SB = obj.matrix_basis.transposed().to_3x3()
-				SB = fix_matrix_order(SB) # matrix indexing hack
-				v1 = points[j+1] - points[j]
-				v2 = SB[2].cross(v1)
-				v3 = v1.cross(v2)
-				v2.normalize()
-				v3.normalize()
-				if any(v.length_squared == 0 for v in (v1, v2, v3)):
-					M = SB
-				else:
-					# v1, v2, v3 are the new columns
-					# set as rows, transpose later
-					M = mathutils.Matrix( (v3,v2,v1) )
-					M = fix_matrix_order(M) # matrix indexing hack
-				M = M.transposed().to_4x4()
-				
-				Mtrans = mathutils.Matrix.Translation(points[j])
-				matrix = obj.matrix_world * Mtrans * M
-				
-				self.exportShapeInstances(
-					obj,
-					hair_Strand,
-					matrix=[matrix,None]
+			hair_mat = obj.material_slots[psys.settings.material - 1].material
+			# Export shape definition to .LXO file			
+			hairfile = (
+				(
+					'hairfile_%s'%partsys_name,
+					psys.settings.material - 1,
+					'hairfile',
+					ParamSet() \
+						.add_string('filename', hair_file_path) \
+						.add_bool('usebspline', psys.settings.use_hair_bspline) \
+						.add_integer('resolution', psys.settings.luxrender_hair.resolution)
+				),
+			)
+			self.lux_context.attributeBegin('hairfile_%s'%partsys_name)
+			self.lux_context.transform( matrix_to_list(obj.matrix_world, apply_worldscale=True) )
+			self.lux_context.namedMaterial(hair_mat.name)
+			self.lux_context.shape('hairfile',
+					ParamSet() \
+						.add_string('filename', hair_file_path) \
+						.add_bool('usebspline', psys.settings.use_hair_bspline) \
+						.add_integer('resolution', psys.settings.luxrender_hair.resolution)
 				)
-				matrix = obj.matrix_world * Mtrans
+			self.lux_context.attributeEnd()
+			self.lux_context.set_output_file(Files.MATS)
+			mat_export_result = hair_mat.luxrender_material.export(self.visibility_scene, self.lux_context, hair_mat, mode='indirect')
+			self.lux_context.set_output_file(Files.GEOM)
+	
+		else:
+			#Old export with cylinder and sphere primitives
+			# This should force the strand/junction objects to be instanced
+			self.objects_used_as_duplis.add(obj)
+			hair_Junction = (
+				(
+					'HAIR_Junction_%s'%partsys_name,
+					psys.settings.material - 1,
+					'sphere',
+					ParamSet().add_float('radius', size)
+				),
+			)
+			hair_Strand = (
+				(
+					'HAIR_Strand_%s'%partsys_name,
+					psys.settings.material - 1,
+					'cylinder',
+					ParamSet() \
+						.add_float('radius', size) \
+						.add_float('zmin', 0.0) \
+						.add_float('zmax', 1.0)
+				),
+			)
+		
+			for sn, si, st, sp in hair_Junction:
+				self.lux_context.objectBegin(sn)
+				self.lux_context.shape(st, sp)
+				self.lux_context.objectEnd()
+		
+			for sn, si, st, sp in hair_Strand:
+				self.lux_context.objectBegin(sn)
+				self.lux_context.shape(st, sp)
+				self.lux_context.objectEnd()
 				
+			for pindex in range(num_parents + num_children):
+				det.exported_objects += 1
+				points = []
+
+				for step in range(0,steps):
+					co = psys.co_hair(obj, mod, pindex, step)
+					if not co.length_squared == 0:
+						points.append(co)
+						
+				if psys.settings.use_hair_bspline:
+					temp = []
+					degree = 2
+					dimension = 3
+					for i in range(math.trunc(math.pow(2,psys.settings.render_step))):
+						if i > 0:
+							u = i*(len(points)- degree)/math.trunc(math.pow(2,psys.settings.render_step)-1)-0.0000000000001
+						else:
+							u = i*(len(points)- degree)/math.trunc(math.pow(2,psys.settings.render_step)-1)
+						temp.append(self.BSpline(points, dimension, degree, u))
+					points = temp
+			
+				for j in range(len(points)-1):
+					# transpose SB so we can extract columns
+					# TODO - change when matrix.col is available
+					SB = obj.matrix_basis.transposed().to_3x3()
+					SB = fix_matrix_order(SB) # matrix indexing hack
+					v1 = points[j+1] - points[j]
+					v2 = SB[2].cross(v1)
+					v3 = v1.cross(v2)
+					v2.normalize()
+					v3.normalize()
+					if any(v.length_squared == 0 for v in (v1, v2, v3)):
+						#Use standard basis and scale according to segment length
+						M = SB
+						v = v1+v2+v3
+						scale = v.length
+						v.normalize()						
+						M = mathutils.Matrix.Scale(abs(scale),3,v)*M						
+					else:
+						# v1, v2, v3 are the new columns
+						# set as rows, transpose later
+						M = mathutils.Matrix( (v3,v2,v1) )
+						M = fix_matrix_order(M) # matrix indexing hack
+					M = M.transposed().to_4x4()
+					
+					Mtrans = mathutils.Matrix.Translation(points[j])
+					matrix = Mtrans * M
+				
+					self.exportShapeInstances(
+						obj,
+						hair_Strand,
+						matrix=[matrix,None]
+					)
+					
+					self.exportShapeInstances(
+						obj,
+						hair_Junction,
+						matrix=[Mtrans,None]
+					)
+
+				matrix = mathutils.Matrix.Translation(points[len(points)-1])
 				self.exportShapeInstances(
 					obj,
 					hair_Junction,
 					matrix=[matrix,None]
 				)
 		
+		psys.set_resolution(self.geometry_scene, obj, 'PREVIEW')
 		det.stop()
 		det.join()
 		
@@ -928,10 +1034,10 @@ class GeometryExporter(object):
 			# attribute when inside create_dupli_list()..free_dupli_list()
 			duplis = []
 			for dupli_ob in obj.dupli_list:
-				if dupli_ob.object.type not in ['MESH', 'SURFACE', 'FONT', 'CURVE']:
+				if dupli_ob.object.type not in ['MESH', 'SURFACE', 'FONT', 'CURVE']: #metaballs are omitted from this function intentionally. Adding them causes recursion when building the ball. (add 'META' to this if you actually want that bug, it makes for some fun glitch art with particles)
 					continue
 				#if not dupli_ob.object.is_visible(self.visibility_scene) or dupli_ob.object.hide_render:
-				if not self.is_visible(dupli_ob.object, is_dupli=True):
+				if not is_obj_visible(self.visibility_scene, dupli_ob.object, is_dupli=True):
 					continue
 				
 				self.objects_used_as_duplis.add(dupli_ob.object)
@@ -995,12 +1101,6 @@ class GeometryExporter(object):
 				self.buildMesh(obj)
 			)
 	
-	def is_visible(self, obj, is_dupli=False):
-		ov = False
-		for lv in [ol and sl for ol,sl in zip(obj.layers, self.visibility_scene.layers)]:
-			ov |= lv
-		return (ov or is_dupli) and not obj.hide_render
-	
 	def iterateScene(self, geometry_scene):
 		self.geometry_scene = geometry_scene
 		self.have_emitting_object = False
@@ -1018,7 +1118,7 @@ class GeometryExporter(object):
 			
 			try:
 				# Export only objects which are enabled for render (in the outliner) and visible on a render layer
-				if not self.is_visible(obj):
+				if not is_obj_visible(self.visibility_scene, obj):
 					raise UnexportableObjectException(' -> not visible')
 				
 				if obj.parent and obj.parent.is_duplicator:

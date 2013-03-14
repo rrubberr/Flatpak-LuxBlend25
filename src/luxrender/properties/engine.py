@@ -98,7 +98,7 @@ class luxrender_testing(declarative_property_group):
 			'type': 'bool',
 			'attr': 'clay_render',
 			'name': 'Clay render',
-			'description': 'Export all materials as default "clay"',
+			'description': 'Export all non-glass materials as default "clay"',
 			'default': False
 		},
 		{
@@ -112,7 +112,7 @@ class luxrender_testing(declarative_property_group):
 			'type': 'bool',
 			'attr': 're_raise',
 			'name': 'Debug: show full trace on export error',
-			'description': '',
+			'description': 'Flash export error messages in UI',
 			'default': False
 		},
 	]
@@ -189,6 +189,13 @@ class luxrender_engine(declarative_property_group):
 		},
 		{
 			'type': 'bool',
+			'attr': 'integratedimaging',
+			'name': 'Integrated imaging workflow',
+			'description': 'Transfer rendered image directly to Blender without saving to disk (adds Z-buffer support and is more stable, but may take longer to refresh)',
+			'default': True
+		},
+		{
+			'type': 'bool',
 			'attr': 'render',
 			'name': 'Run Renderer',
 			'description': 'Run Renderer after export',
@@ -205,20 +212,21 @@ class luxrender_engine(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'partial_ply',
-			'name': 'Partial PLY Export',
-			'description': 'Skip exporting PLY files that already exist. Try disabling this if you have geometry issues',
-			'default': False,
+			'name': 'Use Cached PLY Files',
+			'description': 'Only export PLY files for new or modified objects',
+			'default': True,
 			'save_in_preset': True
 		},
 		{
 			'type': 'enum',
 			'attr': 'binary_name',
 			'name': 'External Type',
-			'description': 'Choose full GUI or console renderer',
+			'description': 'Choose full GUI, console renderer or real-time rendering',
 			'default': 'luxrender',
 			'items': [
 				('luxrender', 'LuxRender GUI', 'luxrender'),
 				('luxconsole', 'LuxConsole', 'luxconsole'),
+				('luxvr', 'LuxVR', 'luxvr'),
 			],
 			'save_in_preset': True
 		},
@@ -234,7 +242,7 @@ class luxrender_engine(declarative_property_group):
 			'type': 'bool',
 			'attr': 'write_files',
 			'name': 'Write to Disk',
-			'description': 'Write scene files to disk',
+			'description': 'Write scene files to disk (allows use of PLY file cache)',
 			'default': True,
 			'save_in_preset': True
 		},

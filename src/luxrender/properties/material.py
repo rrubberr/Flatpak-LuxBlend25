@@ -101,7 +101,7 @@ class SubGroupColorTextureParameter(ColorTextureParameter):
 		return lambda s,c: c.luxrender_material
 
 # Float Textures
-TF_bumpmap			= SubGroupFloatTextureParameter('bumpmap', 'Bump Map',			add_float_value=True, min=-5.0, max=5.0, default=1.0, precision=6, multiply_float=True, ignore_unassigned=True, subtype='DISTANCE', unit='LENGTH' )
+TF_bumpmap			= SubGroupFloatTextureParameter('bumpmap', 'Bump Map',			add_float_value=True, min=-5.0, max=5.0, default=0.01, precision=6, multiply_float=True, ignore_unassigned=True, subtype='DISTANCE', unit='LENGTH' )
 TF_normalmap			= SubGroupFloatTextureParameter('normalmap', 'Normal Map',		add_float_value=True, min=-5.0, max=5.0, default=1.0, precision=6, multiply_float=False, ignore_unassigned=True)
 TF_amount				= FloatTextureParameter('amount', 'Mix amount',						add_float_value=True, min=0.0, default=0.5, max=1.0)
 TF_cauchyb				= FloatTextureParameter('cauchyb', 'Cauchy B',						add_float_value=True, default=0.0, min=0.0, max=1.0 ) # default 0.0 for OFF
@@ -115,7 +115,7 @@ TF_M3					= FloatTextureParameter('M3', 'M3',									add_float_value=True, defa
 TF_R1					= FloatTextureParameter('R1', 'R1',									add_float_value=True, min=0.00001, max=1.0, default=0.950 )
 TF_R2					= FloatTextureParameter('R2', 'R2',									add_float_value=True, min=0.00001, max=1.0, default=0.90 )
 TF_R3					= FloatTextureParameter('R3', 'R3',									add_float_value=True, min=0.00001, max=1.0, default=0.7 )
-TF_sigma				= FloatTextureParameter('sigma', 'Sigma',							add_float_value=True, min=0.0, max=100.0 )
+TF_sigma				= FloatTextureParameter('sigma', 'Sigma',							add_float_value=True, min=0.0, max=45.0 )
 TF_uroughness			= FloatTextureParameter('uroughness', 'U-Roughness',				add_float_value=True, min=0.00001, max=0.8, default=0.075 )
 TF_uexponent			= FloatTextureParameter('uexponent', 'U-Exponent',					add_float_value=True, min=1.0, max=1000000, default=353.556 )
 TF_vroughness			= FloatTextureParameter('vroughness', 'V-Roughness',				add_float_value=True, min=0.00001, max=0.8, default=0.075 )
@@ -126,7 +126,6 @@ TF_backface_uroughness	= FloatTextureParameter('bf_uroughness', 'Backface U-Roug
 TF_backface_uexponent	= FloatTextureParameter('bf_uexponent', 'Backface U-Exponent',		real_attr='backface_uexponent', add_float_value=True, min=1.0, max=1000000, default=30 )
 TF_backface_vroughness	= FloatTextureParameter('bf_vroughness', 'Backface V-Roughness',	real_attr='backface_vroughness', add_float_value=True, min=0.00001, max=1.0, default=0.25 )
 TF_backface_vexponent	= FloatTextureParameter('bf_vexponent', 'Backface V-Exponent',		real_attr='backface_vexponent',	add_float_value=True, min=1.0, max=1000000, default=30 )
-TF_g					= FloatTextureParameter('g', 'Scattering asymmetry',				add_float_value=True, default=0.0, min=-1.0, max=1.0 ) # default 0.0 for Uniform
 #These are for the layered mat:
 TF_OP1					= FloatTextureParameter('opacity1', 'Opacity 1',					add_float_value=True, default=1.0, min=0.0, max=1.0 )
 TF_OP2					= FloatTextureParameter('opacity2', 'Opacity 2',					add_float_value=True, default=1.0, min=0.0, max=1.0 )
@@ -145,6 +144,10 @@ TC_Ks3					= ColorTextureParameter('Ks3', 'Specular color 3',					default=(0.04,
 TC_Kt					= ColorTextureParameter('Kt', 'Transmission color',					default=(1.0,1.0,1.0) )
 TC_backface_Ka			= ColorTextureParameter('backface_Ka', 'Backface Absorption color',	default=(0.0,0.0,0.0) )
 TC_backface_Ks			= ColorTextureParameter('backface_Ks', 'Backface Specular color',	default=(0.02,0.02,0.02) ) #.02 = 1.333, the IOR of water
+TC_warp_Kd				= ColorTextureParameter('warp_Kd', 'Warp Diffuse Color',			default=(0.64,0.64,0.64) )
+TC_warp_Ks				= ColorTextureParameter('warp_Ks', 'Warp Specular Color',			default=(0.04,0.04,0.04) )
+TC_weft_Kd				= ColorTextureParameter('weft_Kd', 'Weft Diffuse Color',			default=(0.64,0.64,0.64) )
+TC_weft_Ks				= ColorTextureParameter('weft_Ks', 'Weft Specular Color',			default=(0.04,0.04,0.04) )
 
 # Fresnel Textures
 TFR_fresnel				= FresnelTextureParameter('fresnel', 'Fresnel', 					add_float_value = False)
@@ -164,6 +167,7 @@ mat_names = {
 	'metal2': 'Metal2',
 	'shinymetal': 'Shiny Metal',
 	'velvet': 'Velvet',
+	'cloth': 'Cloth',
 	'scatter': 'Scatter',
 	'mix': 'Mix',
 	'layered': 'Layered',
@@ -195,6 +199,122 @@ class MATERIAL_MT_luxrender_type(bpy.types.Menu):
 		for m_name in sorted(mat_names.keys()):
 			op = sl.operator('MATERIAL_OT_set_luxrender_type', text=mat_names[m_name])
 			op.mat_name = m_name
+
+
+def luxrender_bumpmap_export(self, lux_context, material, bumpmap_material_name, TF_bumpmap, TF_normalmap):
+		bump_params = ParamSet()
+		if self.normalmap_usefloattexture: #We have a normal map
+			#Get the normal map
+			texture_name = getattr(material.luxrender_material, 'normalmap_floattexturename')
+
+			if texture_name != '' and self.normalmap_usefloattexture:
+				texture = get_texture_from_scene(LuxManager.CurrentScene, texture_name)
+				lux_texture = texture.luxrender_texture
+				params = ParamSet()
+				if lux_texture.type in ('normalmap', 'imagemap'):
+					if lux_texture.type == 'normalmap':
+						src_texture = lux_texture.luxrender_tex_normalmap
+					else:
+						src_texture = lux_texture.luxrender_tex_imagemap
+							
+					process_filepath_data(LuxManager.CurrentScene, texture, src_texture.filename, params, 'filename')
+					params.add_integer('discardmipmaps', src_texture.discardmipmaps)
+					params.add_string('filtertype', src_texture.filtertype)
+					params.add_float('maxanisotropy', src_texture.maxanisotropy)
+					params.add_float('gamma', 1.0) #Don't gamma correct normal maps
+					params.add_string('wrap', src_texture.wrap)
+					params.update( lux_texture.luxrender_tex_mapping.get_paramset(LuxManager.CurrentScene) )
+					
+				elif lux_texture.type == 'BLENDER' and texture.type == 'IMAGE':
+					src_texture = texture.image
+							
+					params = ParamSet()
+					process_filepath_data(LuxManager.CurrentScene, texture, src_texture.filepath, params, 'filename')
+					params.add_string('filtertype', 'bilinear')
+					params.add_float('gamma', 1.0) #Don't gamma correct normal maps
+					params.update( lux_texture.luxrender_tex_mapping.get_paramset(LuxManager.CurrentScene) )
+				else:
+					LuxLog('Texture %s is not a normal map! Greyscale height maps should be applied to the bump channel.' % texture_name)
+					
+				ExportedTextures.texture(
+					lux_context,
+					self.normalmap_floattexturename,
+					'float',
+					'normalmap',
+					params
+				)
+				ExportedTextures.export_new(lux_context)
+				
+				if self.normalmap_multiplyfloat:
+					ExportedTextures.texture(
+					lux_context,
+					'%s_scaled' % self.normalmap_floattexturename,
+					'float',
+					'scale',
+					ParamSet() \
+						.add_float('tex1', self.normalmap_floatvalue) \
+						.add_texture('tex2', self.normalmap_floattexturename)
+					)
+					ExportedTextures.export_new(lux_context)
+					
+					#Attach it to the bump map slot:
+					bump_params.add_texture('bumpmap', '%s_scaled' % self.normalmap_floattexturename)
+				else:
+					#Attach the normal map directly to the bump slot
+					bump_params.add_texture('bumpmap', self.normalmap_floattexturename)
+
+		if self.bumpmap_usefloattexture: # We have a bump map
+		
+			bump_params.update( TF_bumpmap.get_paramset(self) )
+				
+		if self.normalmap_usefloattexture and self.bumpmap_usefloattexture: # We have both normal and bump, need to mix them
+			
+			bumpmap_texturename = self.bumpmap_floattexturename if self.bumpmap_usefloattexture else ''
+			normalmap_floattexturename = self.normalmap_floattexturename if self.normalmap_usefloattexture else ''
+			
+			#Get the bump map
+			texture_name = getattr(material.luxrender_material, 'bumpmap_floattexturename')
+			if texture_name != '':
+				texture = get_texture_from_scene(LuxManager.CurrentScene, texture_name)
+				lux_texture = texture.luxrender_texture
+				if lux_texture.type == 'BLENDER' and texture.type == 'IMAGE':
+					bumpmap_texturename = '%s_float' % bumpmap_texturename
+					
+			#Build the multi-mix tex of the summed bump and normal maps
+			mm_params = ParamSet() \
+				.add_texture('tex1', bumpmap_texturename) \
+				.add_texture('tex2', normalmap_floattexturename)
+			
+			if self.bumpmap_multiplyfloat and self.normalmap_multiplyfloat:
+				weights = [self.bumpmap_floatvalue, self.normalmap_floatvalue]
+			elif self.bumpmap_multiplyfloat:
+				weights = [self.bumpmap_floatvalue, 1.0]
+			elif self.normalmap_multiplyfloat:
+				weights = [1.0, self.normalmap_floatvalue]
+			else:
+				weights = [1.0, 1.0]
+
+			# In API mode need to tell Lux how many slots explicity
+			if LuxManager.GetActive().lux_context.API_TYPE == 'PURE':
+				mm_params.add_integer('nweights', 2)
+			#Now add the actual weights
+			mm_params.add_float('weights', weights)
+			
+			mm_texturename = '%s_bump_normal_mix' % bumpmap_material_name
+			ExportedTextures.texture(
+				lux_context,
+				mm_texturename,
+				'float',
+				'multimix',
+				mm_params
+			)
+			ExportedTextures.export_new(lux_context)
+			
+			# Overwrite the old maps with the combined map
+			bump_params.add_texture('bumpmap', mm_texturename)
+		
+		return bump_params
+
 
 @LuxRenderAddon.addon_register_class
 class luxrender_material(declarative_property_group):
@@ -241,9 +361,9 @@ class luxrender_material(declarative_property_group):
 		'Exterior',
 #		'generatetangents' TODO: Make this checkbox actually do something (it has to write a line to the mesh definition)
 	] + \
-	TF_normalmap.controls + \
-	TF_bumpmap.controls +\
-	TC_Sc.controls
+		TF_normalmap.controls + \
+		TF_bumpmap.controls + \
+		TC_Sc.controls
 	
 	visibility = dict_merge({}, TF_bumpmap.visibility, TF_normalmap.visibility, TC_Sc.visibility)
 	
@@ -274,12 +394,13 @@ class luxrender_material(declarative_property_group):
 		{
 		'attr': 'preview_zoom',
 		'type': 'float',
-		'name': 'Zoom Factor', # gets corrected in export
+		'description': 'Zoom Factor of preview camera',
+		'name': 'Zoom Factor',
 		'min': 1.0,
 		'soft_min': 0.5,
 		'max': 2.0,
 		'soft_max': 2.0,
-		'step': 50,
+		'step': 25,
 		'default': 1.0
 		},
 #		{
@@ -305,6 +426,7 @@ class luxrender_material(declarative_property_group):
 	# not set, then the color won't be changed.
 	master_color_map = {
 		'carpaint': 'Kd',
+		'cloth': 'warp_Kd',
 		'glass': 'Kt',
 		'roughglass': 'Kt',
 		'glossy': 'Kd',
@@ -414,101 +536,8 @@ class luxrender_material(declarative_property_group):
 				material_params.update( TC_Sc.get_paramset(self) )
 				
 				# Bump and normal mapping
-				if self.type not in ['mix', 'null', 'layered']:			
-					
-					material_params.update( TF_bumpmap.get_paramset(self) )
-					
-					#Get the normal map
-					texture_name = getattr(material.luxrender_material, 'normalmap_floattexturename')
-
-					if texture_name != '' and self.normalmap_usefloattexture:
-						texture = get_texture_from_scene(LuxManager.CurrentScene, texture_name)
-						lux_texture = texture.luxrender_texture
-						if lux_texture.type in ('normalmap', 'imagemap'):
-							if lux_texture.type == 'normalmap':
-								src_texture = lux_texture.luxrender_tex_normalmap
-							else:
-								src_texture = lux_texture.luxrender_tex_imagemap
-									
-							params = ParamSet()
-							process_filepath_data(LuxManager.CurrentScene, texture, src_texture.filename, params, 'filename')
-							params.add_integer('discardmipmaps', src_texture.discardmipmaps)
-							params.add_string('filtertype', src_texture.filtertype)
-							params.add_float('maxanisotropy', src_texture.maxanisotropy)
-							params.add_float('gamma', 1.0) #Don't gamma correct normal maps
-							params.add_string('wrap', src_texture.wrap)
-							params.update( lux_texture.luxrender_tex_mapping.get_paramset(LuxManager.CurrentScene) )
-							
-							ExportedTextures.texture(
-								lux_context,
-								self.normalmap_floattexturename,
-								'float',
-								'normalmap',
-								params
-							)
-							ExportedTextures.export_new(lux_context)
-						elif lux_texture.type == 'BLENDER' and texture.type == 'IMAGE':
-							src_texture = texture.image
-									
-							params = ParamSet()
-							process_filepath_data(LuxManager.CurrentScene, texture, src_texture.filepath, params, 'filename')
-							params.add_string('filtertype', 'bilinear')
-							params.add_float('gamma', 1.0) #Don't gamma correct normal maps
-							params.update( lux_texture.luxrender_tex_mapping.get_paramset(LuxManager.CurrentScene) )
-							
-							ExportedTextures.texture(
-								lux_context,
-								self.normalmap_floattexturename,
-								'float',
-								'normalmap',
-								params
-							)
-							ExportedTextures.export_new(lux_context)
-						else:
-							LuxLog('Texture %s is not a normal map! Greyscale height maps should be applied to the bump channel.' % texture_name)
-						
-					bumpmap_texturename = self.bumpmap_floattexturename if self.bumpmap_usefloattexture else ''
-					normalmap_floattexturename = self.normalmap_floattexturename if self.normalmap_usefloattexture else ''
-					
-					#Get the bump map
-					texture_name = getattr(material.luxrender_material, 'bumpmap_floattexturename')
-					if texture_name != '':
-						texture = get_texture_from_scene(LuxManager.CurrentScene, texture_name)
-						lux_texture = texture.luxrender_texture
-						if lux_texture.type == 'BLENDER' and texture.type == 'IMAGE':
-							bumpmap_texturename = '%s_float' % bumpmap_texturename
-							
-					#Build the multi-mix tex of the summed bump and normal maps
-					mm_params = ParamSet() \
-						.add_texture('tex1', bumpmap_texturename) \
-						.add_texture('tex2', normalmap_floattexturename)
-					
-					if self.bumpmap_multiplyfloat:
-						weights = [self.bumpmap_floatvalue, 1.0]
-					elif self.normalmap_multiplyfloat:
-						weights = [1.0, self.normalmap_floatvalue]
-					elif self.bumpmap_multiplyfloat and self.normalmap_multiplyfloat:
-						weights = [self.bumpmap_floatvalue, self.normalmap_floatvalue]
-					else:
-						weights = [1.0, 1.0]
-
-					# In API mode need to tell Lux how many slots explicity
-					if LuxManager.GetActive().lux_context.API_TYPE == 'PURE':
-						mm_params.add_integer('nweights', 2)
-					#Now add the actual weights
-					mm_params.add_float('weights', weights)
-					
-					ExportedTextures.texture(
-						lux_context,
-						'%s_bump+normal_generated' % material.name,
-						'float',
-						'multimix',
-						mm_params
-					)
-					ExportedTextures.export_new(lux_context)
-					
-					#Overwrite the old maps with the combined map
-					material_params.add_texture('bumpmap', '%s_bump+normal_generated' % material.name)
+				if self.type not in ['mix', 'null', 'layered']:
+					material_params.update( luxrender_bumpmap_export(self, lux_context, material, material.name, TF_bumpmap, TF_normalmap) )
 				
 				if hasattr(subtype, 'export'):
 				   subtype.export(lux_context, material)
@@ -1153,6 +1182,8 @@ TF_c_uroughness			= CoatingFloatTextureParameter('uroughness', 'U-Roughness',			
 TF_c_uexponent			= CoatingFloatTextureParameter('uexponent', 'U-Exponent',			add_float_value=True, min=1.0, max=1000000, default=353.556 )
 TF_c_vroughness			= CoatingFloatTextureParameter('vroughness', 'V-Roughness',			add_float_value=True, min=0.00001, max=0.8, default=0.075 )
 TF_c_vexponent			= CoatingFloatTextureParameter('vexponent', 'V-Exponent',			add_float_value=True, min=1.0, max=1000000, default=353.556 )
+TF_c_bumpmap			= CoatingFloatTextureParameter('bumpmap', 'Bump Map',				add_float_value=True, min=-5.0, max=5.0, default=0.01, precision=6, multiply_float=True, ignore_unassigned=True, subtype='DISTANCE', unit='LENGTH' )
+TF_c_normalmap			= CoatingFloatTextureParameter('normalmap', 'Normal Map',			add_float_value=True, min=-5.0, max=5.0, default=1.0, precision=6, multiply_float=False, ignore_unassigned=True)
 
 # Color Textures
 TC_c_Ka					= CoatingColorTextureParameter('Ka', 'Absorption color',			default=(0.0,0.0,0.0) )
@@ -1167,7 +1198,10 @@ class luxrender_coating(declarative_property_group):
 	ef_attach_to = ['Material']
 	alert = {}
 	
-	controls = [
+	controls = [] + \
+		TF_c_normalmap.controls + \
+		TF_c_bumpmap.controls + \
+	[
 		'multibounce',
 	] + \
 		TF_c_d.controls + \
@@ -1186,7 +1220,6 @@ class luxrender_coating(declarative_property_group):
 		TF_c_vroughness.controls + \
 		TF_c_vexponent.controls
 		
-		
 	visibility = dict_merge(
 		{
 
@@ -1204,13 +1237,17 @@ class luxrender_coating(declarative_property_group):
 		TF_c_uroughness.visibility,
 		TF_c_uexponent.visibility,
 		TF_c_vroughness.visibility,
-		TF_c_vexponent.visibility	
+		TF_c_vexponent.visibility,
+		TF_c_normalmap.visibility,
+		TF_c_bumpmap.visibility
 	)
 
 	enabled = {}
 	enabled = texture_append_visibility(enabled, TF_c_vroughness, { 'use_coating': True, 'anisotropic': True })
 	enabled = texture_append_visibility(enabled, TF_c_vexponent,  { 'use_coating': True, 'anisotropic': True })
 	
+	visibility = texture_append_visibility(visibility, TF_c_normalmap,  { 'use_coating': True })
+	visibility = texture_append_visibility(visibility, TF_c_bumpmap,    { 'use_coating': True })
 	visibility = texture_append_visibility(visibility, TF_c_uroughness, { 'use_coating': True, 'use_exponent': False })
 	visibility = texture_append_visibility(visibility, TF_c_vroughness, { 'use_coating': True, 'use_exponent': False })
 	visibility = texture_append_visibility(visibility, TF_c_uexponent,  { 'use_coating': True, 'use_exponent': True })
@@ -1268,6 +1305,8 @@ class luxrender_coating(declarative_property_group):
 			'save_in_preset': True
 		},
 	] + \
+		TF_c_normalmap.get_properties() + \
+		TF_c_bumpmap.get_properties() + \
 		TF_c_d.get_properties() + \
 		TF_c_index.get_properties() + \
 		TC_c_Ka.get_properties() + \
@@ -1306,8 +1345,10 @@ class luxrender_coating(declarative_property_group):
 		
 		glossycoating_params.update( TF_c_uroughness.get_paramset(self) )
 		glossycoating_params.update( TF_c_vroughness.get_paramset(self) )
-				
-		return glossycoating_params	
+		
+		glossycoating_params.update( luxrender_bumpmap_export(self, lux_context, material, material.name + '_coating', TF_c_bumpmap, TF_c_normalmap) )
+		
+		return glossycoating_params
 
 @LuxRenderAddon.addon_register_class
 class luxrender_mat_carpaint(declarative_property_group):
@@ -1688,9 +1729,10 @@ class luxrender_mat_glossy(declarative_property_group):
 	alert = {}
 	
 	controls = [
-		'multibounce'
+		['multibounce', 'separable']
 	] + \
 		TC_Kd.controls + \
+		TF_sigma.controls + \
 		TF_d.controls + \
 		TC_Ka.controls + \
 	[
@@ -1724,7 +1766,8 @@ class luxrender_mat_glossy(declarative_property_group):
 		{
 			'alpha_source': { 'transparent': True }
 		},
-		TF_alpha.visibility
+		TF_alpha.visibility,
+		TF_sigma.visibility
 	)
 	
 	enabled = {}
@@ -1739,6 +1782,7 @@ class luxrender_mat_glossy(declarative_property_group):
 	visibility = texture_append_visibility(visibility, TC_Ks, { 'useior': False })
 	visibility = texture_append_visibility(visibility, TF_index, { 'useior': True })
 	visibility = texture_append_visibility(visibility, TF_alpha, { 'transparent': True, 'alpha_source': 'separate' })
+	visibility = texture_append_visibility(visibility, TF_sigma, { 'separable': True })
 	
 	properties = [
 		{
@@ -1752,6 +1796,14 @@ class luxrender_mat_glossy(declarative_property_group):
 			'name': 'Multibounce',
 			'description': 'Enable surface layer multibounce',
 			'default': False,
+			'save_in_preset': True
+		},
+		{
+			'type': 'bool',
+			'attr': 'separable',
+			'name': 'Separable',
+			'description': 'Use separable coating/base model',
+			'default': True,
 			'save_in_preset': True
 		},
 		{
@@ -1788,7 +1840,8 @@ class luxrender_mat_glossy(declarative_property_group):
 		TF_uexponent.get_properties() + \
 		TF_vroughness.get_properties() + \
 		TF_vexponent.get_properties() + \
-		TF_alpha.get_properties()
+		TF_alpha.get_properties() + \
+		TF_sigma.get_properties()
 			
 	for prop in properties:
 		if prop['attr'].startswith('uexponent'):
@@ -1805,6 +1858,8 @@ class luxrender_mat_glossy(declarative_property_group):
 		glossy_params = ParamSet()
 		
 		glossy_params.add_bool('multibounce', self.multibounce)
+		glossy_params.add_bool('separable', self.separable)
+
 		
 		if self.d_floatvalue > 0:
 			glossy_params.update( TF_d.get_paramset(self) )
@@ -1822,11 +1877,15 @@ class luxrender_mat_glossy(declarative_property_group):
 		glossy_params.update( TF_uroughness.get_paramset(self) )
 		glossy_params.update( TF_vroughness.get_paramset(self) )
 		
+		if self.separable:
+			glossy_params.update( TF_sigma.get_paramset(self) )
+		
 		return glossy_params
 	
 	def load_paramset(self, ps):
 		psi_accept = {
-			'multibounce': 'bool'
+			'multibounce': 'bool',
+			'separable':	'separable'
 		}
 		psi_accept_keys = psi_accept.keys()
 		for psi in ps:
@@ -2678,27 +2737,43 @@ class luxrender_mat_scatter(declarative_property_group):
 	controls = [
 	] + \
 		TC_Kd.controls + \
-		TF_g.controls
+	[
+		'g'
+	]
 	
 	visibility = dict_merge(
-		TC_Kd.visibility,
-		TF_g.visibility
+		TC_Kd.visibility
 	)
 	
 	properties = [
+		{
+			'type': 'float_vector',
+			'attr': 'g',
+			'name': 'Asymmetry',
+			'description': 'Scattering asymmetry RGB. -1 means backscatter, 0 is isotropic, 1 is forwards scattering',
+			'default': (0.0, 0.0, 0.0),
+			'min': -1.0,
+			'soft_min': -1.0,
+			'max': 1.0,
+			'soft_max': 1.0,
+			'precision': 4,
+			'save_in_preset': True
+		},
 	] + \
-		TC_Kd.get_properties() + \
-		TF_g.get_properties()
-	
+		TC_Kd.get_properties()
+			
 	def get_paramset(self, material):
 		scatter_params = ParamSet()
 		
 		scatter_params.update( TC_Kd.get_paramset(self) )
-		scatter_params.update( TF_g.get_paramset(self) )
-		
+		scatter_params.add_color('g', self.g)
+				
 		return scatter_params
 	
 	def load_paramset(self, ps):
+		psi_accept = {
+			'g': 'color'
+		}
 		TC_Kd.load_paramset(self, ps)
 		TF_g.load_paramset(self, ps)
 
@@ -3070,6 +3145,104 @@ class luxrender_mat_velvet(declarative_property_group):
 				setattr(self, psi['name'], psi['value'])
 		
 		TC_Kd.load_paramset(self, ps)
+		
+@LuxRenderAddon.addon_register_class
+class luxrender_mat_cloth(declarative_property_group):
+	ef_attach_to = ['luxrender_material']
+	alert = {}
+	
+	controls = [
+		'presetname'
+	] + \
+		TC_warp_Kd.controls + \
+		TC_warp_Ks.controls + \
+		TC_weft_Kd.controls + \
+		TC_weft_Ks.controls + \
+	[
+		['repeat_u', 'repeat_v']
+	]
+
+			
+	visibility = dict_merge(
+		TC_warp_Kd.visibility,
+		TC_warp_Ks.visibility,
+		TC_weft_Kd.visibility,
+		TC_weft_Ks.visibility
+	)
+	
+	properties = [
+		{
+			'type': 'enum',
+			'attr': 'presetname',
+			'name': 'Fabric Type',
+			'description': 'Fabric type to use',
+			'items': [
+				('denim', 'Denim', 'Denim'),
+				('silk_charmeuse', 'Silk Charmeuse', 'Silk charmeuse'),
+				('cotton_twill', 'Cotton Twill', 'Cotton twill'),
+				('wool_gabardine', 'Wool Gabardine', 'Wool Gabardine'),
+				('polyester_lining_cloth', 'Polyester Lining Cloth', 'Polyester lining cloth'),
+				('silk_shantung', 'Silk Shantung', 'Silk shantung'),
+			],
+			'default': 'denim',
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'repeat_u',
+			'name': 'Repeat U',
+			'default': 100.0,
+			'min': 1.0,
+			'soft_min': 1.0,
+			'max': 1000.0,
+			'soft_max': 1000.0,
+			'save_in_preset': True,
+		},
+		{
+			'type': 'float',
+			'attr': 'repeat_v',
+			'name': 'Repeat V',
+			'default': 100.0,
+			'min': 1.0,
+			'soft_min': 1.0,
+			'max': 1000.0,
+			'soft_max': 1000.0,
+			'save_in_preset': True,
+		},		
+	] + \
+		TC_warp_Kd.get_properties() + \
+		TC_warp_Ks.get_properties() + \
+		TC_weft_Kd.get_properties() + \
+		TC_weft_Ks.get_properties()
+	
+	def get_paramset(self, material):
+		cloth_params = ParamSet()
+		
+		cloth_params.add_string('presetname', self.presetname)
+		cloth_params.update( TC_warp_Kd.get_paramset(self) )
+		cloth_params.update( TC_warp_Ks.get_paramset(self) )
+		cloth_params.update( TC_weft_Kd.get_paramset(self) )
+		cloth_params.update( TC_weft_Ks.get_paramset(self) )
+		cloth_params.add_float('repeat_u', self.repeat_u)
+		cloth_params.add_float('repeat_v', self.repeat_v)
+		
+		return cloth_params
+	
+	def load_paramset(self, ps):
+		psi_accept = {
+			'presetname': 'string',
+			'repeat_u': 'float',
+			'repeat_v': 'float'
+		}
+		psi_accept_keys = psi_accept.keys()
+		for psi in ps:
+			if psi['name'] in psi_accept_keys and psi['type'].lower() == psi_accept[psi['name']]:
+				setattr(self, psi['name'], psi['value'])
+		
+		TC_warp_Kd.load_paramset(self, ps)
+		TC_warp_Ks.load_paramset(self, ps)
+		TC_weft_Kd.load_paramset(self, ps)
+		TC_weft_Ks.load_paramset(self, ps)
 
 def EmissionLightGroupParameter():
 	return [

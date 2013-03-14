@@ -70,7 +70,22 @@ class luxrender_world(declarative_property_group):
 		'default_exterior'
 	]
 	
-	properties = [] + \
+	properties = [
+				  {
+				  'attr': 'preview_object_size',
+				  'type': 'float',
+				  'name': 'Preview Object Size',
+				  'description': 'Real Size of the Preview Objects Edges or Sphere-Diameter',
+				  'min': 0.01,
+				  'soft_min': 0.01,
+				  'max': 100.0,
+				  'soft_max': 100.0,
+				  'step': 100,
+				  'default': 2.0,
+				  'subtype': 'DISTANCE',
+				  'unit': 'LENGTH',
+				  }
+				  ] + \
 		WorldVolumeParameter('default_interior', 'Default Interior') + \
 		WorldVolumeParameter('default_exterior', 'Default Exterior')
 
@@ -492,7 +507,8 @@ class luxrender_lightgroup_data(declarative_property_group):
 			'description': 'Overall gain for this light group',
 			'min': 0.0,
 			'soft_min': 0.0,
-			'default': 1.0
+			'default': 1.0,
+			'precision': 4
 		}
 	]
 

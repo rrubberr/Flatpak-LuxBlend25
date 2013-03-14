@@ -37,7 +37,7 @@ class ui_transform(bl_ui.properties_object.ObjectButtonsPanel, property_group_re
 	'''
 	
 	bl_label = 'LuxRender Transform Settings'
-	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
+	COMPAT_ENGINES = 'LUXRENDER_RENDER'
 	
 	@classmethod
 	def poll(cls, context):
@@ -55,7 +55,7 @@ class ui_camera_setting(bl_ui.properties_object.ObjectButtonsPanel, property_gro
 	'''
 	
 	bl_label = 'LuxRender Camera Settings'
-	COMPAT_ENGINES = {LuxRenderAddon.BL_IDNAME}
+	COMPAT_ENGINES = 'LUXRENDER_RENDER'
 	
 	@classmethod
 	def poll(cls, context):
@@ -78,7 +78,7 @@ class ui_object(bl_ui.properties_object.ObjectButtonsPanel, property_group_rende
 	@classmethod
 	def poll(cls, context):
 		engine = context.scene.render.engine
-		return context.object and context.object.type in ['MESH','SURFACE','FONT'] and (engine in cls.COMPAT_ENGINES)
+		return context.object and context.object.type in ['MESH','SURFACE','FONT','META'] and (engine in cls.COMPAT_ENGINES)
 	
 	display_property_groups = [
 		( ('object',), 'luxrender_object' )

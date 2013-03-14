@@ -42,7 +42,6 @@ from ..util import dict_merge, bdecode_string2file
 # Texture property group construction helpers
 #------------------------------------------------------------------------------ 
 
-
 def shorten_name(n):
 	return hashlib.md5(n.encode()).hexdigest()[:21] if len(n) > 21 else n
 
@@ -72,7 +71,7 @@ class TextureParameterBase(object):
 		if real_attr is not None:
 			self.real_attr = real_attr
 		self.texture_only = texture_only
-		
+
 		self.controls = self.get_controls()
 		self.visibility = self.get_visibility()
 		self.properties = self.get_properties()
@@ -326,7 +325,7 @@ class FloatTextureParameter(TextureParameterBase):
 	min					= 0.0
 	max					= 1.0
 	precision			= 6
-#	texture_only		= False
+	texture_only		= False
 	multiply_float		= False
 	ignore_unassigned	= False
 	subtype			= 'NONE'
@@ -654,21 +653,13 @@ tex_names = (
 	
 	('LuxRender Textures',
 	(
-		('band', 'Band'),
-		('bilerp', 'Bilerp'),
 		('brick', 'Brick'),
 		('checkerboard', 'Checkerboard'),
 		('dots', 'Dots'),
 		('fbm', 'FBM'),
-		('harlequin', 'Harlequin'),
 		('imagemap', 'Image Map'),
 		('normalmap', 'Normal Map'),
 		('marble', 'Marble'),
-		('mix', 'Mix'),
-		('multimix', 'Multi Mix'),
-		('scale', 'Scale'),
-		('uv', 'UV'),
-		('uvmask', 'UV Mask'),
 		('windy', 'Windy'),
 		('wrinkled', 'Wrinkled'),
 	)),
@@ -685,7 +676,6 @@ tex_names = (
 	
 	('Fresnel Textures',
 	(
-		('constant', 'Constant'),
 		('cauchy', 'Cauchy'),
 		('fresnelcolor', 'Fresnel Color'),
 		('fresnelname', 'Fresnel Name (preset/nk data)'),
@@ -693,6 +683,22 @@ tex_names = (
 		('sopra', 'Sopra'),
 		('luxpop', 'Luxpop'),
 	)),
+	
+	('Utility Textures',
+	(
+		('add', 'Add'),
+		('band', 'Band'),
+		('bilerp', 'Bilerp'),
+		('constant', 'Constant'),
+		('harlequin', 'Harlequin'),
+		('mix', 'Mix'),
+		('multimix', 'Multi Mix'),
+		('scale', 'Scale'),
+		('subtract', 'Subtract'),
+		('uv', 'UV'),
+		('uvmask', 'UV Mask'),
+	)),
+
 )
 
 @LuxRenderAddon.addon_register_class
@@ -872,6 +878,102 @@ for i in range(1, BAND_MAX_TEX+1):
 	TFR_BAND_ARRAY.append(
 		FresnelTextureParameter('tex%d'%i, 'tex%d'%i, default=1.0, min=-40.0, max=40.0)
 	)
+
+@LuxRenderAddon.addon_register_class
+class luxrender_tex_add(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
+	alert = {}
+	
+	controls = [
+		'variant',
+		
+	] + \
+	TF_tex1.controls + \
+	TFR_tex1.controls + \
+	TC_tex1.controls + \
+	TF_tex2.controls + \
+	TFR_tex2.controls + \
+	TC_tex2.controls
+	
+	# Visibility we do manually because of the variant switch
+	visibility = {
+		'tex1_colorlabel':			{ 'variant': 'color' },
+		'tex1_color': 				{ 'variant': 'color' },
+		'tex1_usecolortexture':		{ 'variant': 'color' },
+		'tex1_colortexture':		{ 'variant': 'color', 'tex1_usecolortexture': True },
+		'tex1_multiplycolor':		{ 'variant': 'color', 'tex1_usecolortexture': True },
+		
+		'tex1_usefloattexture':		{ 'variant': 'float' },
+		'tex1_floatvalue':			{ 'variant': 'float' },
+		'tex1_floattexture':		{ 'variant': 'float', 'tex1_usefloattexture': True },
+		'tex1_multiplyfloat':		{ 'variant': 'float', 'tex1_usefloattexture': True },
+		
+		'tex1_usefresneltexture':	{ 'variant': 'fresnel' },
+		'tex1_fresnelvalue':		{ 'variant': 'fresnel' },
+		'tex1_fresneltexture':		{ 'variant': 'fresnel', 'tex1_usefresneltexture': True },
+		'tex1_multiplyfresnel':		{ 'variant': 'fresnel', 'tex1_usefresneltexture': True },
+		
+		'tex2_colorlabel':			{ 'variant': 'color' },
+		'tex2_color': 				{ 'variant': 'color' },
+		'tex2_usecolortexture':		{ 'variant': 'color' },
+		'tex2_colortexture':		{ 'variant': 'color', 'tex2_usecolortexture': True },
+		'tex2_multiplycolor':		{ 'variant': 'color', 'tex2_usecolortexture': True },
+		
+		'tex2_usefloattexture':		{ 'variant': 'float' },
+		'tex2_floatvalue':			{ 'variant': 'float' },
+		'tex2_floattexture':		{ 'variant': 'float', 'tex2_usefloattexture': True },
+		'tex2_multiplyfloat':		{ 'variant': 'float', 'tex2_usefloattexture': True },
+		
+		'tex2_usefresneltexture':	{ 'variant': 'fresnel' },
+		'tex2_fresnelvalue':		{ 'variant': 'fresnel' },
+		'tex2_fresneltexture':		{ 'variant': 'fresnel', 'tex2_usefresneltexture': True },
+		'tex2_multiplyfresnel':		{ 'variant': 'fresnel', 'tex2_usefresneltexture': True },
+	}
+	
+	properties = [
+		{
+			'attr': 'variant',
+			'type': 'enum',
+			'name': 'Variant',
+			'items': [
+				('float', 'Greyscale', 'Output a floating point number'),
+				('color', 'Color', 'Output a color value'),
+				# ('fresnel', 'Fresnel', 'fresnel'),
+			],
+			'expand': True,
+			'save_in_preset': True
+		},
+	] + \
+	TF_tex1.properties + \
+	TFR_tex1.properties + \
+	TC_tex1.properties + \
+	TF_tex2.properties + \
+	TFR_tex2.properties + \
+	TC_tex2.properties
+	
+	def get_paramset(self, scene, texture):
+		add_params = ParamSet()
+		
+		if LuxManager.GetActive() is not None:
+			add_params.update(
+				add_texture_parameter(LuxManager.GetActive().lux_context, 'tex1', self.variant, self)
+			)
+			add_params.update(
+				add_texture_parameter(LuxManager.GetActive().lux_context, 'tex2', self.variant, self)
+			)
+		
+		return set(), add_params
+	
+	def load_paramset(self, variant, ps):
+		self.variant = variant if variant in ['float', 'color'] else 'float'
+		
+		if self.variant == 'float':
+			TF_tex1.load_paramset(self, ps)
+			TF_tex2.load_paramset(self, ps)
+		
+		if self.variant == 'color':
+			TC_tex1.load_paramset(self, ps)
+			TC_tex2.load_paramset(self, ps)
 
 @LuxRenderAddon.addon_register_class
 class luxrender_tex_band(declarative_property_group):
@@ -1630,7 +1732,7 @@ class luxrender_tex_checkerboard(declarative_property_group):
 			'attr': 'dimension',
 			'type': 'int',
 			'name': 'Dimensions',
-			'default': 2,
+			'default': 3,
 			'min': 2,
 			'soft_min': 2,
 			'max': 3,
@@ -1681,26 +1783,59 @@ class luxrender_tex_constant(declarative_property_group):
 	alert = {}
 	
 	controls = [
-		'value'
+		'variant',
+		'floatvalue',
+		'colorvalue',
+		'value' #Just use "value" for fresnel value to avoid breaking .blend files made from when this tex only had a fresnel mode
 	]
 	
-	visibility = {}
+	visibility = {
+		'floatvalue': { 'variant': 'float' },
+		'colorvalue': { 'variant': 'color' },
+		'value': 	  { 'variant': 'fresnel' },
+	}
 	
 	properties = [
 		{
-			'type': 'string',
 			'attr': 'variant',
-			'default': 'fresnel'
+			'type': 'enum',
+			'name': 'Variant',
+			'items': [
+				('float', 'Greyscale', 'Output a floating point number'),
+				('color', 'Color', 'Output a color value'),
+				('fresnel', 'Fresnel', 'Output optical data'),
+			],
+			'expand': True,
+			'save_in_preset': True
+		},
+		{
+			'attr': 'floatvalue',
+			'type': 'float',
+			'name': 'Value',
+			'default': 1.00,
+			'precision': 4,
+			'save_in_preset': True
+		},
+		{
+			'attr': 'colorvalue',
+			'type': 'float_vector',
+			'name': 'Value',
+			'default': (0.64, 0.64, 0.64),
+			'max': 10.0, #Blender's color picker does not behave will with unbounded colors
+			'soft_max': 10.0,
+			'min': -10.0,
+			'soft_min': -10.0,
+			'precision': 4,
+			'subtype': 'COLOR',
+			'save_in_preset': True
 		},
 		{
 			'attr': 'value',
 			'type': 'float',
 			'name': 'Value',
-			'default': 1.51,
-			'min': 0.0,
-			'soft_min': 0.0,
-			'max': 10.0,
-			'soft_max': 10.0,
+			'default': 1.52,
+			'min': 1.0, #Lux core does not properly handle lower fresnel values
+			'soft_min': 1.0,
 			'precision': 4,
 			'save_in_preset': True
 		},
@@ -1708,11 +1843,17 @@ class luxrender_tex_constant(declarative_property_group):
 	
 	def get_paramset(self, scene, texture):
 		constant_params = ParamSet()
-		constant_params.add_float('value', self.value)
+		if self.variant == 'float':
+			constant_params.add_float('value', self.floatvalue)
+		if self.variant == 'color':
+			constant_params.add_color('value', self.colorvalue)
+		if self.variant == 'fresnel':
+			constant_params.add_float('value', self.value)
 		
 		return set(), constant_params
 	
 	def load_paramset(self, variant, ps):
+		self.variant = variant if variant in ['float', 'color', 'fresnel',] else 'float'
 		psi_accept = {
 			'value': 'float',
 		}
@@ -3022,11 +3163,11 @@ class luxrender_tex_mix(declarative_property_group):
 			TF_tex1.load_paramset(self, ps)
 			TF_tex2.load_paramset(self, ps)
 			
-		if  variant == 'color':
+		if variant == 'color':
 			TC_tex1.load_paramset(self, ps)
 			TC_tex2.load_paramset(self, ps)
 		
-		if  variant == 'fresnel':
+		if variant == 'fresnel':
 			TFR_tex1.load_paramset(self, ps)
 			TFR_tex2.load_paramset(self, ps)
 
@@ -3349,6 +3490,102 @@ class luxrender_tex_scale(declarative_property_group):
 			)
 		
 		return set(), scale_params
+	
+	def load_paramset(self, variant, ps):
+		self.variant = variant if variant in ['float', 'color'] else 'float'
+		
+		if self.variant == 'float':
+			TF_tex1.load_paramset(self, ps)
+			TF_tex2.load_paramset(self, ps)
+		
+		if self.variant == 'color':
+			TC_tex1.load_paramset(self, ps)
+			TC_tex2.load_paramset(self, ps)
+
+@LuxRenderAddon.addon_register_class			
+class luxrender_tex_subtract(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
+	alert = {}
+	
+	controls = [
+		'variant',
+		
+	] + \
+	TF_tex1.controls + \
+	TFR_tex1.controls + \
+	TC_tex1.controls + \
+	TF_tex2.controls + \
+	TFR_tex2.controls + \
+	TC_tex2.controls
+	
+	# Visibility we do manually because of the variant switch
+	visibility = {
+		'tex1_colorlabel':			{ 'variant': 'color' },
+		'tex1_color': 				{ 'variant': 'color' },
+		'tex1_usecolortexture':		{ 'variant': 'color' },
+		'tex1_colortexture':		{ 'variant': 'color', 'tex1_usecolortexture': True },
+		'tex1_multiplycolor':		{ 'variant': 'color', 'tex1_usecolortexture': True },
+		
+		'tex1_usefloattexture':		{ 'variant': 'float' },
+		'tex1_floatvalue':			{ 'variant': 'float' },
+		'tex1_floattexture':		{ 'variant': 'float', 'tex1_usefloattexture': True },
+		'tex1_multiplyfloat':		{ 'variant': 'float', 'tex1_usefloattexture': True },
+		
+		'tex1_usefresneltexture':	{ 'variant': 'fresnel' },
+		'tex1_fresnelvalue':		{ 'variant': 'fresnel' },
+		'tex1_fresneltexture':		{ 'variant': 'fresnel', 'tex1_usefresneltexture': True },
+		'tex1_multiplyfresnel':		{ 'variant': 'fresnel', 'tex1_usefresneltexture': True },
+		
+		'tex2_colorlabel':			{ 'variant': 'color' },
+		'tex2_color': 				{ 'variant': 'color' },
+		'tex2_usecolortexture':		{ 'variant': 'color' },
+		'tex2_colortexture':		{ 'variant': 'color', 'tex2_usecolortexture': True },
+		'tex2_multiplycolor':		{ 'variant': 'color', 'tex2_usecolortexture': True },
+		
+		'tex2_usefloattexture':		{ 'variant': 'float' },
+		'tex2_floatvalue':			{ 'variant': 'float' },
+		'tex2_floattexture':		{ 'variant': 'float', 'tex2_usefloattexture': True },
+		'tex2_multiplyfloat':		{ 'variant': 'float', 'tex2_usefloattexture': True },
+		
+		'tex2_usefresneltexture':	{ 'variant': 'fresnel' },
+		'tex2_fresnelvalue':		{ 'variant': 'fresnel' },
+		'tex2_fresneltexture':		{ 'variant': 'fresnel', 'tex2_usefresneltexture': True },
+		'tex2_multiplyfresnel':		{ 'variant': 'fresnel', 'tex2_usefresneltexture': True },
+	}
+	
+	properties = [
+		{
+			'attr': 'variant',
+			'type': 'enum',
+			'name': 'Variant',
+			'items': [
+				('float', 'Greyscale', 'Output a floating point number'),
+				('color', 'Color', 'Output a color value'),
+				# ('fresnel', 'Fresnel', 'fresnel'),
+			],
+			'expand': True,
+			'save_in_preset': True
+		},
+	] + \
+	TF_tex1.properties + \
+	TFR_tex1.properties + \
+	TC_tex1.properties + \
+	TF_tex2.properties + \
+	TFR_tex2.properties + \
+	TC_tex2.properties
+	
+	def get_paramset(self, scene, texture):
+		subtract_params = ParamSet()
+		
+		if LuxManager.GetActive() is not None:
+			subtract_params.update(
+				add_texture_parameter(LuxManager.GetActive().lux_context, 'tex1', self.variant, self)
+			)
+			subtract_params.update(
+				add_texture_parameter(LuxManager.GetActive().lux_context, 'tex2', self.variant, self)
+			)
+		
+		return set(), subtract_params
 	
 	def load_paramset(self, variant, ps):
 		self.variant = variant if variant in ['float', 'color'] else 'float'

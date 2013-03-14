@@ -33,6 +33,7 @@ from extensions_framework import util as efutil
 from ..outputs.file_api import Files
 from ..export import ParamSet, get_worldscale, matrix_to_list
 from ..export import fix_matrix_order
+from ..export import is_obj_visible
 
 def attr_light(scene, lux_context, light, name, group, light_type, params, transform=None, portals=[]):
 	'''
@@ -62,9 +63,9 @@ def attr_light(scene, lux_context, light, name, group, light_type, params, trans
 		lux_context.rotate(180, 0,1,0)
 	
 	lux_context.lightGroup(group, [])
+
+	mirrorTransform = light.type == 'HEMI'
 	
-	mirrorTransform = light.type == 'HEMI' and light.luxrender_lamp.luxrender_lamp_hemi.type in ('infinite', 'environment')
-#Aldo tirou	
 	if mirrorTransform:
 		# correct worldmap orientation
 		lux_context.transformBegin(file=Files.MAIN)
@@ -76,7 +77,7 @@ def attr_light(scene, lux_context, light, name, group, light_type, params, trans
 		lux_context.exterior(scene.luxrender_world.default_exterior_volume)
 	
 	lux_context.lightSource(light_type, params)
-#Aldo tirou
+
 	if mirrorTransform:
 		lux_context.transformEnd()
 	
@@ -133,18 +134,26 @@ def exportLight(scene, lux_context, ob, matrix, portals = []):
 	if light.type == 'SUN':
 		invmatrix = matrix.inverted()
 		invmatrix = fix_matrix_order(invmatrix) # matrix indexing hack
-		if light.luxrender_lamp.luxrender_lamp_sun.sunsky_type != 'sky': light_params.add_vector('sundir', (invmatrix[2][0], invmatrix[2][1], invmatrix[2][2]))
-		attr_light(scene, lux_context, light, ob.name, light_group, light.luxrender_lamp.luxrender_lamp_sun.sunsky_type, light_params, portals=portals)
+		sunsky_type = light.luxrender_lamp.luxrender_lamp_sun.sunsky_type
+		legacy_sky = light.luxrender_lamp.luxrender_lamp_sun.legacy_sky
+		if light.luxrender_lamp.luxrender_lamp_sun.sunsky_type in ['sun', 'sunsky']:
+			light_params.add_vector('sundir', (invmatrix[2][0], invmatrix[2][1], invmatrix[2][2]))
+		if light.luxrender_lamp.luxrender_lamp_sun.sunsky_type == 'distant':
+			light_params.add_point('from', (invmatrix[2][0], invmatrix[2][1], invmatrix[2][2]))
+			light_params.add_point('to', (0,0,0)) #This combo will produce the same result as sundir
+		if not legacy_sky and sunsky_type not in ['sun', 'distant']: # new skymodel
+			if sunsky_type == 'sky':
+				attr_light(scene, lux_context, light, ob.name, light_group, 'sky2', light_params, portals=portals)
+			elif sunsky_type == 'sunsky':
+				attr_light(scene, lux_context, light, ob.name, light_group, 'sunsky2', light_params, portals=portals)
+		else: # Use light definition itself, old sky model, sun only, or distant, as needed.
+			attr_light(scene, lux_context, light, ob.name, light_group, sunsky_type, light_params, portals=portals)
 		return True
 	
 	if light.type == 'HEMI':
 		hemi_type = light.luxrender_lamp.luxrender_lamp_hemi.type
-		if hemi_type == 'distant':
-			light_params.add_point('from', (0,0,0))
-			light_params.add_point('to', (0,0,-1))
-
-		elif hemi_type == 'infinite':
-			hemi_type = light.luxrender_lamp.luxrender_lamp_hemi.sampling_method	
+		if hemi_type == 'infinite':
+			hemi_type = 'infinitesample' if light.luxrender_lamp.luxrender_lamp_hemi.hdri_infinitesample else 'infinite'
 
 		else: # hemi_type == 'environment':
 			pass
@@ -306,7 +315,7 @@ def lights(lux_context, geometry_scene, visibility_scene, mesh_definitions):
 	# Then iterate for lights
 	for ob in geometry_scene.objects:
 		
-		if not ob.is_visible(visibility_scene) or ob.hide_render:
+		if not is_obj_visible(visibility_scene, ob) or ob.hide_render:
 			continue
 		
 		# skip dupli (child) objects when they are not lamps

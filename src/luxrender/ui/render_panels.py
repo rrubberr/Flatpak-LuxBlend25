@@ -58,7 +58,11 @@ class layers(render_panel):
 		rd = scene.render
 
 		row = layout.row()
-		row.template_list(rd, "layers", rd.layers, "active_index", rows=2)
+		if bpy.app.version < (2, 65, 3 ):
+			row.template_list(rd, "layers", rd.layers, "active_index", rows=2)
+		else:
+			row.template_list("RENDER_UL_renderlayers", "", rd, "layers", rd.layers, "active_index", rows=2)
+
 
 		col = row.column(align=True)
 		col.operator("scene.render_layer_add", icon='ZOOMIN', text="")
@@ -77,7 +81,11 @@ class layers(render_panel):
 		col.prop(scene, "layers", text="Scene")
 		col.label(text="")
 		col = split.column()
-		        
+		col.prop(rl, "layers", text="Layer")
+		
+		split = layout.split()
+
+		col = split.column()
 		col.label(text="Passes:")
 		col.prop(rl, "use_pass_combined")
 		col.prop(rl, "use_pass_z")
@@ -135,18 +143,21 @@ class engine(render_panel):
 	'''
 	
 	bl_label = 'LuxRender Engine Configuration'
+	bl_options = {'DEFAULT_CLOSED'}
 	
 	display_property_groups = [
 		( ('scene',), 'luxrender_engine' )
 	]
 	
 	def draw(self, context):
-		row = self.layout.row(align=True)
-		row.menu("LUXRENDER_MT_presets_engine", text=bpy.types.LUXRENDER_MT_presets_engine.bl_label)
-		row.operator("luxrender.preset_engine_add", text="", icon="ZOOMIN")
-		row.operator("luxrender.preset_engine_add", text="", icon="ZOOMOUT").remove_active = True
-		
 		super().draw(context)
+		
+		row = self.layout.row(align=True)
+		rd = context.scene.render
+		if bpy.app.version < (2, 63, 19 ):
+			row.prop(rd, "use_color_management")
+			if rd.use_color_management == True:
+				row.prop(rd, "use_color_unpremultiply")
 		
 @LuxRenderAddon.addon_register_class
 class render_settings(render_panel):
@@ -165,6 +176,17 @@ class render_settings(render_panel):
 		( ('scene',), 'luxrender_accelerator' ),
 		( ('scene',), 'luxrender_halt' ),
 	]
+	
+	def draw(self, context):
+		row = self.layout.row(align=True)
+		rd = context.scene.render
+		split = self.layout.split()
+		row.menu("LUXRENDER_MT_presets_engine", text=bpy.types.LUXRENDER_MT_presets_engine.bl_label)
+		row.operator("luxrender.preset_engine_add", text="", icon="ZOOMIN")
+		row.operator("luxrender.preset_engine_add", text="", icon="ZOOMOUT").remove_active = True
+		
+		super().draw(context)
+	
 	
 @LuxRenderAddon.addon_register_class
 class testing(render_panel):

@@ -42,15 +42,22 @@ class luxrender_volumeintegrator(declarative_property_group):
 	ef_attach_to = ['Scene']
 	
 	controls = [
+		'spacer',
 		'volumeintegrator',
 		'stepsize',
 	]
 	
 	visibility = {
-		'stepsize':							{ 'advanced': True },
+		'spacer':	{ 'advanced': True },
+		'stepsize':	{ 'advanced': True },
 	}
 	
 	properties = [
+		{
+			'type': 'text',
+			'attr': 'spacer',
+			'name': '', #This param just draws some blank space in the panel
+		},
 		{
 			'type': 'enum',
 			'attr': 'volumeintegrator',
@@ -58,10 +65,10 @@ class luxrender_volumeintegrator(declarative_property_group):
 			'description': 'Integrator used to calculate volumetric effects',
 			'default': 'multi',
 			'items': [
-				('emission', 'Emission', 'Calculate absorption and light-emission only'),
-				('single', 'Single', 'Calculate single scattering as well as absorption and light-emission'),
-				('multi', 'Multi', 'Calculate all volumetric effects, including multiple scattering, absorption, and light-emission'),
-				('none', 'None', 'Experimental, NoneScattering volumetric effects'),
+				('emission', 'Emission', 'Calculate volumetric absorption'),
+				('single', 'Single', 'Calculate single scattering and absorption'),
+				('multi', 'Multi', 'Calculate all volumetric effects, including multiple scattering and absorption'),
+				('none', 'None', 'Experimental/Debugging integrator, does not calculate any scattering effects'),
 			],
 			'save_in_preset': True
 		},
@@ -120,10 +127,13 @@ class luxrender_integrator(declarative_property_group):
 	controls = [
 		'advanced',
 		
+		'lightstrategy',
+		
 		# bidir +
+		'lightpathstrategy',
 		['eyedepth', 'lightdepth'],
 		['eyerrthreshold', 'lightrrthreshold'],
-		'lightpathstrategy',
+		'lightraycount',
 		
 		# dl +
 		'maxdepth',
@@ -196,7 +206,7 @@ class luxrender_integrator(declarative_property_group):
 		'mindist',
 		
 		#sppm
-		'photonperpass',
+		['hitpointperpass', 'photonperpass'],
 		['startradius', 'alpha'],
 		['directlightsampling', 'includeenvironment'],
 		#sppm advanced
@@ -209,116 +219,116 @@ class luxrender_integrator(declarative_property_group):
 		'useproba',
 
 				
-		# path
+		# path + bidir
 		'shadowraycount',
-		
-		'lightstrategy'
-
 	]
 	
 	visibility = {
 		# bidir +
-		'eyedepth':							{ 'surfaceintegrator': 'bidirectional' },
-		'lightdepth':						{ 'surfaceintegrator': 'bidirectional' },
+		'eyedepth':					{ 'surfaceintegrator': 'bidirectional' },
+		'lightdepth':					{ 'surfaceintegrator': 'bidirectional' },
 		'lightpathstrategy':				{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
-		'eyerrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
-		'lightrrthreshold':					{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
-		'lightstrategy':					{ 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'bidirectional', 'arpath', 'ardirectlighting', 'envpath', 'depthfield'])},
+		'eyerrthreshold':				{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
+		'lightrrthreshold':				{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
+		'lightstrategy':				{ 'surfaceintegrator': O(['directlighting', 'exphotonmap', 'igi', 'path',  'distributedpath', 'bidirectional', 'arpath', 'ardirectlighting', 'envpath', 'depthfield'])},
+		'lightraycount':				{ 'advanced': True, 'surfaceintegrator': 'bidirectional' },
 		
 		# dl +
-		'maxdepth':							{ 'surfaceintegrator': O(['directlighting', 'igi', 'path', 'arpath', 'ardirectlighting', 'envpath', 'depthfield']) },
+		'maxdepth':					{ 'surfaceintegrator': O(['directlighting', 'igi', 'path', 'arpath', 'ardirectlighting', 'envpath', 'depthfield']) },
+		'shadowraycount':				{ 'advanced': True, 'surfaceintegrator': O(['exphotonmap', 'directlighting', 'bidirectional', 'path', 'arpath', 'envpath']) },
 		
 		# dp
-		'lbl_direct':						{ 'surfaceintegrator': 'distributedpath' },
-		'directsampleall':					{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'directsamples':					{ 'surfaceintegrator': 'distributedpath' },
-		'directdiffuse':					{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'directglossy':						{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'lbl_indirect':						{ 'surfaceintegrator': 'distributedpath' },
+		'lbl_direct':					{ 'surfaceintegrator': 'distributedpath' },
+		'directsampleall':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
+		'directsamples':				{ 'surfaceintegrator': 'distributedpath' },
+		'directdiffuse':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
+		'directglossy':					{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
+		'lbl_indirect':					{ 'surfaceintegrator': 'distributedpath' },
 		'indirectsampleall':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'indirectsamples':					{ 'surfaceintegrator': 'distributedpath' },
-		'indirectdiffuse':					{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'indirectglossy':					{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'lbl_diffuse':						{ 'surfaceintegrator': 'distributedpath' },
+		'indirectsamples':				{ 'surfaceintegrator': 'distributedpath' },
+		'indirectdiffuse':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
+		'indirectglossy':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
+		'lbl_diffuse':					{ 'surfaceintegrator': 'distributedpath' },
 		'diffusereflectdepth':				{ 'surfaceintegrator': 'distributedpath' },
 		'diffusereflectsamples':			{ 'surfaceintegrator': 'distributedpath' },
 		'diffuserefractdepth':				{ 'surfaceintegrator': 'distributedpath' },
 		'diffuserefractsamples':			{ 'surfaceintegrator': 'distributedpath' },
-		'lbl_glossy':						{ 'surfaceintegrator': 'distributedpath' },
+		'lbl_glossy':					{ 'surfaceintegrator': 'distributedpath' },
 		'glossyreflectdepth':				{ 'surfaceintegrator': 'distributedpath' },
 		'glossyreflectsamples':				{ 'surfaceintegrator': 'distributedpath' },
 		'glossyrefractdepth':				{ 'surfaceintegrator': 'distributedpath' },
 		'glossyrefractsamples':				{ 'surfaceintegrator': 'distributedpath' },
-		'lbl_specular':						{ 'surfaceintegrator': 'distributedpath' },
+		'lbl_specular':					{ 'surfaceintegrator': 'distributedpath' },
 		'specularreflectdepth':				{ 'surfaceintegrator': 'distributedpath' },
 		'specularrefractdepth':				{ 'surfaceintegrator': 'distributedpath' },
-		'lbl_rejection':					{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
+		'lbl_rejection':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
 		'diffusereflectreject':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'diffusereflectreject_threshold':	{ 'advanced': True, 'diffusereflectreject': True, 'surfaceintegrator': 'distributedpath' },
+		'diffusereflectreject_threshold':		{ 'advanced': True, 'diffusereflectreject': True, 'surfaceintegrator': 'distributedpath' },
 		'diffuserefractreject':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'diffuserefractreject_threshold':	{ 'advanced': True, 'diffuserefractreject': True, 'surfaceintegrator': 'distributedpath' },
+		'diffuserefractreject_threshold':		{ 'advanced': True, 'diffuserefractreject': True, 'surfaceintegrator': 'distributedpath' },
 		'glossyreflectreject':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'glossyreflectreject_threshold':	{ 'advanced': True, 'glossyreflectreject': True, 'surfaceintegrator': 'distributedpath' },
+		'glossyreflectreject_threshold':		{ 'advanced': True, 'glossyreflectreject': True, 'surfaceintegrator': 'distributedpath' },
 		'glossyrefractreject':				{ 'advanced': True, 'surfaceintegrator': 'distributedpath' },
-		'glossyrefractreject_threshold':	{ 'advanced': True, 'glossyrefractreject': True, 'surfaceintegrator': 'distributedpath' },
+		'glossyrefractreject_threshold':		{ 'advanced': True, 'glossyrefractreject': True, 'surfaceintegrator': 'distributedpath' },
 		
 		# expm
-		'maxeyedepth':						{ 'surfaceintegrator': O(['exphotonmap', 'sppm']) },
-		'maxphotondepth':					{ 'surfaceintegrator': O(['exphotonmap', 'sppm']) },
-		'directphotons':					{ 'surfaceintegrator': 'exphotonmap' },
-		'causticphotons':					{ 'surfaceintegrator': 'exphotonmap' },
-		'indirectphotons':					{ 'surfaceintegrator': 'exphotonmap' },
-		'radiancephotons':					{ 'surfaceintegrator': 'exphotonmap' },
-		'nphotonsused':						{ 'surfaceintegrator': 'exphotonmap' },
-		'maxphotondist':					{ 'surfaceintegrator': 'exphotonmap' },
-		'renderingmode':					{ 'surfaceintegrator': 'exphotonmap' },
-		'finalgather':						{ 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
+		'maxeyedepth':					{ 'surfaceintegrator': O(['exphotonmap', 'sppm']) },
+		'maxphotondepth':				{ 'surfaceintegrator': O(['exphotonmap', 'sppm']) },
+		'directphotons':				{ 'surfaceintegrator': 'exphotonmap' },
+		'causticphotons':				{ 'surfaceintegrator': 'exphotonmap' },
+		'indirectphotons':				{ 'surfaceintegrator': 'exphotonmap' },
+		'radiancephotons':				{ 'surfaceintegrator': 'exphotonmap' },
+		'nphotonsused':					{ 'surfaceintegrator': 'exphotonmap' },
+		'maxphotondist':				{ 'surfaceintegrator': 'exphotonmap' },
+		'renderingmode':				{ 'surfaceintegrator': 'exphotonmap' },
+		'finalgather':					{ 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
 		'finalgathersamples':				{ 'finalgather': True, 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
-		'gatherangle':						{ 'finalgather': True, 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
-		'rrstrategy':						{ 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath', 'envpath']) },
-		'rrcontinueprob':					{ 'rrstrategy': 'probability', 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath', 'envpath']) },
+		'gatherangle':					{ 'finalgather': True, 'renderingmode': 'directlighting', 'surfaceintegrator': 'exphotonmap' },
+		'rrstrategy':					{ 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath', 'envpath']) },
+		'rrcontinueprob':				{ 'rrstrategy': 'probability', 'surfaceintegrator': O(['exphotonmap', 'path', 'arpath', 'envpath']) },
 		'distancethreshold':				{ 'renderingmode': 'path', 'surfaceintegrator': 'exphotonmap' },
 		# expm advanced
-		'photonmapsfile':					{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
+		'photonmapsfile':				{ 'advanced': True, 'surfaceintegrator': 'exphotonmap' },
 		
 		# expm debug
-		'debugmode':						{ 'surfaceintegrator': 'exphotonmap' },
-		'dbg_enabledirect':					{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
+		'debugmode':					{ 'surfaceintegrator': 'exphotonmap' },
+		'dbg_enabledirect':				{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
 		'dbg_enableradiancemap':			{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
 		'dbg_enableindircaustic':			{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
 		'dbg_enableindirdiffuse':			{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
 		'dbg_enableindirspecular':			{ 'debugmode': True, 'surfaceintegrator': 'exphotonmap' },
 		
 		# igi
-		'nsets':							{ 'surfaceintegrator': 'igi' },
-		'nlights':							{ 'surfaceintegrator': 'igi' },
-		'mindist':							{ 'surfaceintegrator': 'igi' },
+		'nsets':					{ 'surfaceintegrator': 'igi' },
+		'nlights':					{ 'surfaceintegrator': 'igi' },
+		'mindist':					{ 'surfaceintegrator': 'igi' },
 		
 		# path
-		'shadowraycount':					{ 'advanced': True, 'surfaceintegrator': O(['path', 'arpath', 'envpath']) },
-		
-		# sppm
-		'photonperpass':					{ 'surfaceintegrator': 'sppm' },
-		'startk':							{ 'surfaceintegrator': 'sppm' },
-		'alpha':							{ 'surfaceintegrator': 'sppm' },
-		'startradius':						{ 'surfaceintegrator': 'sppm' },
 		'includeenvironment':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath', 'envpath']) },
 		'directlightsampling':				{ 'surfaceintegrator': O(['sppm', 'path', 'arpath', 'envpath']) },
 		
+		# sppm
+		'photonperpass':				{ 'surfaceintegrator': 'sppm' },
+		'hitpointperpass':				{ 'surfaceintegrator': 'sppm' },
+		'startk':					{ 'surfaceintegrator': 'sppm' },
+		'alpha':					{ 'surfaceintegrator': 'sppm' },
+		'startradius':					{ 'surfaceintegrator': 'sppm' },
+
 		# sppm advanced
 		'storeglossy':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
-		'wavelengthstratificationpasses': 	{ 'advanced': True, 'surfaceintegrator': 'sppm' },
-		'lookupaccel':						{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'wavelengthstratificationpasses': 		{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'lookupaccel':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
 		'parallelhashgridspare':			{ 'advanced': True, 'lookupaccel': 'parallelhashgrid', 'surfaceintegrator': 'sppm' },
-		'pixelsampler':						{ 'advanced': True, 'surfaceintegrator': 'sppm' },
-		'photonsampler':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
-		'useproba':						{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'pixelsampler':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'photonsampler':				{ 'advanced': True, 'surfaceintegrator': 'sppm' },
+		'useproba':					{ 'advanced': True, 'surfaceintegrator': 'sppm' },
 	}
 	
 	alert = {}
 	
 	properties = [
-		#This parameter is fed to the "integrator' context, and holds the actual surface integrator setting. The user does not interact with it directly, and it does not appear in the panels
+		#This parameter is fed to the "integrator' context, and holds the actual surface integrator setting. The user does not interact with it directly, and it does not appear in the UI.
+		#It is set via the Rendering Mode menu and update_rendering_mode function
 		{
 			'type': 'enum', 
 			'attr': 'surfaceintegrator',
@@ -355,15 +365,15 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'enum',
 			'attr': 'lightstrategy',
 			'name': 'Light Strategy',
-			'description': 'Light Sampling Strategy',
+			'description': 'Light sampling strategy',
 			'default': 'auto',
 			'items': [
-				('auto', 'Auto', 'Automatically choose between one or all depending on number of lights'),
-				('one', 'One', 'Each ray samples a single lamp, chosen at random'),
-				('all', 'All', 'Each ray samples all lamps'),
+				('auto', 'Auto', 'Automatically choose between one uniform or all uniform depending on the number of lights'),
+				('one', 'One Uniform', 'Each ray samples a single lamp, chosen at random'),
+				('all', 'All Uniform', 'Each ray samples all lamps'),
 				('importance', 'Importance', 'Each ray samples a single lamp chosen by importance value'),
 				('powerimp', 'Power', 'Each ray samples a single lamp, chosen by importance value and output power'),
-				('allpowerimp', 'All Power', 'Each ray samples all lamps at least once, extra samples are given to lamps with higher importance and output power'),
+				('allpowerimp', 'All Power', 'Each ray starts a number of samples equal to the number of lamps, and distributes them according to importance and output power'),
 				('logpowerimp', 'Log Power', 'Each ray samples a single lamp, chosen by importance value and logarithmic output power')
 			],
 			#'update': lambda s,c: check_renderer_settings(c),
@@ -372,7 +382,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int', 
 			'attr': 'eyedepth',
-			'name': 'Eye Depth',
+			'name': 'Max Eye Depth',
 			'description': 'Max recursion depth for ray casting from eye',
 			'default': 48,
 			'min': 1,
@@ -382,7 +392,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int', 
 			'attr': 'lightdepth',
-			'name': 'Light Depth',
+			'name': 'Max Light Depth',
 			'description': 'Max recursion depth for ray casting from light',
 			'default': 48,
 			'min': 1,
@@ -423,16 +433,16 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'enum',
 			'attr': 'lightpathstrategy',
 			'name': 'Light Path Strategy',
-			'description': 'Strategy for choosing which lamp to start a light path from',
+			'description': 'Strategy for choosing which lamp(s) to start light paths from',
 			'default': 'auto',
 			'items': [
-				('auto', 'Auto', 'Automatically choose between one or all depending on number of lamps'),
-				('one', 'One', 'A light path is started from a single lamp'),
-				('all', 'All', 'All lamps start a light path (can be slow)'),
+				('auto', 'Auto', 'Automatically choose between one uniform or all uniform depending on the number of lights'),
+				('one', 'One Uniform', 'A light path is started from a single lamp, chosen at random'),
+				('all', 'All Uniform', 'All lamps start a light path (this can be slow)'),
 				('importance', 'Importance', 'A single light path is started from a lamp chosen by importance value'),
 				('powerimp', 'Power', 'A single light path is started from a lamp chosen by importance value and output power'),
-				('allpowerimp', 'All Power', 'Each ray samples all lamps at least once, extra samples are given to lamps with higher importance and output power'),
-				('logpowerimp', 'Log Power', 'A single light path is started from a lamp chosen by importance value and output power')
+				('allpowerimp', 'All Power', 'Starts a number of light paths equal to the number of lamps, the paths will be launched from lamps chosen by importance value and output power'),
+				('logpowerimp', 'Log Power', 'A single light path is started from a lamp chosen by importance value and logarithmic output power')
 			],
 			'save_in_preset': True
 		},
@@ -440,7 +450,20 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'shadowraycount',
 			'name': 'Shadow Ray Count',
+			'description': 'Multiplier for the number of shadow rays traced: higher values are slower overall, but can speed convergence of direct light and soft shadows',
 			'default': 1,
+			'min': 1,
+			'max': 1024,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'lightraycount',
+			'name': 'Light Ray Count',
+			'description': 'Multiplier for the number of light paths traced: higher values can speed convergence of indirect light and caustics at the expense of reflections and refractions',
+			'default': 1,
+			'min': 1,
+			'max': 1024,
 			'save_in_preset': True
 		},
 		{
@@ -905,8 +928,16 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'int',
 			'attr': 'photonperpass',
 			'name': 'Photons per pass',
-			'description': 'Number of photons to gather before going on to next pass',
+			'description': 'Number of photons to gather before going on to the next pass',
 			'default': 1000000,
+			'save_in_preset': True
+		},
+		{
+			'type': 'int',
+			'attr': 'hitpointperpass',
+			'name': 'Hit points per pass',
+			'description': 'Number of hit points to store per eye-pass before moving on. Lower values can decrease memory useage at the cost of some performance. 0=one hitpoint per pixel',
+			'default': 0,
 			'save_in_preset': True
 		},
 		{
@@ -918,15 +949,15 @@ class luxrender_integrator(declarative_property_group):
 			'min': 0.0001,
 			'save_in_preset': True
 		},
-		{
-			'type': 'int',
-			'attr': 'startk',
-			'name': 'Starting K',
-			'description': 'Adjust starting photon radius to get this many photons. Higher values clear faster but are less accurate. 0=use initial radius',
-			'default': 30,
-			'min': 0,
-			'save_in_preset': True
-		},
+# 		{
+# 			'type': 'int',
+# 			'attr': 'startk',
+# 			'name': 'Starting K',
+# 			'description': 'Adjust starting photon radius to get this many photons. Higher values clear faster but are less accurate. 0=use initial radius',
+# 			'default': 30,
+# 			'min': 0,
+# 			'save_in_preset': True
+# 		},
 		{
 			'type': 'float',
 			'attr': 'alpha',
@@ -1007,7 +1038,7 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'bool',
 			'attr': 'useproba',
 			'name': 'Use PPM Probability',
-			'description': 'Use PPM probability for search radius reduction.',
+			'description': 'Use PPM probability for search radius reduction',
 			'default': True,
 			'save_in_preset': True
 		},
@@ -1022,19 +1053,28 @@ class luxrender_integrator(declarative_property_group):
 		
 		params = ParamSet()
 		
-		#Check to make sure all settings are correct when hybrid is selected. Keep this up to date as hybrid gets new options in 0.9
+		#Check to make sure all settings are correct when hybrid is selected. Keep this up to date as hybrid gets new options in later versions
 		
 		if scene.luxrender_rendermode.renderer == 'hybrid':
 			#Check each integrator seperately so they don't mess with each other!
 
 			if self.surfaceintegrator == 'bidirectional':
 				if self.lightstrategy != ('one'):
-					LuxLog('Incompatible lightstrategy for Hybrid Bidir (use "one").')
-					raise Exception('Incompatible render settings')
+					LuxLog('Incompatible light strategy for Hybrid Bidir (switching to "one uniform").')
+#					raise Exception('Incompatible render settings')
+			
+		hybrid_compat = scene.luxrender_rendermode.renderer == 'hybrid' and self.surfaceintegrator == 'bidirectional'
 		
 		#Exphotonmap is not compatible with light groups, warn here instead of light export code so this warning only shows once instead of per lamp
 		if scene.luxrender_lightgroups.ignore == False and self.surfaceintegrator == 'exphotonmap':
 			LuxLog('WARNING: Ex-Photon Map does not support light groups, exporting all lights in the default group.')
+			
+		#Warn about multi volume integrator and homogeneous exterior
+		if scene.luxrender_world.default_exterior_volume != '':
+			ext_v = scene.luxrender_world.default_exterior_volume
+			for volume in scene.luxrender_volumes.volumes:
+				if volume.name == ext_v and volume.type == 'homogeneous' and scene.luxrender_volumeintegrator.volumeintegrator == 'multi':
+					LuxLog('Warning: Default exterior volume is homogeneous, and the "multi" volume integrator is selected! Performance may be poor, consider using the "single" volume integrator instead')
 				
 		#Safety checks for settings end here
 		
@@ -1042,25 +1082,34 @@ class luxrender_integrator(declarative_property_group):
 			params.add_integer('eyedepth', self.eyedepth) \
 				  .add_integer('lightdepth', self.lightdepth)
 			if not self.advanced:
-				params.add_string('lightpathstrategy', self.lightstrategy) #Export the regular light strategy setting for lightpath strat when in non-advanced mode, advanced mode allows them to be set independently
+				params.add_string('lightpathstrategy', self.lightstrategy if not hybrid_compat else 'one') #Export the regular light strategy setting for lightpath strat when in non-advanced mode, advanced mode allows them to be set independently
 			if self.advanced:
 				params.add_float('eyerrthreshold', self.eyerrthreshold) \
 					  .add_float('lightrrthreshold', self.lightrrthreshold) \
-					  .add_string('lightpathstrategy', self.lightpathstrategy)
+					  .add_string('lightpathstrategy', self.lightpathstrategy if not hybrid_compat else 'one') \
+					  .add_integer('shadowraycount', self.shadowraycount) \
+					  .add_integer('lightraycount', self.lightraycount)
 		
 		if self.surfaceintegrator == 'directlighting':
-			params.add_integer('maxdepth', self.maxdepth) \
+			params.add_integer('maxdepth', self.maxdepth)
+			if self.advanced:
+				params.add_integer('shadowraycount', self.shadowraycount)
 
 		if self.surfaceintegrator == 'ardirectlighting':
-			params.add_integer('maxdepth', self.maxdepth) \
+			params.add_integer('maxdepth', self.maxdepth)
+			if self.advanced:
+				params.add_integer('shadowraycount', self.shadowraycount)
 
 		if self.surfaceintegrator == 'depthfield':
-			params.add_integer('maxdepth', self.maxdepth) \
+			params.add_integer('maxdepth', self.maxdepth)
+			if self.advanced:
+				params.add_integer('shadowraycount', self.shadowraycount)
 			
 		if self.surfaceintegrator == 'sppm':
 			params.add_integer('maxeyedepth', self.maxeyedepth) \
 				  .add_integer('maxphotondepth', self.maxphotondepth) \
 				  .add_integer('photonperpass', self.photonperpass) \
+				  .add_integer('hitpointperpass', self.hitpointperpass) \
  				  .add_float('startradius', self.startradius) \
 				  .add_float('alpha', self.alpha) \
 				  .add_bool('includeenvironment', self.includeenvironment) \
@@ -1121,7 +1170,8 @@ class luxrender_integrator(declarative_property_group):
 				  #Export maxeyedepth as maxdepth, since that is actually the switch the scene file accepts
 			if self.advanced:
 				params.add_float('distancethreshold', self.distancethreshold) \
-					  .add_string('photonmapsfile', self.photonmapsfile) 
+					  .add_string('photonmapsfile', self.photonmapsfile) \
+					  .add_integer('shadowraycount', self.shadowraycount)
 			if self.debugmode:
 				params.add_bool('dbg_enabledirect', self.dbg_enabledirect) \
 					  .add_bool('dbg_enableradiancemap', self.dbg_enableradiancemap) \
@@ -1140,26 +1190,29 @@ class luxrender_integrator(declarative_property_group):
 				  .add_float('rrcontinueprob', self.rrcontinueprob) \
 				  .add_string('rrstrategy', self.rrstrategy) \
 				  .add_bool('includeenvironment', self.includeenvironment) \
-				  .add_bool('directlightsampling', self.directlightsampling) \
-				  .add_integer('shadowraycount', self.shadowraycount)
+				  .add_bool('directlightsampling', self.directlightsampling)
+			if self.advanced:
+				params.add_integer('shadowraycount', self.shadowraycount)
 
 		if self.surfaceintegrator == 'arpath':
 			params.add_integer('maxdepth', self.maxdepth) \
 				  .add_float('rrcontinueprob', self.rrcontinueprob) \
 				  .add_string('rrstrategy', self.rrstrategy) \
 				  .add_bool('includeenvironment', self.includeenvironment) \
-				  .add_bool('directlightsampling', self.directlightsampling) \
-				  .add_integer('shadowraycount', self.shadowraycount)
+				  .add_bool('directlightsampling', self.directlightsampling)
+			if self.advanced:
+				params.add_integer('shadowraycount', self.shadowraycount)
 
 		if self.surfaceintegrator == 'envpath':
 			params.add_integer('maxdepth', self.maxdepth) \
 				  .add_float('rrcontinueprob', self.rrcontinueprob) \
 				  .add_string('rrstrategy', self.rrstrategy) \
 				  .add_bool('includeenvironment', self.includeenvironment) \
-				  .add_bool('directlightsampling', self.directlightsampling) \
-				  .add_integer('shadowraycount', self.shadowraycount)
+				  .add_bool('directlightsampling', self.directlightsampling)
+			if self.advanced:
+				params.add_integer('shadowraycount', self.shadowraycount)
 		
 		if self.surfaceintegrator != 'sppm':
-			params.add_string('lightstrategy', self.lightstrategy) \
+			params.add_string('lightstrategy', self.lightstrategy if not hybrid_compat else 'one') \
 		
 		return self.surfaceintegrator, params

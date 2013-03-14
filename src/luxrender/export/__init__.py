@@ -246,9 +246,19 @@ class ParamSet(list):
 		self.add('texture', name, str(value))
 		return self
 
+
+def is_obj_visible(scene, obj, is_dupli=False):
+	ov = False
+	for lv in [ol and sl and rl for ol,sl,rl in zip(obj.layers, scene.layers, scene.render.layers.active.layers)]:
+		ov |= lv
+	return (ov or is_dupli) and not obj.hide_render
+
 def get_worldscale(as_scalematrix=True):
-	ws = 1.0
-	
+	# For usability, previev_scale is not an own property but calculated from the object dimensions
+	# A user can directly judge mappings on an adjustable object_size, we simply scale the whole preview
+	preview_scale = bpy.context.scene.luxrender_world.preview_object_size / 2
+	ws = 1 / preview_scale if LuxManager.CurrentScene.name == "preview" else 1 # this is a safety net to prevent previewscale affecting render
+
 	scn_us = LuxManager.CurrentScene.unit_settings
 	
 	if scn_us.system in ['METRIC', 'IMPERIAL']:
@@ -261,36 +271,38 @@ def get_worldscale(as_scalematrix=True):
 	else:
 		return ws
 
-def object_anim_matrix(scene, obj, frame_offset=1, ignore_scale=False):
-	if obj.animation_data != None and obj.animation_data.action != None and len(obj.animation_data.action.fcurves)>0:
-		next_frame = scene.frame_current + frame_offset
+def object_anim_matrices(scene, obj, steps=1):
+	'''
+	steps		Number of interpolation steps per frame
+	
+	Returns a list of animated matrices for the object, with the given number of 
+	per-frame interpolation steps. 
+	The number of matrices returned is at most steps+1.
+	'''
+	old_sf = scene.frame_subframe
+	cur_frame = scene.frame_current
+	
+	ref_matrix = None
+	animated = False
+	
+	next_matrices = []
+	for i in range(0, steps+1):
+		scene.frame_set(cur_frame, subframe=i/float(steps))
 		
-		anim_location = obj.location.copy()
-		anim_rotation = obj.rotation_euler.copy()
-		anim_scale    = obj.scale.copy()
+		sub_matrix = obj.matrix_world.copy()
 		
-		for fc in obj.animation_data.action.fcurves:
-			if fc.data_path == 'location':
-				anim_location[fc.array_index] = fc.evaluate(next_frame)
-			if fc.data_path == 'rotation_euler':
-				anim_rotation[fc.array_index] = fc.evaluate(next_frame)
-			if fc.data_path == 'scale':
-				anim_scale[fc.array_index] = fc.evaluate(next_frame)
+		if ref_matrix == None:
+			ref_matrix = sub_matrix
+		animated |= sub_matrix != ref_matrix
 		
-		next_matrix  = mathutils.Matrix.Translation( mathutils.Vector(anim_location) )
-		anim_rotn_e = mathutils.Euler(anim_rotation)
-		anim_rotn_e.make_compatible(obj.rotation_euler)
-		anim_rotn_e = anim_rotn_e.to_matrix().to_4x4()
-		next_matrix *= anim_rotn_e
+		next_matrices.append(sub_matrix)
+	
+	if not animated:
+		next_matrices = []
 		
-		if not ignore_scale:
-			next_matrix *= mathutils.Matrix.Scale(anim_scale[0], 4, mathutils.Vector([1,0,0]))
-			next_matrix *= mathutils.Matrix.Scale(anim_scale[1], 4, mathutils.Vector([0,1,0]))
-			next_matrix *= mathutils.Matrix.Scale(anim_scale[2], 4, mathutils.Vector([0,0,1]))
-		
-		return next_matrix
-	else:
-		return False
+	# restore subframe value
+	scene.frame_set(cur_frame, old_sf)
+	return next_matrices
 
 # hack for the matrix order api change in r42816
 # TODO remove this when obsolete

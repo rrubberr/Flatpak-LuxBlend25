@@ -38,6 +38,7 @@ class luxrender_filter(declarative_property_group):
 	ef_attach_to = ['Scene']
 	
 	controls = [
+		'spacer',
 		'filter',
 		
 		'sharpness',
@@ -50,6 +51,7 @@ class luxrender_filter(declarative_property_group):
 	]
 	
 	visibility = {
+		'spacer':		{ 'advanced': True },
 		'sharpness':	{ 'advanced': False, 'filter': 'mitchell' },
 		'xwidth':		{ 'advanced': True },
 		'ywidth':		{ 'advanced': True },
@@ -61,6 +63,11 @@ class luxrender_filter(declarative_property_group):
 	}
 	
 	properties = [
+		{
+			'type': 'text',
+			'attr': 'spacer',
+			'name': '', #This param just draws some blank space in the panel
+		},
 		{
 			'type': 'enum',
 			'attr': 'filter',
@@ -164,7 +171,7 @@ class luxrender_filter(declarative_property_group):
 			'type': 'bool',
 			'attr': 'supersample',
 			'name': 'Supersample',
-			'description': 'Use filter super-sampling',
+			'description': 'Use filter super-sampling, disabling this is NOT recommended',
 			'default': True,
 			'save_in_preset': True
 		},

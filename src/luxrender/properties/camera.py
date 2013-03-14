@@ -72,7 +72,8 @@ class luxrender_camera(declarative_property_group):
 		'fstop',
 		'sensitivity',
 		'exposure_mode',
-		'exposure_start', 'exposure_end_norm', 'exposure_end_abs',
+		['exposure_start_norm', 'exposure_end_norm'], 
+		'exposure_start_abs', 'exposure_end_abs',
 		['exposure_degrees_start', 'exposure_degrees_end'],
 		'usemblur',
 		'motion_blur_samples',
@@ -90,8 +91,9 @@ class luxrender_camera(declarative_property_group):
 #		'blades':					{ 'use_dof': True },
 #		'distribution':				{ 'use_dof': True },
 #		'power':					{ 'use_dof': True },
-		'exposure_start':			{ 'exposure_mode': O(['normalised','absolute']) },
+		'exposure_start_norm':		{ 'exposure_mode': 'normalised' },
 		'exposure_end_norm':		{ 'exposure_mode': 'normalised' },
+		'exposure_start_abs':		{ 'exposure_mode': 'absolute' },
 		'exposure_end_abs':			{ 'exposure_mode': 'absolute' },
 		'exposure_degrees_start':	{ 'exposure_mode': 'degrees' },
 		'exposure_degrees_end':		{ 'exposure_mode': 'degrees' },
@@ -203,8 +205,8 @@ class luxrender_camera(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'motion_blur_samples',
-			'name': 'Shutter Steps',
-			'description': 'Shutter Steps',
+			'name': 'Motion Subdivision',
+			'description': 'Number of motion steps per frame. Increase for non-linear motion blur or high velocity rotations',
 			'default': 1,
 			'min': 1,
 			'soft_min': 1,
@@ -213,10 +215,10 @@ class luxrender_camera(declarative_property_group):
 		},
 		{
 			'type': 'float',
-			'attr': 'exposure_start',
+			'attr': 'exposure_start_norm',
 			'name': 'Open',
-			'description': 'Shutter open time',
-			'precision': 6,
+			'description': 'Normalised shutter open time',
+			'precision': 3,
 			'default': 0.0,
 			'min': 0.0,
 			'soft_min': 0.0,
@@ -227,8 +229,8 @@ class luxrender_camera(declarative_property_group):
 			'type': 'float',
 			'attr': 'exposure_end_norm',
 			'name': 'Close',
-			'description': 'Shutter close time',
-			'precision': 6,
+			'description': 'Normalised shutter close time',
+			'precision': 3,
 			'default': 1.0,
 			'min': 0.0,
 			'soft_min': 0.0,
@@ -237,15 +239,23 @@ class luxrender_camera(declarative_property_group):
 		},
 		{
 			'type': 'float',
+			'attr': 'exposure_start_abs',
+			'name': 'Open',
+			'description': 'Absolute shutter open time (seconds)',
+			'precision': 6,
+			'default': 0.0,
+			'min': 0.0,
+			'soft_min': 0.0,
+		},
+		{
+			'type': 'float',
 			'attr': 'exposure_end_abs',
 			'name': 'Close',
-			'description': 'Shutter close time',
+			'description': 'Absolute shutter close time (seconds)',
 			'precision': 6,
 			'default': 1.0,
 			'min': 0.0,
 			'soft_min': 0.0,
-			'max': 120.0,
-			'soft_max': 120.0
 		},
 		{
 			'type': 'float',
@@ -256,8 +266,10 @@ class luxrender_camera(declarative_property_group):
 			'default': 0.0,
 			'min': 0.0,
 			'soft_min': 0.0,
-			'max': 360.0,
-			'soft_max': 360.0
+			'max': 2*math.pi,
+			'soft_max': 2*math.pi,
+			'subtype': 'ANGLE',
+			'unit': 'ROTATION'
 		},
 		{
 			'type': 'float',
@@ -265,11 +277,13 @@ class luxrender_camera(declarative_property_group):
 			'name': 'Close angle',
 			'description': 'Shutter close angle',
 			'precision': 1,
-			'default': 360.0,
+			'default': 2*math.pi,
 			'min': 0.0,
 			'soft_min': 0.0,
-			'max': 360.0,
-			'soft_max': 360.0
+			'max': 2*math.pi,
+			'soft_max': 2*math.pi,
+			'subtype': 'ANGLE',
+			'unit': 'ROTATION'
 		},
 		{
 			'type': 'bool',
@@ -310,13 +324,14 @@ class luxrender_camera(declarative_property_group):
 		},
 	]
 	
-	def lookAt(self, camera):
+	def lookAt(self, camera, matrix = None):
 		'''
 		Derive a list describing 3 points for a LuxRender LookAt statement
 		
 		Returns		tuple(9) (floats)
 		'''
-		matrix = camera.matrix_world.copy()
+		if matrix is None:
+			matrix = camera.matrix_world.copy()
 		ws = get_worldscale()
 		matrix *= ws
 		ws = get_worldscale(as_scalematrix=False)
@@ -370,7 +385,7 @@ class luxrender_camera(declarative_property_group):
 				((2*shiftY)+1) * scale
 				]
 		
-		if scene.render.use_border:
+		if scene.render.use_border and not (scene.render.use_crop_to_border == False and (scene.luxrender_engine.render == False or (scene.luxrender_engine.export_type == 'EXT' and scene.luxrender_engine.binary_name == 'luxrender' and scene.luxrender_engine.monitor_external == False))): #If we are using cropwindow, we want the full-frame screenwindow. See border render handling code elsewhere in this file (do a search for "border")
 			(x1,x2,y1,y2) = [
 				scene.render.border_min_x, scene.render.border_max_x,
 				scene.render.border_min_y, scene.render.border_max_y
@@ -388,15 +403,15 @@ class luxrender_camera(declarative_property_group):
 		"""
 		Calculate the camera exposure time in seconds
 		"""
-		fps = LuxManager.CurrentScene.render.fps
+		fps = LuxManager.CurrentScene.render.fps / LuxManager.CurrentScene.render.fps_base
 		
 		time = 1.0
 		if self.exposure_mode == 'normalised':
-			time = (self.exposure_end_norm - self.exposure_start) / fps
+			time = (self.exposure_end_norm - self.exposure_start_norm) / fps
 		if self.exposure_mode == 'absolute':
-			time = (self.exposure_end_abs - self.exposure_start)
+			time = (self.exposure_end_abs - self.exposure_start_abs)
 		if self.exposure_mode == 'degrees':
-			time = (self.exposure_degrees_end - self.exposure_degrees_start) / (fps * 360.0)
+			time = (self.exposure_degrees_end - self.exposure_degrees_start) / (fps * 2 * math.pi)
 		
 		return time
 	
@@ -420,16 +435,16 @@ class luxrender_camera(declarative_property_group):
 		params.add_float('screenwindow', self.screenwindow(xr, yr, scene, cam))
 		params.add_bool('autofocus', False)
 		
-		fps = scene.render.fps
+		fps = scene.render.fps / scene.render.fps_base
 		if self.exposure_mode == 'normalised':
-			params.add_float('shutteropen', self.exposure_start / fps)
+			params.add_float('shutteropen', self.exposure_start_norm / fps)
 			params.add_float('shutterclose', self.exposure_end_norm / fps)
 		if self.exposure_mode == 'absolute':
-			params.add_float('shutteropen', self.exposure_start)
+			params.add_float('shutteropen', self.exposure_start_abs)
 			params.add_float('shutterclose', self.exposure_end_abs)
 		if self.exposure_mode == 'degrees':
-			params.add_float('shutteropen', self.exposure_degrees_start / (fps*360.0))
-			params.add_float('shutterclose', self.exposure_degrees_end / (fps*360.0))
+			params.add_float('shutteropen', self.exposure_degrees_start / (fps * 2 * math.pi))
+			params.add_float('shutterclose', self.exposure_degrees_end / (fps * 2 * math.pi))
 		
 		if self.use_dof:
 			# Do not world-scale this, it is already in meters !
@@ -458,9 +473,6 @@ class luxrender_camera(declarative_property_group):
 			# update the camera settings with motion blur settings
 			params.add_string('shutterdistribution', self.shutterdistribution)
 		
-			if self.cammblur and is_cam_animated:
-				params.add_string('endtransform', 'CameraEndTransform')
-		
 		cam_type = 'orthographic' if cam.type == 'ORTHO' else self.type if bpy.app.version < (2, 63, 5 ) else 'environment' if cam.type == 'PANO' else 'perspective'
 		return cam_type, params
 
@@ -472,39 +484,38 @@ class luxrender_film(declarative_property_group):
 	controls = [
 		'lbl_internal',
 		'internal_updateinterval',
-		'integratedimaging',
 		
 		'lbl_external',
 		'writeinterval',
 		'flmwriteinterval',
 		'displayinterval',
 		
-		'lbl_outputs',
-		['write_png', 'write_png_16bit'],
-		'write_tga',
-		['write_exr', 'write_exr_applyimaging', 'write_exr_halftype'],
-		'write_exr_compressiontype',
-		'write_zbuf',
-		'zbuf_normalization',
-		['output_alpha', 'premultiply_alpha'],
-		['write_flm', 'restart_flm', 'write_flm_direct'],
+#		'lbl_outputs',
+#		['write_png', 'write_png_16bit'],
+#		'write_tga',
+#		['write_exr', 'write_exr_applyimaging', 'write_exr_halftype'],
+#		'write_exr_compressiontype',
+#		'write_zbuf',
+#		'zbuf_normalization',
+#		['output_alpha', 'premultiply_alpha'],
+#		['write_flm', 'restart_flm', 'write_flm_direct'],
 		
 		'ldr_clamp_method',
 		'outlierrejection_k',
 		'tilecount'
 	]
 	
-	visibility = {
-		'restart_flm': { 'write_flm': True },
-		'premultiply_alpha': { 'output_alpha': True },
-		'write_flm_direct': { 'write_flm': True },
-		'write_png_16bit': { 'write_png': True },
-		'write_exr_applyimaging': { 'write_exr': True },
-		'write_exr_halftype': { 'write_exr': True },
-		'write_exr_compressiontype': { 'write_exr': True },
-		'write_zbuf': O([{'write_exr': True }, { 'write_tga': True }]),
-		'zbuf_normalization': A([{'write_zbuf': True}, O([{'write_exr': True }, { 'write_tga': True }])]),
-	}
+#	visibility = {
+#		'restart_flm': { 'write_flm': True },
+#		'premultiply_alpha': { 'output_alpha': True },
+#		'write_flm_direct': { 'write_flm': True },
+#		'write_png_16bit': { 'write_png': True },
+#		'write_exr_applyimaging': { 'write_exr': True },
+#		'write_exr_halftype': { 'write_exr': True },
+#		'write_exr_compressiontype': { 'write_exr': True },
+#		'write_zbuf': O([{'write_exr': True }, { 'write_tga': True }]),
+#		'zbuf_normalization': A([{'write_zbuf': True}, O([{'write_exr': True }, { 'write_tga': True }])]),
+#	}
 	
 	properties = [
 		{
@@ -564,13 +575,6 @@ class luxrender_film(declarative_property_group):
 		},
 		{
 			'type': 'bool',
-			'attr': 'integratedimaging',
-			'name': 'Integrated imaging workflow',
-			'description': 'Transfer rendered image directly to Blender without saving to disk (adds Alpha and Z-buffer support)',
-			'default': False
-		},
-		{
-			'type': 'bool',
 			'attr': 'write_png',
 			'name': 'PNG',
 			'description': 'Enable PNG output',
@@ -595,7 +599,7 @@ class luxrender_film(declarative_property_group):
 			'attr': 'write_exr_halftype',
 			'name': 'Use 16bit EXR',
 			'description': 'Use "half" (16bit float) OpenEXR format instead of 32bit float',
-			'default': True
+			'default': False
 		},
 		{
 			'type': 'enum',
@@ -622,6 +626,7 @@ class luxrender_film(declarative_property_group):
 			'type': 'bool',
 			'attr': 'write_flm',
 			'name': 'Write FLM',
+			'description': 'Write framebuffer (FLM) to disk to allow resuming and adjusting imaging options',
 			'default': False
 		},
 		{
@@ -642,14 +647,14 @@ class luxrender_film(declarative_property_group):
 			'type': 'bool',
 			'attr': 'output_alpha',
 			'name': 'Enable alpha channel',
-			'description': 'Enable alpha channel. This applies to all image formats',
+			'description': 'Enable alpha channel. This applies to all image formats. Integrated imaging must be always premultiplied',
 			'default': False
 		},
 		{
 			'type': 'bool',
 			'attr': 'premultiply_alpha',
 			'name': 'Premultiply Alpha',
-			'description': 'Premultiply alpha channel (happens during film stage, not image output)',
+			'description': 'Premultiply alpha channel. This is applied during splatting, not image output',
 			'default': True
 		},
 		{
@@ -683,7 +688,7 @@ class luxrender_film(declarative_property_group):
 			'attr': 'outlierrejection_k',
 			'name': 'Firefly rejection',
 			'description': 'Firefly (outlier) rejection k parameter. 0=disabled',
-			'default': 0,
+			'default': 5,
 			'min': 0,
 			'soft_min': 0,
 		},
@@ -743,25 +748,45 @@ class luxrender_film(declarative_property_group):
 		
 		params = ParamSet()
 		
-		if scene.render.use_border:
-			(x1,x2,y1,y2) = [
-				scene.render.border_min_x, scene.render.border_max_x,
-				scene.render.border_min_y, scene.render.border_max_y
-			]
-			# Set resolution
-			params.add_integer('xresolution', round(xr*x2, 0)-round(xr*x1, 0))
-			params.add_integer('yresolution', round(yr*y2, 0)-round(yr*y1, 0))
+		if scene.render.use_border: #Border rendering handler, this gets a bit tricky. Blender ALWAYS expects to get back a cropped image, it will handle the padding itself if the user asked for it.
+			if scene.render.use_crop_to_border: #user asked to crop, so always crop
+				(x1,x2,y1,y2) = [
+					scene.render.border_min_x, scene.render.border_max_x,
+					scene.render.border_min_y, scene.render.border_max_y
+				]
+				# Set resolution
+				# This is a new method of "rounding" the cropped image to match blenders expected rectangle_size
+				# I tested this with several cases which failed with the former rounding, pls check - Jens
+				params.add_integer('xresolution', int((xr*x2)-(xr*x1)+1))
+				params.add_integer('yresolution', int((yr*y2)-(yr*y1)+1))
+			
+			if not scene.render.use_crop_to_border: #user asked for padded-to-full-frame output, there are a few cases where Lux needs to do this itself since the rendered image will not be returned to Blender
+				if scene.luxrender_engine.render == False or (scene.luxrender_engine.export_type == 'EXT' and scene.luxrender_engine.binary_name == 'luxrender' and scene.luxrender_engine.monitor_external == False): #If run-renderer (scene.luxrender_engine.render) is disabled or we are in un-monitored external mode, we do not return the image to Blender and Lux must pad the image itself
+					cropwindow = [
+						scene.render.border_min_x, scene.render.border_max_x,
+						1-scene.render.border_min_y, 1-scene.render.border_max_y
+					] #Subtract scene.render.border Y values from 1 to translate between Blender and Lux conventions
+					params.add_float('cropwindow', cropwindow)
+					params.add_integer('xresolution', xr) #Don't forget to set full frame resolution
+					params.add_integer('yresolution', yr)
+
+					
+				else: #we are returning the image to blender which will pad for us, so have LuxRender send back a cropped frame anyway
+					(x1,x2,y1,y2) = [
+						scene.render.border_min_x, scene.render.border_max_x,
+						scene.render.border_min_y, scene.render.border_max_y
+					]
+					# Set resolution
+					# This is a new method of "rounding" the cropped image to match blenders expected rectangle_size
+					# I tested this with several cases which failed with the former rounding, pls check - Jens
+					params.add_integer('xresolution', int((xr*x2)-(xr*x1)+1))
+					params.add_integer('yresolution', int((yr*y2)-(yr*y1)+1))
+
 		else:
 			# Set resolution
 			params.add_integer('xresolution', xr)
 			params.add_integer('yresolution', yr)
 		
-#		if scene.render.use_border:
-#			cropwindow = [
-#				scene.render.border_min_x, scene.render.border_max_x,
-#				scene.render.border_min_y, scene.render.border_max_y
-#			]
-#			params.add_float('cropwindow', cropwindow)
 		
 		# ColourSpace
 		if self.luxrender_colorspace.preset:
@@ -796,7 +821,6 @@ class luxrender_film(declarative_property_group):
 		params.add_string('filename', get_output_filename(scene))
 		background_path = scene.camera.data.luxrender_camera.background
 		params.add_string('background', efutil.path_relative_to_export(background_path) )
-#		params.add_string('background',  scene.camera.data.luxrender_camera.background)
 		params.add_bool('write_resume_flm', self.write_flm)
 		params.add_bool('restart_resume_flm', self.restart_flm)
 		params.add_bool('write_flm_direct', self.write_flm_direct)
@@ -807,18 +831,16 @@ class luxrender_film(declarative_property_group):
 		else:
 			output_channels = 'RGB'
 								
-		if scene.luxrender_engine.export_type == 'INT' and self.integratedimaging:
-			# Set up params to enable z buffer and set gamma=1.0
+		if scene.luxrender_engine.export_type == 'INT' and scene.luxrender_engine.integratedimaging:
+			# Set up params to enable z buffer
+			# we use the colorspace gamma, else autolinear gives wrong estimation, gamma 1.0 per pixel is recalculated in pylux after
 			# Also, this requires tonemapped EXR output
 			params.add_string('write_exr_channels', 'RGBA')
 			params.add_bool('write_exr_halftype', False)
 			params.add_bool('write_exr_applyimaging', True)
-			params.add_bool('premultiplyalpha', True) #Apparently, this should always be true with EXR
+			params.add_bool('premultiplyalpha', True if self.output_alpha else False) # Blender 2.66 always expects premultiplyalpha
 			params.add_bool('write_exr_ZBuf', True)
 			params.add_string('write_exr_zbuf_normalizationtype', 'Camera Start/End clip')
-			if scene.render.use_color_management:
-				params.add_float('gamma', 1.0) # Linear workflow !
-			# else leave as pre-corrected gamma
 		else:
 			# Otherwise let the user decide on tonemapped EXR and other EXR settings
 			params.add_bool('write_exr_halftype', self.write_exr_halftype)
@@ -827,16 +849,16 @@ class luxrender_film(declarative_property_group):
 			params.add_string('write_exr_compressiontype', self.write_exr_compressiontype)
 			params.add_string('write_exr_zbuf_normalizationtype', self.zbuf_normalization)
 			params.add_bool('write_exr', self.write_exr)
-			if self.write_exr: params.add_string('write_exr_channels', output_channels)
+			params.add_string('write_exr_channels', output_channels)
 		
 		params.add_bool('write_png', self.write_png)
+		params.add_string('write_png_channels', output_channels)
 		if self.write_png:
-			params.add_string('write_png_channels', output_channels)
 			params.add_bool('write_png_16bit', self.write_png_16bit)
 		params.add_bool('write_tga', self.write_tga)
+		params.add_string('write_tga_channels', output_channels)
 		if self.write_tga:
-			params.add_string('write_tga_channels', output_channels)
-			params.add_string('write_tga_Zbuf', self.write_zbuf)
+			params.add_bool('write_tga_ZBuf', self.write_zbuf)
 			params.add_string('write_tga_zbuf_normalizationtype', self.zbuf_normalization)
 		
 		params.add_string('ldr_clamp_method', self.ldr_clamp_method)
@@ -854,7 +876,21 @@ class luxrender_film(declarative_property_group):
 		
 		if scene.luxrender_halt.halttime > 0:
 			params.add_integer('halttime', scene.luxrender_halt.halttime)
+
+		if scene.luxrender_halt.haltthreshold > 0:
+			params.add_float('haltthreshold', 1 - ( scene.luxrender_halt.haltthreshold / 100.00 ))
 		
+		# Convergence Test
+		if scene.luxrender_halt.convergencestep != 32:
+			params.add_float('convergencestep', scene.luxrender_halt.convergencestep)
+		
+		# Filename for User Sampling Map
+		if scene.luxrender_sampler.usersamplingmap_filename != '':
+			if scene.luxrender_sampler.usersamplingmap_filename.endswith('.exr'):
+				params.add_string('usersamplingmap_filename', scene.luxrender_sampler.usersamplingmap_filename)
+			else:
+				params.add_string('usersamplingmap_filename', scene.luxrender_sampler.usersamplingmap_filename + '.exr')
+				
 		if self.outlierrejection_k > 0 and scene.luxrender_rendermode.renderer != 'sppm':
 			params.add_integer('outlierrejection_k', self.outlierrejection_k)
 			

@@ -31,9 +31,11 @@ from extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 
 from .. import LuxRenderAddon
 from ..export import ParamSet
+from ..export.materials import get_texture_from_scene
 from ..properties.material import texture_append_visibility
 from ..properties.texture import FloatTextureParameter, ColorTextureParameter
 from ..util import dict_merge
+from ..outputs import LuxManager
 
 class MeshFloatTextureParameter(FloatTextureParameter):
 	def texture_slot_set_attr(self):
@@ -65,7 +67,7 @@ class luxrender_mesh(declarative_property_group):
 	Storage class for LuxRender Camera settings.
 	'''
 	
-	ef_attach_to = ['Mesh', 'SurfaceCurve', 'TextCurve', 'Curve']
+	ef_attach_to = ['Mesh', 'SurfaceCurve', 'TextCurve', 'Curve', 'MetaBall']
 	
 	controls = [
 		'mesh_type',
@@ -252,7 +254,7 @@ class luxrender_mesh(declarative_property_group):
 	def get_shape_IsSpecial(self):
 		return self.type != 'native'
 	
-	def get_paramset(self, scene):
+	def get_paramset(self):
 		params = ParamSet()
 		
 		#Export generatetangents
@@ -273,7 +275,12 @@ class luxrender_mesh(declarative_property_group):
 		export_dm = TF_displacementmap.get_paramset(self)
 		
 		if self.dm_floattexturename != '' and len(export_dm) > 0:
-			params.add_string('displacementmap', self.dm_floattexturename)
+			texture_name = getattr(self, 'dm_floattexturename')
+			texture = get_texture_from_scene(LuxManager.CurrentScene, texture_name)
+			if texture.type in ('IMAGE', 'OCEAN') and texture.luxrender_texture.type == 'BLENDER':
+				params.add_string('displacementmap', '%s_float' % self.dm_floattexturename)
+			else:	
+				params.add_string('displacementmap', self.dm_floattexturename)
 			params.add_float('dmscale', self.dmscale)
 			params.add_float('dmoffset', self.dmoffset)
 
@@ -283,13 +290,7 @@ class luxrender_mesh(declarative_property_group):
 		export_proj = TC_artexture.get_paramset(self)
 		if self.projmap_colortexturename != '' and len(export_proj) > 0:
 			params.add_bool('projection', True)
-#			cam_pos =  scene.world.texture_slots[self.projmap_colortexturename].texture.luxrender_texture.luxrender_tex_mapping.cam
 			cam_pos =  bpy.context.blend_data.textures[self.projmap_colortexturename].luxrender_texture.luxrender_tex_mapping.cam
 			params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
-#			if self.ccam:
-#				cam_pos =  scene.camera.data.luxrender_camera.lookAt(scene.camera)
-#				params.add_point('cam', ( cam_pos[0], cam_pos[1], cam_pos[2] ) )
-#			else:
-#				params.add_point('cam', self.ucam)
 		
 		return params

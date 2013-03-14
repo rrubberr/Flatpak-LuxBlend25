@@ -155,7 +155,7 @@ class LUXRENDER_OT_volume_remove(bpy.types.Operator):
 class LUXRENDER_OT_camera_setting_file(bpy.types.Operator):
 	'''Load camera settings from file'''
 	bl_idname = "luxrender.camera_setting_load"
-	bl_label = "Load Camera Settings"	
+	bl_label = "Load Camera settings"	
 
 	directory		= bpy.props.StringProperty(name='LXS directory')
 	filename   	 	= bpy.props.StringProperty(name='LXS filename')
@@ -315,7 +315,7 @@ class LUXRENDER_OT_transform_file(bpy.types.Operator):
 class LUXRENDER_OT_projector_params_file(bpy.types.Operator):
 	'''Load projector parameters from file'''
 	bl_idname = "luxrender.projector_params_load"
-	bl_label = "Load Projector Parameters"	
+	bl_label = "Load Projector parameters"	
 
 	directory		= bpy.props.StringProperty(name='LXS directory')
 	filename   	 	= bpy.props.StringProperty(name='LXS filename')
@@ -395,7 +395,7 @@ class LUXRENDER_OT_projector_params_file(bpy.types.Operator):
 class LUXRENDER_OT_projector_copy_from_camera(bpy.types.Operator):
 	'''Copy projector parameters from active camera'''
 	bl_idname = "luxrender.projector_copy_from_cam"
-	bl_label = "Copy parameters from active camera"	
+	bl_label = "Copy parameters from active Camera"	
 
 	directory		= bpy.props.StringProperty(name='LXS directory')
 	filename   	 	= bpy.props.StringProperty(name='LXS filename')

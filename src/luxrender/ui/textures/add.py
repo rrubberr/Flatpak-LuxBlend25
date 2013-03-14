@@ -7,7 +7,7 @@
 # --------------------------------------------------------------------------
 #
 # Authors:
-# Doug Hammond, Daniel Genrich
+# Doug Hammond
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -24,28 +24,15 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
-import bl_ui
-
-from extensions_framework.ui import property_group_renderer
-
-from .. import LuxRenderAddon
+from ... import LuxRenderAddon
+from ...ui.textures import luxrender_texture_base
 
 @LuxRenderAddon.addon_register_class
-class meshes(bl_ui.properties_data_mesh.MeshButtonsPanel, property_group_renderer):
-	bl_label = 'LuxRender Mesh Options'
-	COMPAT_ENGINES = 'LUXRENDER_RENDER'
+class ui_texture_add(luxrender_texture_base):
+	bl_label = 'LuxRender Add Texture'
+	
+	LUX_COMPAT = {'add'}
 	
 	display_property_groups = [
-		( ('mesh',), 'luxrender_mesh' )
+		( ('texture', 'luxrender_texture'), 'luxrender_tex_add' )
 	]
-	
-	def draw(self, context):
-		if context.object.luxrender_object.append_proxy and context.object.luxrender_object.hide_proxy_mesh:
-			msg = ['Mesh options not available when',
-				   'object is used as a render proxy',
-				   'and \"Don\'t Render Original\" is set.'
-				  ]
-			for t in msg:
-				self.layout.label(t)
-		else:
-			super().draw(context)
