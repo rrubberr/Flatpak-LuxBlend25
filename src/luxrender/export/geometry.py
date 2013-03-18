@@ -798,16 +798,17 @@ class GeometryExporter(object):
 			transform = obj.matrix_world.inverted()		
 			for pindex in range(num_parents + num_children):			
 				det.exported_objects += 1				
-				segment_count = 0
+				point_count = 0
 		
 				for step in range(0, steps):
 					co = psys.co_hair(obj, mod, pindex, step)				
 					if not co.length_squared == 0:
 						points.append(transform*co)
-						segment_count = segment_count + 1
+						point_count = point_count + 1
 
-				segments.append(segment_count)
-				total_segments_count = total_segments_count + segment_count
+				if point_count > 1:
+					segments.append(point_count - 1)
+					total_segments_count = total_segments_count + point_count - 1
 			hair_file_path = efutil.path_relative_to_export(hair_file_path)
 			with open(hair_file_path, 'wb') as hair_file:
 				## Binary hair file format from
