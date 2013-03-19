@@ -822,7 +822,7 @@ class GeometryExporter(object):
 				hair_file.write(struct.pack('<I', steps))       #default segments count
 				hair_file.write(struct.pack('<f', size*2))      #default thickness
 				hair_file.write(struct.pack('<f', 0.0))         #default transparency
-				color = (1.0, 1.0, 1.0)
+				color = (0.65, 0.65, 0.65)
 				hair_file.write(struct.pack('<3f', *color))     #default color
 				hair_file.write(struct.pack('<88s', info.encode())) #information
 				
