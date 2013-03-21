@@ -262,7 +262,7 @@ def convert_texture(scene, texture, variant_hint=None):
 				.add_string('type', texture.wood_type.lower() )
 	
 	# Translate Blender Image/movie into lux tex
-	if texture.type == 'IMAGE' and texture.image and texture.image.source in ['GENERATED', 'FILE']:
+	if texture.type == 'IMAGE' and texture.image and texture.image.source in ['GENERATED', 'FILE', 'SEQUENCE']:
 		
 		extract_path = os.path.join(
 			efutil.scene_filename(),
@@ -288,7 +288,62 @@ def convert_texture(scene, texture, variant_hint=None):
 				if not os.path.exists(f_path):
 					raise Exception('Image referenced in blender texture %s doesn\'t exist: %s' % (texture.name, f_path))
 				tex_image = efutil.filesystem_path(f_path)
-		
+
+		if texture.image.source == 'SEQUENCE':
+			if texture.image.packed_file:
+				tex_image = 'luxblend_extracted_image_%s.%s' % (bpy.path.clean_name(texture.name), scene.render.image_settings.file_format)
+				tex_image = os.path.join(extract_path, tex_image)
+				texture.image.save_render(tex_image, scene)
+			else:
+				# sequence params from blender
+				sequence = bpy.data.textures[(texture.name).replace('.001', '')].image_user # remove tex_preview extension to avoid error
+				seqframes = sequence.frame_duration
+				seqoffset = sequence.frame_offset
+				seqstartframe = sequence.frame_start # the global frame at which the imagesequence starts
+				seqcyclic = sequence.use_cyclic
+				currentframe = scene.frame_current
+				
+				if texture.library is not None:
+					f_path = efutil.filesystem_path(bpy.path.abspath( texture.image.filepath, texture.library.filepath))
+				else:
+					f_path = efutil.filesystem_path(texture.image.filepath)
+
+				if currentframe < seqstartframe:
+					fnumber = 1 + seqoffset
+				else:
+					fnumber = currentframe - (seqstartframe-1) + seqoffset
+
+				if fnumber > seqframes:
+					if seqcyclic == False:
+						fnumber = seqframes
+					else:
+						fnumber = (currentframe - (seqstartframe-1)) % seqframes
+						if fnumber == 0:
+							fnumber = seqframes
+
+				import re
+				def get_seq_filename(number, f_path):
+					m = re.findall(r'(\d+)', f_path)
+					if len(m) == 0:
+						return "ERR: Can't find pattern"
+					
+					rightmost_number = m[len(m)-1]
+					seq_length = len(rightmost_number)
+					
+					nstr = "%i" %number
+					new_seq_number = nstr.zfill(seq_length)
+					
+					return f_path.replace(rightmost_number, new_seq_number)
+
+				f_path = get_seq_filename(fnumber, f_path)
+				
+#				print("-----------------", f_path)
+
+				if not os.path.exists(f_path):
+					raise Exception('Image referenced in blender texture %s doesn\'t exist: %s' % (texture.name, f_path))
+				tex_image = efutil.filesystem_path(f_path)
+
+
 		lux_tex_name = 'imagemap'
 		sampling = texture.luxrender_texture.luxrender_tex_imagesampling
 		if variant_hint:

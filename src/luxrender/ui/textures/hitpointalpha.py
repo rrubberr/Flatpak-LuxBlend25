@@ -24,30 +24,15 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
-bl_info = {
-	"name": "LuxRender",
-	"author": "LuxRender Project: Doug Hammond (dougal2), Asbjørn Heid (LordCrc), Daniel Genrich (Genscher), Jens Verwiebe, Jason Clarke (JtheNinja), neo2068",
-	"version": (1, 3, 'dev'),
-	"blender": (2, 65),
-	"api": 44256,
-	"category": "Render",
-	"location": "Info Header > Engine dropdown menu",
-	"warning": "",
-	"wiki_url": "http://www.luxrender.net/wiki/LuxBlend25_Manual",
-	"tracker_url": "http://www.luxrender.net/mantis",
-	"description": "LuxRender integration for Blender"
-}
+from ... import LuxRenderAddon
+from ...ui.textures import luxrender_texture_base
 
-if 'core' in locals():
-	import imp
-	imp.reload(core)
-else:
-	import bpy
+@LuxRenderAddon.addon_register_class
+class ui_texture_windy(luxrender_texture_base):
+	bl_label = 'LuxRender Vertex Alpha (hitpointalpha) Texture'
 	
-	from extensions_framework import Addon
-	LuxRenderAddon = Addon(bl_info)
-	register, unregister = LuxRenderAddon.init_functions()
+	LUX_COMPAT = {'hitpointalpha'}
 	
-	# Importing the core package causes extensions_framework managed
-	# RNA class registration via @LuxRenderAddon.addon_register_class
-	from . import core
+	display_property_groups = [
+		( ('texture', 'luxrender_texture'), 'luxrender_tex_hitpointalpha' )
+	]
