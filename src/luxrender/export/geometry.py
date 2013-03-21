@@ -798,16 +798,17 @@ class GeometryExporter(object):
 			transform = obj.matrix_world.inverted()		
 			for pindex in range(num_parents + num_children):			
 				det.exported_objects += 1				
-				segment_count = 0
+				point_count = 0
 		
 				for step in range(0, steps):
 					co = psys.co_hair(obj, mod, pindex, step)				
 					if not co.length_squared == 0:
 						points.append(transform*co)
-						segment_count = segment_count + 1
+						point_count = point_count + 1
 
-				segments.append(segment_count)
-				total_segments_count = total_segments_count + segment_count
+				if point_count > 1:
+					segments.append(point_count - 1)
+					total_segments_count = total_segments_count + point_count - 1
 			hair_file_path = efutil.path_relative_to_export(hair_file_path)
 			with open(hair_file_path, 'wb') as hair_file:
 				## Binary hair file format from
@@ -821,7 +822,7 @@ class GeometryExporter(object):
 				hair_file.write(struct.pack('<I', steps))       #default segments count
 				hair_file.write(struct.pack('<f', size*2))      #default thickness
 				hair_file.write(struct.pack('<f', 0.0))         #default transparency
-				color = (200.0, 200.0, 200.0)
+				color = (0.65, 0.65, 0.65)
 				hair_file.write(struct.pack('<3f', *color))     #default color
 				hair_file.write(struct.pack('<88s', info.encode())) #information
 				
@@ -833,22 +834,29 @@ class GeometryExporter(object):
 			LuxLog('Binary hair file written: %s' % (hair_file_path))
 			
 			hair_mat = obj.material_slots[psys.settings.material - 1].material
-			# Export shape definition to .LXO file			
+
+			#Shape parameters			
+			hair_shape_params = ParamSet()
+			
+			hair_shape_params.add_string('filename', hair_file_path)
+			hair_shape_params.add_string('name', bpy.path.clean_name(partsys_name))
+			hair_shape_params.add_point('camerapos', bpy.context.scene.camera.location)
+			hair_shape_params.add_string('tesseltype', psys.settings.luxrender_hair.tesseltype)
+			hair_shape_params.add_string('acceltype', psys.settings.luxrender_hair.acceltype)
+		
+			if psys.settings.luxrender_hair.tesseltype == 'ribbonadaptive':
+				hair_shape_params.add_integer('ribbonadaptive_maxdepth', psys.settings.luxrender_hair.ribbonadaptive_maxdepth)
+				hair_shape_params.add_float('ribbonadaptive_error', psys.settings.luxrender_hair.ribbonadaptive_error)
+	
+			if psys.settings.luxrender_hair.tesseltype == 'solid':
+				hair_shape_params.add_integer('solid_sidecount', psys.settings.luxrender_hair.solid_sidecount)
+				hair_shape_params.add_bool('solid_cap', psys.settings.luxrender_hair.solid_cap)
+			
+ 			# Export shape definition to .LXO file			
 			self.lux_context.attributeBegin('hairfile_%s'%partsys_name)
 			self.lux_context.transform( matrix_to_list(obj.matrix_world, apply_worldscale=True) )
 			self.lux_context.namedMaterial(hair_mat.name)
-			self.lux_context.shape('hairfile',
-					ParamSet() \
-						.add_string('filename', hair_file_path) \
-						.add_string('name', bpy.path.clean_name(partsys_name)) \
-						.add_point('camerapos', bpy.context.scene.camera.location) \
-						.add_string('tesseltype', psys.settings.luxrender_hair.tesseltype) \
-						.add_string('acceltype', psys.settings.luxrender_hair.acceltype) \
-						.add_integer('ribbonadaptive_maxdepth', psys.settings.luxrender_hair.ribbonadaptive_maxdepth) \
-						.add_float('ribbonadaptive_error', psys.settings.luxrender_hair.ribbonadaptive_error)
-						#.add_bool('usebspline', psys.settings.use_hair_bspline) \
-						#.add_integer('resolution', psys.settings.luxrender_hair.resolution)
-				)
+			self.lux_context.shape('hairfile', hair_shape_params)
 			self.lux_context.attributeEnd()
 			self.lux_context.set_output_file(Files.MATS)
 			mat_export_result = hair_mat.luxrender_material.export(self.visibility_scene, self.lux_context, hair_mat, mode='indirect')
