@@ -856,31 +856,29 @@ class GeometryExporter(object):
 			colors = []
 			uv_coords = []
 			total_segments_count = 0
+			vertex_color_layer = None
+			uv_tex = None
+			colorflag = 0
+			uvflag = 0                      
 			
 			mesh = obj.to_mesh(self.geometry_scene, True, 'RENDER')
 			uv_textures = mesh.tessface_uv_textures if bpy.app.version > (2, 62, 0 ) else mesh.uv_textures # bmesh
 			vertex_color =  mesh.tessface_vertex_colors if bpy.app.version > (2, 62, 0 ) else mesh.vertex_colors # bmesh
 
-			if vertex_color.active and vertex_color.active.data:
-				vertex_color_layer = vertex_color.active.data
-				colorflag = 1
-			else:
-				vertex_color_layer = None
-				colorflag = 0
+			if psys.settings.luxrender_hair.export_color == 'vertex_color':
+				if vertex_color.active and vertex_color.active.data:
+					vertex_color_layer = vertex_color.active.data
+					colorflag = 1
 
 			if uv_textures.active and uv_textures.active.data:
 				uv_tex = uv_textures.active.data
-				if uv_tex[0].image:
-					image_width = uv_tex[0].image.size[0]
-					image_height = uv_tex[0].image.size[1]
-					image_pixels = uv_tex[0].image.pixels[:]
-					colorflag = 1
-				else:
-					colorflag = 0                                        
+				if psys.settings.luxrender_hair.export_color == 'uv_texture_map':
+					if uv_tex[0].image:
+						image_width = uv_tex[0].image.size[0]
+						image_height = uv_tex[0].image.size[1]
+						image_pixels = uv_tex[0].image.pixels[:]
+						colorflag = 1
 				uvflag = 1
-			else:
-				uv_tex = None
-				uvflag = 0                      
 
 			info = 'Created by LuxBlend 2.6 exporter for LuxRender - www.luxrender.net'
 
@@ -888,29 +886,28 @@ class GeometryExporter(object):
 			for pindex in range(num_parents + num_children):                        
 				det.exported_objects += 1                               
 				point_count = 0
+				i = 0
 				
 				if num_children == 0:
 					i = pindex
-				else:
-					i = 0
 		
+				# A small optimization in order to speedup the export
+				# process: cache the uv_co and color value
+				uv_co = None
+				col = None
 				for step in range(0, steps):
 					co = psys.co_hair(obj, mod, pindex, step)                               
 					if not co.length_squared == 0:
 						points.append(transform*co)
 						point_count = point_count + 1
 
-						# A small optimization in order to speedup the export
-						# process: cache the uv_co value
-						uv_co = None
 						if uvflag:
-							uv_co = psys.uv_on_emitter(mod, psys.particles[i], pindex, uv_textures.active_index)
+							if not uv_co:
+								uv_co = psys.uv_on_emitter(mod, psys.particles[i], pindex, uv_textures.active_index)
 							uv_coords.append(uv_co)
 
-						if colorflag:
-							if uvflag:
-								if not uv_co:
-									uv_co = psys.uv_on_emitter(mod, psys.particles[i], pindex, uv_textures.active_index)
+						if psys.settings.luxrender_hair.export_color == 'uv_texture_map':
+							if not col:
 								x_co = round(uv_co[0] * (image_width - 1))
 								y_co = round(uv_co[1] * (image_height - 1))
 							
@@ -920,9 +917,10 @@ class GeometryExporter(object):
 								g = image_pixels[pixelnumber*4+1]
 								b = image_pixels[pixelnumber*4+2]
 								col = (r,g,b)
-							else:
+							colors.append(col)
+						elif psys.settings.luxrender_hair.export_color == 'vertex_color':
+							if not col:
 								col = psys.mcol_on_emitter(mod, psys.particles[i], pindex, vertex_color.active_index)
-
 							colors.append(col)
 
 				if point_count > 1:
@@ -949,7 +947,7 @@ class GeometryExporter(object):
 				hair_file.write(struct.pack('<%dH'%(len(segments)), *segments))
 				for point in points:
 					hair_file.write(struct.pack('<3f', *point))
-				if colors:
+				if colorflag:
 					for col in colors:
 						hair_file.write(struct.pack('<3f', *col))
 				if uvflag:
