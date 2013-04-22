@@ -134,8 +134,9 @@ class GeometryExporter(object):
 					ext_params.add_float('zmax', obj.luxrender_object.zmax)
 				if obj.luxrender_object.proxy_type == 'cylinder':
 					ext_params.add_float('zmin', obj.luxrender_object.zmin)
-				
-				mesh_definition = (ext_mesh_name, obj.active_material.name, obj.luxrender_object.proxy_type, ext_params)
+					
+				proxy_material = obj.active_material.name if obj.active_material else ""
+				mesh_definition = (ext_mesh_name, proxy_material, obj.luxrender_object.proxy_type, ext_params)
 				mesh_definitions.append( mesh_definition )
 				
 				# Only export objectBegin..objectEnd and cache this mesh_definition if we plan to use instancing
