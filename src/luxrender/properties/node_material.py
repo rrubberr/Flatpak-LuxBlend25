@@ -2477,9 +2477,9 @@ class luxrender_SC_asymmetry_socket(bpy.types.NodeSocket):
 	default_value = bpy.props.FloatVectorProperty(name='Asymmetry', default=(0.0, 0.0, 0.0), min=-1.0, max=1.0, precision=4, get=default_value_get, set=default_value_set)
 	
 	def draw(self, context, layout, node):
-		row = layout.row()
-		row.prop(self, 'sc_asym', text='')
-		row.label(text=self.name)
+		col = layout.column()
+		col.label(text=self.name)
+		col.prop(self, 'sc_asym', text='')
 	
 	def draw_color(self, context, node):
 		return float_socket_color
