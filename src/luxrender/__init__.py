@@ -29,7 +29,7 @@ bl_info = {
 	"author": "LuxRender Project: Doug Hammond (dougal2), Asbjørn Heid (LordCrc), Daniel Genrich (Genscher), Jens Verwiebe, Jason Clarke (JtheNinja), neo2068",
 	"version": (1, 3, 'dev'),
 	"blender": (2, 67, 1),
-	"api": 56598,
+	"api": 57908,
 	"category": "Render",
 	"location": "Info header, render engine menu",
 	"warning": "",
