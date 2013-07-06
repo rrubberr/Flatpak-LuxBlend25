@@ -26,7 +26,7 @@
 #
 import hashlib
 
-import bpy
+import bpy, bpy.props
 
 from extensions_framework import declarative_property_group
 from extensions_framework import util as efutil

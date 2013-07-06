@@ -80,8 +80,6 @@ class ExportCache(object):
 
 class ParamSetItem(list):
 	
-	WRAP_WIDTH	= 100
-	
 	def __init__(self, *args):
 		self.type, self.name, self.value = args
 		self.type_name = "%s %s" % (self.type, self.name)
@@ -111,53 +109,39 @@ class ParamSetItem(list):
 		
 		return sz
 	
-	def list_wrap(self, lst, cnt, type='f'):
-		fcnt = float(cnt)
-		flen = float(len(lst))
-		
-		if False: #flen > fcnt:
-			# LIST WRAPPING DISABLED BECAUSE IT IS HIDEOUSLY EXPENSIVE
-			str = ''
-			if type == 'f':
-				for row in range( math.ceil(flen/fcnt) ):
-					str += ' '.join(['%0.15f'%i for i in lst[(row*cnt):(row+1)*cnt]]) + '\n'
-			elif type == 'i':
-				for row in range( math.ceil(flen/fcnt) ):
-					str += ' '.join(['%i'%i for i in lst[(row*cnt):(row+1)*cnt]]) + '\n'
-		else:
-			if type == 'f':
-				str = ' '.join(['%0.15f'%i for i in lst])
-			elif type == 'i':
-				str = ' '.join(['%i'%i for i in lst])
-		return str
-
+	def format_array(self, lst, fmt='f'):
+		if fmt == 'f':
+			return ' '.join(['%0.15f'%i for i in lst])
+		elif fmt == 'i':
+			return ' '.join(['%i'%i for i in lst])
+	
 	def to_string(self):
 		fs_num = '"%s %s" [%s]'
 		fs_str = '"%s %s" ["%s"]'
 		
-		if self.type == "float" and type(self.value) in (list, tuple):
-			lst = self.list_wrap(self.value, self.WRAP_WIDTH, 'f')
+		if self.type == "float" and isinstance(self.value, (list, tuple)):
+			lst = self.format_array(self.value, 'f')
 			return fs_num % ('float', self.name, lst)
 		if self.type == "float":
 			return fs_num % ('float', self.name, '%0.15f' % self.value)
-		if self.type == "integer" and type(self.value) in (list, tuple):
-			lst = self.list_wrap(self.value, self.WRAP_WIDTH, 'i')
+		if self.type == "integer" and isinstance(self.value, (list, tuple)):
+			lst = self.format_array(self.value, 'i')
 			return fs_num % ('integer', self.name, lst)
 		if self.type == "integer":
 			return fs_num % ('integer', self.name, '%i' % self.value)
 		if self.type == "string":
-			if type(self.value) is list:
+			if isinstance(self.value, (list, tuple)):
 				return fs_num % ('string', self.name, '\n'.join(['"%s"'%v for v in self.value]))
 			else:
 				return fs_str % ('string', self.name, self.value.replace('\\', '\\\\'))
 		if self.type == "vector":
-			lst = self.list_wrap(self.value, self.WRAP_WIDTH, 'f')
+			lst = self.format_array(self.value, 'f')
 			return fs_num % ('vector', self.name, lst)
 		if self.type == "point":
-			lst = self.list_wrap(self.value, self.WRAP_WIDTH, 'f')
+			lst = self.format_array(self.value, 'f')
 			return fs_num % ('point', self.name, lst)
 		if self.type == "normal":
-			lst = self.list_wrap(self.value, self.WRAP_WIDTH, 'f')
+			lst = self.format_array(self.value, 'f')
 			return fs_num % ('normal', self.name, lst)
 		if self.type == "color":
 			return fs_num % ('color', self.name, ' '.join(['%0.8f'%i for i in self.value]))
@@ -174,7 +158,7 @@ class ParamSetItem(list):
 class ParamSet(list):
 	
 	def __init__(self):
-		self.names = []
+		self.names = set()
 		self.item_sizes = {}
 	
 	def increase_size(self, param_name, sz):
@@ -204,7 +188,7 @@ class ParamSet(list):
 		self.append(
 			ParamSetItem(type, name, value)
 		)
-		self.names.append(name)
+		self.names.add(name)
 		return self
 	
 	def add_float(self, name, value):
@@ -220,7 +204,7 @@ class ParamSet(list):
 		return self
 	
 	def add_string(self, name, value):
-		if type(value) is list:
+		if isinstance(value, (list, tuple)):
 			self.add('string', name, [str(v) for v in value])
 		else:
 			self.add('string', name, str(value))
@@ -248,10 +232,8 @@ class ParamSet(list):
 
 
 def is_obj_visible(scene, obj, is_dupli=False):
-	ov = False
-	for lv in [ol and sl and rl for ol,sl,rl in zip(obj.layers, scene.layers, scene.render.layers.active.layers)]:
-		ov |= lv
-	return (ov or is_dupli) and not obj.hide_render
+	layer_viz = any(ol and sl and rl for ol,sl,rl in zip(obj.layers, scene.layers, scene.render.layers.active.layers))
+	return not obj.hide_render and (layer_viz or is_dupli)
 
 def get_worldscale(as_scalematrix=True):
 	# For usability, previev_scale is not an own property but calculated from the object dimensions
@@ -336,12 +318,13 @@ def matrix_to_list(matrix, apply_worldscale=False):
 		matrix[2][3] *= sm
 	else:
 		matrix = fix_matrix_order(matrix) # matrix indexing hack
-
 	
-	l = [	matrix[0][0], matrix[1][0], matrix[2][0], matrix[3][0],\
-		matrix[0][1], matrix[1][1], matrix[2][1], matrix[3][1],\
-		matrix[0][2], matrix[1][2], matrix[2][2], matrix[3][2],\
-		matrix[0][3], matrix[1][3], matrix[2][3], matrix[3][3] ]
+	l = [
+		matrix[0][0], matrix[1][0], matrix[2][0], matrix[3][0],
+		matrix[0][1], matrix[1][1], matrix[2][1], matrix[3][1],
+		matrix[0][2], matrix[1][2], matrix[2][2], matrix[3][2],
+		matrix[0][3], matrix[1][3], matrix[2][3], matrix[3][3]
+	]
 	
 	return [float(i) for i in l]
 

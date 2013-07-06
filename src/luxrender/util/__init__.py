@@ -77,7 +77,7 @@ class bEncoder(object):
 		)
 		
 		deflated = comp_obj.compress(
-			fSrc.read().encode()
+			fSrc.read()
 		)
 		deflated += comp_obj.flush()
 		
@@ -111,7 +111,7 @@ class bDecoder(object):
 	
 	def Decode_File2String(self, fSrc_name):
 		with open(fSrc_name, 'rb') as fSrc:
-			with io.StringIO() as fDes:
+			with io.BytesIO() as fDes:
 				fDes.name = '<string>'
 				self._Decode(fSrc, fDes)
 				return fDes.getvalue()
@@ -140,9 +140,9 @@ class bDecoder(object):
 		fDes.write(
 			decomp_obj.decompress(
 				base64.decodebytes(
-					fSrc.read().encode()
+					fSrc.read()
 				)
-			).decode()
+			)
 		)
 		
 		outlen = fDes.tell()

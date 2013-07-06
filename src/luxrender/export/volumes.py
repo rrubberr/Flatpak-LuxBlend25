@@ -30,7 +30,7 @@ from ctypes import cdll, c_uint, c_float, cast, POINTER, byref, sizeof
 import os, struct, sys
 
 # Blender Libs
-import bpy
+import bpy, bpy.utils
 
 # LuxRender libs
 from . import ParamSet, matrix_to_list, LuxManager
