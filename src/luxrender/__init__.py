@@ -38,69 +38,63 @@ bl_info = {
 	"description": "LuxRender integration for Blender"
 }
 
-from extensions_framework import Addon
-LuxRenderAddon = Addon(bl_info)
-
-from os import getenv
-
-if getenv('LUXBLEND_NO_REGISTER', None) is None:
+if 'core' in locals():
+	import imp
+	imp.reload(core)
+else:
+	import bpy
+	from bpy.types import AddonPreferences
+	from bpy.props import StringProperty, IntProperty, BoolProperty
+	from extensions_framework import Addon
+	import nodeitems_utils
+	from nodeitems_utils import NodeCategory, NodeItem, NodeItemCustom
 	
-	if 'core' in locals():
-		import imp
-		imp.reload(core)
-	else:
-		import bpy
-		from bpy.types import AddonPreferences
-		from bpy.props import StringProperty, IntProperty, BoolProperty
+	def find_luxrender_path():
+		from os import getenv
+		from extensions_framework import util as efutil
+		return getenv(
+			# Use the env var path, if set ...
+			'LUXRENDER_ROOT',
+			# .. or load the last path from CFG file
+			efutil.find_config_value('luxrender', 'defaults', 'install_path', '')
+		)
 		
-		import nodeitems_utils
-		from nodeitems_utils import NodeCategory, NodeItem, NodeItemCustom
+	class LuxRenderAddonPreferences(AddonPreferences):
+		# this must match the addon name
+		bl_idname = __name__
 		
-		def find_luxrender_path():
-			from extensions_framework import util as efutil
-			return getenv(
-				# Use the env var path, if set ...
-				'LUXRENDER_ROOT',
-				# .. or load the last path from CFG file
-				efutil.find_config_value('luxrender', 'defaults', 'install_path', '')
-			)
-			
-		class LuxRenderAddonPreferences(AddonPreferences):
-			# this must match the addon name
-			bl_idname = __name__
-			
-			install_path = StringProperty(
-					name="Path to LuxRender Installation",
-					description='Path to LuxRender install directory',
-					subtype='DIR_PATH',
-					default=find_luxrender_path(),
-					)
-			
-			def draw(self, context):
-				layout = self.layout
-				#layout.label(text="This is a preferences view for our addon")
-				layout.prop(self, "install_path")
+		install_path = StringProperty(
+				name="Path to LuxRender Installation",
+				description='Path to LuxRender install directory',
+				subtype='DIR_PATH',
+				default=find_luxrender_path(),
+				)
 		
-		
-		
-		def get_prefs():
-			return bpy.context.user_preferences.addons[__name__].preferences
-		# patch the LuxRenderAddon class to make it easier to get the addon prefs
-		LuxRenderAddon.get_prefs = get_prefs
-		
-		addon_register, addon_unregister = LuxRenderAddon.init_functions()
-		
-		def register():
-			bpy.utils.register_class(LuxRenderAddonPreferences)
-			nodeitems_utils.register_node_categories("LUX_SHADER", ui.node_editor.luxrender_node_catagories)
-			addon_register()
-		
-		def unregister():
-			bpy.utils.unregister_class(LuxRenderAddonPreferences)
-			nodeitems_utils.register_node_categories("LUX_SHADER", ui.node_editor.luxrender_node_catagories)
-			addon_unregister()
-		
-		
-		# Importing the core package causes extensions_framework managed
-		# RNA class registration via @LuxRenderAddon.addon_register_class
-		from . import core
+		def draw(self, context):
+			layout = self.layout
+			#layout.label(text="This is a preferences view for our addon")
+			layout.prop(self, "install_path")
+	
+	LuxRenderAddon = Addon(bl_info)
+	
+	def get_prefs():
+		return bpy.context.user_preferences.addons[__name__].preferences
+	# patch the LuxRenderAddon class to make it easier to get the addon prefs
+	LuxRenderAddon.get_prefs = get_prefs
+	
+	addon_register, addon_unregister = LuxRenderAddon.init_functions()
+	
+	def register():
+		bpy.utils.register_class(LuxRenderAddonPreferences)
+		nodeitems_utils.register_node_categories("LUX_SHADER", ui.node_editor.luxrender_node_catagories)
+		addon_register()
+	
+	def unregister():
+		bpy.utils.unregister_class(LuxRenderAddonPreferences)
+		nodeitems_utils.register_node_categories("LUX_SHADER", ui.node_editor.luxrender_node_catagories)
+		addon_unregister()
+	
+	
+	# Importing the core package causes extensions_framework managed
+	# RNA class registration via @LuxRenderAddon.addon_register_class
+	from . import core

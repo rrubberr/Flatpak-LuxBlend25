@@ -1,4 +1,4 @@
-from _helpers import _AnyObject
+from _helpers import _AnyObject, _LiteralObject
 
 class Node(_AnyObject):
 	pass
@@ -16,7 +16,9 @@ class Menu(_AnyObject):
 	draw_preset = None
 
 class Panel(_AnyObject):
-	pass
+	@staticmethod
+	def append(*a, **k):
+		pass
 
 class Armature(_AnyObject):
 	pass
@@ -77,3 +79,22 @@ class World(_AnyObject):
 
 class Header(_AnyObject):
 	pass
+
+class PropertyGroup(_AnyObject):
+	pass
+
+class RenderEngine(_AnyObject):
+	pass
+
+class AddonPreferences(_AnyObject):
+	pass
+
+class RigidBodyConstraint(_AnyObject):
+	class bl_rna:
+		properties = {
+			'type': _LiteralObject(enum_items=[])
+		}
+
+INFO_MT_file_export = []
+RENDER_PT_output = []
+

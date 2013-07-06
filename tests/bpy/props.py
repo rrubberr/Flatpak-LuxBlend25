@@ -17,3 +17,6 @@ class EnumProperty(_AnyObject):
 
 class IntProperty(_AnyObject):
 	pass
+
+class CollectionProperty(_AnyObject):
+	pass
