@@ -77,7 +77,7 @@ class bEncoder(object):
 		)
 		
 		deflated = comp_obj.compress(
-			fSrc.read()
+			fSrc.read().encode()
 		)
 		deflated += comp_obj.flush()
 		
@@ -88,7 +88,7 @@ class bEncoder(object):
 		)
 		
 		self.last_encode_size = fDes.tell()
-		elapsed = time.time() - start_time
+		elapsed = float(time.time() - start_time)
 		print('bEncode %s : %d bytes -> %d bytes -> %d bytes: %0.2f%% : %0.2f sec : %0.2f kb/sec' % (
 			input_filename, 
 			filelen,
@@ -96,8 +96,8 @@ class bEncoder(object):
 			self.last_encode_size,
 			100*self.last_encode_size/filelen,
 			elapsed,
-			filelen / elapsed / 1024)
-		)
+			float(filelen) / elapsed / 1024.0 if elapsed > 0 else 9999.0
+		))
 
 class bDecoder(object):
 	"""
@@ -140,21 +140,21 @@ class bDecoder(object):
 		fDes.write(
 			decomp_obj.decompress(
 				base64.decodebytes(
-					fSrc.read()
+					fSrc.read().encode()
 				)
-			)
+			).decode()
 		)
 		
 		outlen = fDes.tell()
-		elapsed = time.time() - start_time
+		elapsed = float(time.time() - start_time)
 		print('bDecode %s : %d bytes -> %d bytes : %0.2f%% : %0.2f sec : %0.2f kb/sec' % (
 			input_filename,
 			filelen,
 			outlen,
 			100*outlen/filelen,
 			elapsed,
-			filelen / elapsed / 1024)
-		)
+			float(filelen) / elapsed / 1024.0 if elapsed > 0 else 9999.0
+		))
 
 def bencode_file2file(in_filename, out_filename):
 	be = bEncoder()

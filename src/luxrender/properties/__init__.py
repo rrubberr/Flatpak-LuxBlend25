@@ -25,7 +25,7 @@
 # ***** END GPL LICENCE BLOCK *****
 #
 
-import bpy
+import bpy, bpy.types
 
 class luxrender_node(bpy.types.Node):
 	#This node is only for the Lux node-tree
@@ -40,16 +40,16 @@ class luxrender_material_node(luxrender_node):
 
 ## For eliminating redundant volume definitions
 class ExportedVolumes(object):
-	vol_names = []
+	vol_names = set()
 	
 	@staticmethod
 	def list_exported_volumes(name):
 		if name not in ExportedVolumes.vol_names:
-			ExportedVolumes.vol_names.append(name)
+			ExportedVolumes.vol_names.add(name)
 	
 	@staticmethod
 	def reset_vol_list():
-		ExportedVolumes.vol_names = []
+		ExportedVolumes.vol_names.clear()
 
 
 def find_node(material, nodetype):

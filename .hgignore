@@ -14,4 +14,4 @@ liblux*
 *.dylib
 *.orig
 *.patch
-
+.coverage
