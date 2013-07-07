@@ -1,6 +1,10 @@
 import unittest
 import mox
 
+# LuxBlend stores objects in sets/dict keys for caching,
+# therefore our mock obejcts need to be hashable
+mox.MockAnything.__hash__ = lambda self: id(self)
+
 class _BaseTest(unittest.TestCase):
 	
 	def setUp(self):

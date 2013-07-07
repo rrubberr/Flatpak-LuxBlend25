@@ -16,3 +16,4 @@ set PATH=src;%BLENDER_MODS%;%PATH%
 set PYTHONPATH=%BLENDER_MODS%;%PYTHONPATH%
 
 %PY3_64% -m nose --with-coverage --cover-package=luxrender --cover-erase tests
+:: %PY3_64% -m nose --cover-package=luxrender --cover-erase tests
