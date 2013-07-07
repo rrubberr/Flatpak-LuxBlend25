@@ -18,6 +18,11 @@ class _AnyObject(object):
 	def __init__(self, *a, **k):
 		pass
 
-class _LiteralObject(object):
-	def __init__(self, **kwargs):
-		self.__dict__.update(kwargs)
+def _LiteralObject(_base=object, *la, **lk):
+	class _BasedLiteralObject(_base):
+		def __init__(self, *a, **k):
+			self.__dict__.update(k)
+		def __repr__(self):
+			return '<_LiteralObject(%s) %s>' % (_base.__name__, self.__dict__)
+	
+	return _BasedLiteralObject(*la, **lk)

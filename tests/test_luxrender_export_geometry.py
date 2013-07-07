@@ -65,13 +65,30 @@ class Test_GeometryExporter(_BaseTest):
 			index=0
 		)
 		
-		material = _LiteralObject(
+		material = _LiteralObject()
+		
+		uv_item = _LiteralObject(
+			uv=[ [0,0], [0,1], [1,0] ]
 		)
+		
+		uv_layer = _LiteralObject(
+			_base=list,
+		)
+		uv_layer.append(uv_item)
+		
+		uv_layers = _LiteralObject(
+			_base=list,
+			active=_LiteralObject(
+				data=uv_layer
+			),
+			data=_LiteralObject()
+		)
+		uv_layers.append(uv_layer)
 		
 		mesh = self.mox.CreateMockAnything()
 		mesh.tessfaces = [face]
 		mesh.materials = [material]
-		mesh.tessface_uv_textures = []
+		mesh.tessface_uv_textures = uv_layers
 		mesh.tessface_vertex_colors=_LiteralObject(
 			active=False
 		)
@@ -102,7 +119,8 @@ class Test_GeometryExporter(_BaseTest):
 				[
 					['integer triindices', [0, 1, 2]],
 					['point P', [1, 2, 3, 1, 2, 3, 1, 2, 3]],
-					['normal N', [4, 5, 6, 4, 5, 6, 4, 5, 6]]
+					['normal N', [4, 5, 6, 4, 5, 6, 4, 5, 6]],
+					['float uv', [0, 0, 0, 1, 1, 0]]
 				]
 			)
 		]
