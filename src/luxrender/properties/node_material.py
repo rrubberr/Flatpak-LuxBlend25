@@ -7,7 +7,7 @@
 # --------------------------------------------------------------------------
 #
 # Authors:
-# Jens Verwiebe, Jason Clarke
+# Jens Verwiebe, Jason Clarke, Asbjørn Heid
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -31,7 +31,8 @@ import bpy
 from extensions_framework import declarative_property_group
 
 from .. import LuxRenderAddon
-from ..properties import (luxrender_node, luxrender_material_node, get_linked_node, check_node_export_material, check_node_export_texture, check_node_get_paramset)
+from ..properties import (luxrender_node, luxrender_material_node, get_linked_node, check_node_export_material, check_node_export_texture, check_node_get_paramset, ExportedVolumes)
+
 from ..properties.texture import (
 	FloatTextureParameter, ColorTextureParameter, FresnelTextureParameter,
 	import_paramset_to_blender_texture, shorten_name, refresh_preview
@@ -62,36 +63,15 @@ def add_nodetype(layout, type):
 
 def get_socket_paramsets(sockets, make_texture):
 	params = ParamSet()
-	store_urougness = 0.0
 	for socket in sockets:
 		if not hasattr(socket, 'get_paramset'):
 			print('No get_paramset() for socket %s' % socket.bl_idname)
 			continue
-		if socket.hide:
-			print('Hidden socket %s will not be exported' % socket.bl_idname)
+		if not socket.enabled:
+			print('Disabled socket %s will not be exported' % socket.bl_idname)
 			continue
-		if hasattr(socket, 'uroughness'):
-			store_urougness = socket.uroughness
-		if hasattr(socket, 'vroughness') and socket.sync_vroughness and socket.vroughness != store_urougness:
-			socket.vroughness = store_urougness
-			print("Syncing U/V-Roughness")
 		params.update( socket.get_paramset(make_texture) )
 	return params
-
-#Create the mainmenu for the add-node menu
-def draw_add_menu(self, context):
-	if context.space_data.tree_type == 'luxrender_material_nodes':
-		layout = self.layout
-		layout.label('LuxRender Node Types')
-		layout.menu("Lux_NODE_inputs")
-		layout.menu("Lux_NODE_outputs")
-		layout.menu("Lux_NODE_materials")
-		layout.menu("Lux_NODE_textures")
-#		layout.menu("Lux_NODE_spectra")
-		layout.menu("Lux_NODE_fresnel")
-		layout.menu("Lux_NODE_utilities")
-		layout.menu("Lux_NODE_volumes")
-		layout.menu("Lux_NODE_lights")
 
 #Create the submenus for the add-node menu
 @LuxRenderAddon.addon_register_class
@@ -241,12 +221,28 @@ class luxrender_mat_node_editor(bpy.types.NodeTree):
 		#			return bpy.data.node_groups[la.luxrender_lamp.nodetree], la, la
 		return (None, None, None)
 
+	def draw_add_menu(self, context):
+		if context.space_data.tree_type == 'luxrender_material_nodes':
+			layout = self.layout
+			layout.label('LuxRender Node Types')
+			layout.menu("Lux_NODE_inputs")
+			layout.menu("Lux_NODE_outputs")
+			layout.menu("Lux_NODE_materials")
+			layout.menu("Lux_NODE_textures")
+#			layout.menu("Lux_NODE_spectra")
+			layout.menu("Lux_NODE_fresnel")
+			layout.menu("Lux_NODE_utilities")
+			layout.menu("Lux_NODE_volumes")
+			layout.menu("Lux_NODE_lights")
+	
 	# This block updates the preview, when socket links change
 	def update(self):
 		self.refresh = True
 	
 	def acknowledge_connection(self, context):
-		self.refresh = False
+		while self.refresh == True:
+			self.refresh = False
+			break
 	
 	refresh = bpy.props.BoolProperty(name='Links Changed', default=False, update=acknowledge_connection)
 
@@ -472,11 +468,13 @@ class luxrender_material_type_node_glossy(luxrender_material_node):
 
 	def change_use_ior(self, context):
 		## Specular/IOR representation switches
-		self.inputs['Specular Color'].hide = self.use_ior
-		self.inputs['IOR'].hide = not self.use_ior
+		self.inputs['Specular Color'].enabled = not self.use_ior
+		self.inputs['IOR'].enabled =  self.use_ior
 	
 	def change_use_anistropy(self, context):
-		self.inputs['V-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['U-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['V-Roughness'].enabled = self.use_anisotropy
+		self.inputs['U-Roughness'].name = 'Roughness' if not self.use_anisotropy else 'U-Roughness'		
 
 	multibounce = bpy.props.BoolProperty(name='Multibounce', description='Enable surface layer multibounce', default=False)
 	use_ior = bpy.props.BoolProperty(name='Use IOR', description='Set Specularity by IOR', default=False, update=change_use_ior)
@@ -487,11 +485,12 @@ class luxrender_material_type_node_glossy(luxrender_material_node):
 		self.inputs.new('luxrender_TF_sigma_socket', 'Sigma')
 		self.inputs.new('luxrender_TC_Ks_socket', 'Specular Color')
 		self.inputs.new('luxrender_TF_ior_socket', 'IOR')
-		self.inputs['IOR'].hide = True # initial state is hidden
+		self.inputs['IOR'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TC_Ka_socket', 'Absorption Color')
 		self.inputs.new('luxrender_TF_d_socket', 'Absorption depth (nm)')
 		self.inputs.new('luxrender_TF_uroughness_socket', 'U-Roughness')
 		self.inputs.new('luxrender_TF_vroughness_socket', 'V-Roughness')
+		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 
 		self.outputs.new('NodeSocketShader', 'Surface')
@@ -521,11 +520,13 @@ class luxrender_material_type_node_glossycoating(luxrender_material_node):
 
 	def change_use_ior(self, context):
 		## Specular/IOR representation switches
-		self.inputs['Specular Color'].hide = self.use_ior
-		self.inputs['IOR'].hide = not self.use_ior
+		self.inputs['Specular Color'].enabled = not self.use_ior
+		self.inputs['IOR'].enabled = self.use_ior
 	
 	def change_use_anistropy(self, context):
-		self.inputs['V-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['U-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['V-Roughness'].enabled = self.use_anisotropy
+		self.inputs['U-Roughness'].name = 'Roughness' if not self.use_anisotropy else 'U-Roughness'
 	
 	multibounce = bpy.props.BoolProperty(name='Multibounce', description='Enable surface layer multibounce', default=False)
 	use_ior = bpy.props.BoolProperty(name='Use IOR', description='Set Specularity by IOR', default=False, update=change_use_ior)
@@ -535,11 +536,12 @@ class luxrender_material_type_node_glossycoating(luxrender_material_node):
 		self.inputs.new('NodeSocketShader', 'Base Material')
 		self.inputs.new('luxrender_TC_Ks_socket', 'Specular Color')
 		self.inputs.new('luxrender_TF_ior_socket', 'IOR')
-		self.inputs['IOR'].hide = True # initial state is hidden
+		self.inputs['IOR'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TC_Ka_socket', 'Absorption Color')
 		self.inputs.new('luxrender_TF_d_socket', 'Absorption depth (nm)')
 		self.inputs.new('luxrender_TF_uroughness_socket', 'U-Roughness')
 		self.inputs.new('luxrender_TF_vroughness_socket', 'V-Roughness')
+		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 
 		self.outputs.new('NodeSocketShader', 'Surface')
@@ -579,11 +581,13 @@ class luxrender_material_type_node_glossytranslucent(luxrender_material_node):
 	
 	def change_use_ior(self, context):
 		## Specular/IOR representation switches
-		self.inputs['Specular Color'].hide = self.use_ior
-		self.inputs['IOR'].hide = not self.use_ior
+		self.inputs['Specular Color'].enabled = not self.use_ior
+		self.inputs['IOR'].enabled = self.use_ior
 
 	def change_use_anistropy(self, context):
-		self.inputs['V-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['U-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['V-Roughness'].enabled = self.use_anisotropy
+		self.inputs['U-Roughness'].name = 'Roughness' if not self.use_anisotropy else 'U-Roughness'
 	
 	multibounce = bpy.props.BoolProperty(name='Multibounce', description='Enable surface layer multibounce', default=False)
 	use_ior = bpy.props.BoolProperty(name='Use IOR', description='Set Specularity by IOR', default=False, update=change_use_ior)
@@ -596,10 +600,11 @@ class luxrender_material_type_node_glossytranslucent(luxrender_material_node):
 		self.inputs.new('luxrender_TC_Ka_socket', 'Absorption Color')
 		self.inputs.new('luxrender_TC_Ks_socket', 'Specular Color')
 		self.inputs.new('luxrender_TF_ior_socket', 'IOR')
-		self.inputs['IOR'].hide = True # initial state is hidden
+		self.inputs['IOR'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		self.inputs.new('luxrender_TF_uroughness_socket', 'U-Roughness')
 		self.inputs.new('luxrender_TF_vroughness_socket', 'V-Roughness')
+		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		
 		self.outputs.new('NodeSocketShader', 'Surface')
 	
@@ -739,7 +744,9 @@ class luxrender_material_type_node_metal(luxrender_material_node):
 			metal_presets = prop['items']
 
 	def change_use_anistropy(self, context):
-		self.inputs['V-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['U-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['V-Roughness'].enabled = self.use_anisotropy
+		self.inputs['U-Roughness'].name = 'Roughness' if not self.use_anisotropy else 'U-Roughness'
 	
 	metal_preset = bpy.props.EnumProperty(name='Preset', description='Luxrender Metal Preset', items=metal_presets, default='aluminium')
 	
@@ -750,6 +757,7 @@ class luxrender_material_type_node_metal(luxrender_material_node):
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		self.inputs.new('luxrender_TF_uroughness_socket', 'U-Roughness')
 		self.inputs.new('luxrender_TF_vroughness_socket', 'V-Roughness')
+		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		
 		self.outputs.new('NodeSocketShader', 'Surface')
 	
@@ -794,7 +802,9 @@ class luxrender_material_type_node_metal2(luxrender_material_node):
 			metal2_presets = prop['items']
 
 	def change_use_anistropy(self, context):
-		self.inputs['V-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['U-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['V-Roughness'].enabled = self.use_anisotropy
+		self.inputs['U-Roughness'].name = 'Roughness' if not self.use_anisotropy else 'U-Roughness'
 
 # 	metal2_type = bpy.props.EnumProperty(name='Type', description='Luxrender Metal2 Type', items=metal2_types, default='preset')
 # 	metal2_preset = bpy.props.EnumProperty(name='Preset', description='Luxrender Metal2 Preset', items=metal2_presets, default='aluminium')
@@ -807,6 +817,7 @@ class luxrender_material_type_node_metal2(luxrender_material_node):
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		self.inputs.new('luxrender_TF_uroughness_socket', 'U-Roughness')
 		self.inputs.new('luxrender_TF_vroughness_socket', 'V-Roughness')
+		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		
 		self.outputs.new('NodeSocketShader', 'Surface')
 	
@@ -915,7 +926,9 @@ class luxrender_material_type_node_roughglass(luxrender_material_node):
 	bl_width_min = 180
 	
 	def change_use_anistropy(self, context):
-		self.inputs['V-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['U-Roughness'].sync_vroughness = not self.use_anisotropy
+		self.inputs['V-Roughness'].enabled = self.use_anisotropy
+		self.inputs['U-Roughness'].name = 'Roughness' if not self.use_anisotropy else 'U-Roughness'
 
 	use_anisotropy = bpy.props.BoolProperty(name='Anisotropic Roughness', description='Anisotropic Roughness', default=False, update=change_use_anistropy)
 	dispersion = bpy.props.BoolProperty(name='Dispersion', description='Enables chromatic dispersion, volume should have a sufficient data for this', default=False)
@@ -928,6 +941,7 @@ class luxrender_material_type_node_roughglass(luxrender_material_node):
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		self.inputs.new('luxrender_TF_uroughness_socket', 'U-Roughness')
 		self.inputs.new('luxrender_TF_vroughness_socket', 'V-Roughness')
+		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 
 		self.outputs.new('NodeSocketShader', 'Surface')
 
@@ -1174,16 +1188,24 @@ class luxrender_material_output_node(luxrender_node):
 			nonlocal lux_context
 			vol_name = '%s::%s' % (tree_name, vol_name)
 			volume_name = vol_name
-			print('Exporting volume, type: "%s", name: "%s"' % (vol_type, vol_name))
 			
-			lux_context.makeNamedVolume(vol_name, vol_type, vol_params)
+			## Here we look for redundant volume definitions caused by material used more than once
+			if mode=='indirect':
+				if vol_name not in ExportedVolumes.vol_names: # was not yet exported
+					print('Exporting volume, type: "%s", name: "%s"' % (vol_type, vol_name))
+					
+					lux_context.makeNamedVolume(vol_name, vol_type, vol_params)
+					ExportedVolumes.list_exported_volumes(vol_name) # mark as exported
+					
+			else: # direct
+				lux_context.makeNamedVolume(vol_name, vol_type, vol_params)
 				
 			return volume_name
 		if int_vol_socket.is_linked:
 			int_vol_node.export_volume(make_volume=make_volume, make_texture=make_texture)
 		if ext_vol_socket.is_linked:
 			ext_vol_node.export_volume(make_volume=make_volume, make_texture=make_texture)
-
+		
 		return set()
 
 # Custom socket types, lookup parameters here:
@@ -1225,14 +1247,17 @@ class luxrender_fresnel_socket(bpy.types.NodeSocket):
 	default_value = bpy.props.FloatProperty(name='IOR', default=1.52, precision=6, get=default_value_get, set=default_value_set)
 	
 	# Optional function for drawing the socket input value
-	def draw(self, context, layout, node):
-		box = layout.box()
-		if self.fresnel == self.fresnel_presetvalue:
-			menu_text = self.fresnel_presetstring
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
 		else:
-			menu_text = '-- Choose preset --'
-		box.menu('LUXRENDER_MT_ior_presets', text=menu_text)
-		box.prop(self, 'fresnel', text=self.name)
+			box = layout.box()
+			if self.fresnel == self.fresnel_presetvalue:
+				menu_text = self.fresnel_presetstring
+			else:
+				menu_text = '-- Choose preset --'
+			box.menu('LUXRENDER_MT_ior_presets', text=menu_text)
+			box.prop(self, 'fresnel', text=self.name)
 	
 	# Socket color
 	def draw_color(self, context, node):
@@ -1280,11 +1305,14 @@ class luxrender_TC_Ka_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Absorption Color', default=get_default(TC_Ka), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1328,11 +1356,14 @@ class luxrender_TC_Kd_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Diffuse Color', default=get_default(TC_Kd), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1376,11 +1407,14 @@ class luxrender_TC_Kr_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Reflection Color', default=get_default(TC_Kr), subtype='COLOR',get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1422,11 +1456,14 @@ class luxrender_TC_Ks_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Specular Color', default=get_default(TC_Ks), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1468,11 +1505,14 @@ class luxrender_TC_Ks1_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Specular Color 1', default=get_default(TC_Ks1), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1514,11 +1554,14 @@ class luxrender_TC_Ks2_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Specular Color 2', default=get_default(TC_Ks2), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1560,11 +1603,14 @@ class luxrender_TC_Ks3_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Specular Color 3', default=get_default(TC_Ks3), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1606,11 +1652,14 @@ class luxrender_TC_Kt_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Transmission Color', default=get_default(TC_Kt), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1652,11 +1701,14 @@ class luxrender_TC_warp_Kd_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Warp Diffuse Color', default=get_default(TC_warp_Kd), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1698,11 +1750,14 @@ class luxrender_TC_warp_Ks_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Warp Specular Color', default=get_default(TC_warp_Ks), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1744,11 +1799,14 @@ class luxrender_TC_weft_Kd_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Weft Diffuse Color', default=get_default(TC_weft_Kd), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1790,11 +1848,14 @@ class luxrender_TC_weft_Ks_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Weft Specular Color', default=get_default(TC_weft_Ks), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1836,11 +1897,14 @@ class luxrender_TC_backface_Ka_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Backface Absorption Color', default=get_default(TC_backface_Ka), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1882,11 +1946,14 @@ class luxrender_TC_backface_Ks_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Backface Specular Color', default=get_default(TC_backface_Ks), subtype='COLOR', get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1928,11 +1995,14 @@ class luxrender_AC_absorption_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatVectorProperty(name='Absorption Color', description='Absorption Color', default=(0.0, 0.0, 0.0), subtype='COLOR', min=0.0, soft_max=1.0, update=color_update)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -1974,11 +2044,14 @@ class luxrender_SC_absorption_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Absorption Color', description='Absorption Color', default=(0.0, 0.0, 0.0), subtype='COLOR', min=0.0, soft_max=1.0, update=color_update)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -2020,11 +2093,14 @@ class luxrender_SC_color_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatVectorProperty(name='Scattering Color', description='Scattering Color', default=(0.0, 0.0, 0.0), subtype='COLOR', min=0.0, soft_max=1.0)
 	
-	def draw(self, context, layout, node):
-		row = layout.row()
-		row.alignment = 'LEFT'
-		row.prop(self, 'color', text='')
-		row.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			row = layout.row()
+			row.alignment = 'LEFT'
+			row.prop(self, 'color', text='')
+			row.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -2050,7 +2126,7 @@ class luxrender_SC_color_socket(bpy.types.NodeSocket):
 @LuxRenderAddon.addon_register_class
 class luxrender_TF_amount_socket(bpy.types.NodeSocket):
 	# Description string
-	'''Bump socket'''
+	'''Amount socket'''
 	# Optional identifier string. If not explicitly defined, the python class name is used.
 	bl_idname = 'luxrender_TF_amount_socket'
 	# Label for nice name display
@@ -2072,8 +2148,11 @@ class luxrender_TF_amount_socket(bpy.types.NodeSocket):
 	default_value = bpy.props.FloatProperty(name=get_props(TF_amount, 'name'), default=get_props(TF_amount, 'default'), subtype=get_props(TF_amount, 'subtype'), unit=get_props(TF_amount, 'unit'), min=get_props(TF_amount, 'min'), max=get_props(TF_amount, 'max'), soft_min=get_props(TF_amount, 'soft_min'), soft_max=get_props(TF_amount, 'soft_max'), precision=get_props(TF_amount, 'precision'), get=default_value_get, set=default_value_set)
 	
 	# Optional function for drawing the socket input value
-	def draw(self, context, layout, node):
-		layout.prop(self, 'amount', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'amount', text=self.name)
 	
 	# Socket color
 	def draw_color(self, context, node):
@@ -2120,8 +2199,11 @@ class luxrender_TF_bump_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_bumpmap, 'name'), description=get_props(TF_bumpmap, 'description'), default=get_props(TF_bumpmap, 'default'), subtype=get_props(TF_bumpmap, 'subtype'), unit=get_props(TF_bumpmap, 'unit'), min=get_props(TF_bumpmap, 'min'), max=get_props(TF_bumpmap, 'max'), soft_min=get_props(TF_bumpmap, 'soft_min'), soft_max=get_props(TF_bumpmap, 'soft_max'), precision=get_props(TF_bumpmap, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.label(text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.label(text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2160,8 +2242,11 @@ class luxrender_TF_cauchyb_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_cauchyb, 'name'), default=get_props(TF_cauchyb, 'default'), subtype=get_props(TF_cauchyb, 'subtype'), min=get_props(TF_cauchyb, 'min'), max=get_props(TF_cauchyb, 'max'), soft_min=get_props(TF_cauchyb, 'soft_min'), soft_max=get_props(TF_cauchyb, 'soft_max'), precision=get_props(TF_cauchyb, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'cauchyb', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'cauchyb', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2210,14 +2295,17 @@ class luxrender_TF_film_ior_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_filmindex, 'name'), default=get_props(TF_filmindex, 'default'), subtype=get_props(TF_filmindex, 'subtype'), min=get_props(TF_filmindex, 'min'), max=get_props(TF_filmindex, 'max'), soft_min=get_props(TF_filmindex, 'soft_min'), soft_max=get_props(TF_filmindex, 'soft_max'), precision=get_props(TF_filmindex, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		box = layout.box()
-		if self.filmindex == self.filmindex_presetvalue:
-			menu_text = self.filmindex_presetstring
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
 		else:
-			menu_text = '-- Choose preset --'
-		box.menu('LUXRENDER_MT_ior_presets', text=menu_text)
-		box.prop(self, 'filmindex', text=self.name)
+			box = layout.box()
+			if self.filmindex == self.filmindex_presetvalue:
+				menu_text = self.filmindex_presetstring
+			else:
+				menu_text = '-- Choose preset --'
+			box.menu('LUXRENDER_MT_ior_presets', text=menu_text)
+			box.prop(self, 'filmindex', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2241,7 +2329,7 @@ class luxrender_TF_film_ior_socket(bpy.types.NodeSocket):
 		
 @LuxRenderAddon.addon_register_class
 class luxrender_TF_film_thick_socket(bpy.types.NodeSocket):
-	'''Thin film IOR socket'''
+	'''Thin film thickness socket'''
 	bl_idname = 'luxrender_TF_film_thick_socket'
 	bl_label = 'Thin Film thickness socket'
 	
@@ -2261,8 +2349,11 @@ class luxrender_TF_film_thick_socket(bpy.types.NodeSocket):
 	default_value = bpy.props.FloatProperty(name=get_props(TF_film, 'name'), default=get_props(TF_film, 'default'), subtype=get_props(TF_film, 'subtype'), min=get_props(TF_film, 'min'), max=get_props(TF_film, 'max'), soft_min=get_props(TF_film, 'soft_min'), soft_max=get_props(TF_film, 'soft_max'), precision=get_props(TF_film, 'precision'), get=default_value_get, set=default_value_set)
 
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'film', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'film', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2311,14 +2402,17 @@ class luxrender_TF_ior_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_index, 'name'), default=get_props(TF_index, 'default'), subtype=get_props(TF_index, 'subtype'), min=get_props(TF_index, 'min'), max=get_props(TF_index, 'max'), soft_min=get_props(TF_index, 'soft_min'), soft_max=get_props(TF_index, 'soft_max'), precision=get_props(TF_index, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		box = layout.box()
-		if self.index == self.index_presetvalue:
-			menu_text = self.index_presetstring
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
 		else:
-			menu_text = '-- Choose preset --'
-		box.menu('LUXRENDER_MT_ior_presets', text=menu_text)
-		box.prop(self, 'index', text=self.name)
+			box = layout.box()
+			if self.index == self.index_presetvalue:
+				menu_text = self.index_presetstring
+			else:
+				menu_text = '-- Choose preset --'
+			box.menu('LUXRENDER_MT_ior_presets', text=menu_text)
+			box.prop(self, 'index', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2350,6 +2444,7 @@ class luxrender_TF_uroughness_socket(bpy.types.NodeSocket):
 	def uroughness_update(self, context):
 		pass
 	
+	sync_vroughness = bpy.props.BoolProperty(name='Sync V to U', default=True)
 	uroughness = bpy.props.FloatProperty(name=get_props(TF_uroughness, 'name'), description=get_props(TF_uroughness, 'description'), default=get_props(TF_uroughness, 'default'), subtype=get_props(TF_uroughness, 'subtype'), min=get_props(TF_uroughness, 'min'), max=get_props(TF_uroughness, 'max'), soft_min=get_props(TF_uroughness, 'soft_min'), soft_max=get_props(TF_uroughness, 'soft_max'), precision=get_props(TF_uroughness, 'precision'), update=uroughness_update)
 
 	# helper property
@@ -2361,10 +2456,11 @@ class luxrender_TF_uroughness_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_uroughness, 'name'), default=get_props(TF_uroughness, 'default'), subtype=get_props(TF_uroughness, 'subtype'), min=get_props(TF_uroughness, 'min'), max=get_props(TF_uroughness, 'max'), soft_min=get_props(TF_uroughness, 'soft_min'), soft_max=get_props(TF_uroughness, 'soft_max'), precision=get_props(TF_uroughness, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		if node.use_anisotropy: name = 'U-Roughness'
-		else: name = 'Roughness'
-		layout.prop(self, 'uroughness', text=name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'uroughness', text=self.name)
 		
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2379,11 +2475,24 @@ class luxrender_TF_uroughness_socket(bpy.types.NodeSocket):
 				
 			tex_name = tex_node.export_texture(make_texture)
 			
-			roughness_params = ParamSet() \
-				.add_texture('uroughness', tex_name)
+			if self.sync_vroughness:
+				print("Syncing V-Roughness: ")
+				roughness_params = ParamSet() \
+					.add_texture('uroughness', tex_name) \
+					.add_texture('vroughness', tex_name)
+			else:
+				roughness_params = ParamSet() \
+					.add_texture('uroughness', tex_name)
+				
 		else:
-			roughness_params = ParamSet() \
-				.add_float('uroughness', self.uroughness)
+			if self.sync_vroughness:
+				print("Syncing V-Roughness: ")
+				roughness_params = ParamSet() \
+					.add_float('uroughness', self.uroughness) \
+					.add_float('vroughness', self.uroughness)
+			else:
+				roughness_params = ParamSet() \
+					.add_float('uroughness', self.uroughness)
 		
 		return roughness_params
 
@@ -2397,7 +2506,6 @@ class luxrender_TF_vroughness_socket(bpy.types.NodeSocket):
 	def vroughness_update(self, context):
 		pass
 	
-	sync_vroughness = bpy.props.BoolProperty(name='Sync V', default=True)
 	vroughness = bpy.props.FloatProperty(name=get_props(TF_vroughness, 'name'), description=get_props(TF_vroughness, 'description'), default=get_props(TF_vroughness, 'default'), subtype=get_props(TF_vroughness, 'subtype'), min=get_props(TF_vroughness, 'min'), max=get_props(TF_vroughness, 'max'), soft_min=get_props(TF_vroughness, 'soft_min'), soft_max=get_props(TF_vroughness, 'soft_max'), precision=get_props(TF_uroughness, 'precision'), update=vroughness_update)
 
 	# helper property
@@ -2409,9 +2517,11 @@ class luxrender_TF_vroughness_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_vroughness, 'name'), default=get_props(TF_vroughness, 'default'), subtype=get_props(TF_vroughness, 'subtype'), min=get_props(TF_vroughness, 'min'), max=get_props(TF_vroughness, 'max'), soft_min=get_props(TF_vroughness, 'soft_min'), soft_max=get_props(TF_vroughness, 'soft_max'), precision=get_props(TF_uroughness, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'vroughness', text=self.name)
-		layout.active = node.use_anisotropy
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'vroughness', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2456,8 +2566,11 @@ class luxrender_TF_sigma_socket(bpy.types.NodeSocket):
 
 	default_value = bpy.props.FloatProperty(name="Sigma", default=get_props(TF_sigma, 'default'), subtype=get_props(TF_sigma, 'subtype'), min=get_props(TF_sigma, 'min'), max=get_props(TF_sigma, 'max'), soft_min=get_props(TF_sigma, 'soft_min'), soft_max=get_props(TF_sigma, 'soft_max'), precision=get_props(TF_sigma, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'sigma', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'sigma', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2499,10 +2612,13 @@ class luxrender_SC_asymmetry_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatVectorProperty(name='Asymmetry', default=(0.0, 0.0, 0.0), min=-1.0, max=1.0, precision=4, get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		col = layout.column()
-		col.label(text=self.name)
-		col.prop(self, 'sc_asym', text='')
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			col = layout.column()
+			col.label(text=self.name)
+			col.prop(self, 'sc_asym', text='')
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2544,8 +2660,11 @@ class luxrender_TF_d_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_d, 'name'), default=get_props(TF_d, 'default'), subtype=get_props(TF_d, 'subtype'), min=get_props(TF_d, 'min'), max=get_props(TF_d, 'max'), soft_min=get_props(TF_d, 'soft_min'), soft_max=get_props(TF_d, 'soft_max'), precision=get_props(TF_d, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'd', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'd', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2587,8 +2706,11 @@ class luxrender_TF_OP1_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_OP1, 'name'), default=get_props(TF_OP1, 'default'), subtype=get_props(TF_OP1, 'subtype'), min=get_props(TF_OP1, 'min'), max=get_props(TF_OP1, 'max'), soft_min=get_props(TF_OP1, 'soft_min'), soft_max=get_props(TF_OP1, 'soft_max'), precision=get_props(TF_OP1, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'opacity1', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'opacity1', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2630,8 +2752,11 @@ class luxrender_TF_OP2_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_OP2, 'name'), default=get_props(TF_OP2, 'default'), subtype=get_props(TF_OP2, 'subtype'), min=get_props(TF_OP2, 'min'), max=get_props(TF_OP2, 'max'), soft_min=get_props(TF_OP2, 'soft_min'), soft_max=get_props(TF_OP2, 'soft_max'), precision=get_props(TF_OP2, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'opacity2', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'opacity2', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2673,8 +2798,11 @@ class luxrender_TF_OP3_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_OP3, 'name'), default=get_props(TF_OP3, 'default'), subtype=get_props(TF_OP3, 'subtype'), min=get_props(TF_OP3, 'min'), max=get_props(TF_OP3, 'max'), soft_min=get_props(TF_OP3, 'soft_min'), soft_max=get_props(TF_OP3, 'soft_max'), precision=get_props(TF_OP3, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'opacity3', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'opacity3', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -2716,8 +2844,11 @@ class luxrender_TF_OP4_socket(bpy.types.NodeSocket):
 	
 	default_value = bpy.props.FloatProperty(name=get_props(TF_OP4, 'name'), default=get_props(TF_OP4, 'default'), subtype=get_props(TF_OP4, 'subtype'), min=get_props(TF_OP4, 'min'), max=get_props(TF_OP4, 'max'), soft_min=get_props(TF_OP4, 'soft_min'), soft_max=get_props(TF_OP4, 'soft_max'), precision=get_props(TF_OP4, 'precision'), get=default_value_get, set=default_value_set)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'opacity4', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'opacity4', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color

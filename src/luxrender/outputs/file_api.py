@@ -32,6 +32,7 @@ import extensions_framework.util as efutil
 
 from ..outputs import LuxLog
 from ..outputs.pure_api import LUXRENDER_VERSION 
+from ..properties import ExportedVolumes
 
 class Files(object):
 	MAIN = 0
@@ -183,12 +184,7 @@ class Custom_Context(object):
 		self._api('ObjectInstance ', [name, []])
 	
 	def portalInstance(self, name):
-		# Backwards compatibility
-		if LUXRENDER_VERSION < '0.8':
-			LuxLog('WARNING: Exporting PortalInstance as ObjectInstance; Portal will not be effective')
-			self._api('ObjectInstance ', [name, []])
-		else:
-			self._api('PortalInstance ', [name, []])
+		self._api('PortalInstance ', [name, []])
 	
 	def renderer(self, *args):
 		self._api('Renderer', args)
@@ -345,6 +341,9 @@ class Custom_Context(object):
 				f.close()
 				LuxLog(' %s' % f.name)
 	
+		# Reset the volume redundancy check
+		ExportedVolumes.reset_vol_list()
+			
 	def cleanup(self):
 		self.exit()
 	

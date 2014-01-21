@@ -7,7 +7,7 @@
 # --------------------------------------------------------------------------
 #
 # Authors:
-# Jens Verwiebe, Jason Clarke
+# Jens Verwiebe, Jason Clarke, Asbjørn Heid
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -366,8 +366,11 @@ class luxrender_TF_tex1_socket(bpy.types.NodeSocket):
 	
 	tex1 = bpy.props.FloatProperty(name='Value 1', min=0.0, max=10.0)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'tex1', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'tex1', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -396,8 +399,11 @@ class luxrender_TF_tex2_socket(bpy.types.NodeSocket):
 	
 	tex2 = bpy.props.FloatProperty(name='Value 2', min=0.0, max=10.0)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'tex2', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'tex2', text=self.name)
 	
 	def draw_color(self, context, node):
 		return float_socket_color
@@ -427,8 +433,11 @@ class luxrender_TC_tex1_socket(bpy.types.NodeSocket):
 	
 	tex1 = bpy.props.FloatVectorProperty(name='Color 1', subtype='COLOR', min=0.0, soft_max=1.0)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'tex1', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'tex1', text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -457,8 +466,11 @@ class luxrender_TC_tex2_socket(bpy.types.NodeSocket):
 	
 	tex2 = bpy.props.FloatVectorProperty(name='Color 2', subtype='COLOR', min=0.0, soft_max=1.0)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'tex2', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'tex2', text=self.name)
 	
 	def draw_color(self, context, node):
 		return color_socket_color
@@ -488,8 +500,11 @@ class luxrender_TFR_tex1_socket(bpy.types.NodeSocket):
 	
 	tex1 = bpy.props.FloatProperty(name='IOR 1', min=1.0, max=25.0, default=1.52)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'tex1', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'tex1', text=self.name)
 	
 	def draw_color(self, context, node):
 		return fresnel_socket_color
@@ -518,8 +533,11 @@ class luxrender_TFR_tex2_socket(bpy.types.NodeSocket):
 	
 	tex2 = bpy.props.FloatProperty(name='IOR 2', min=1.0, max=25.0, default=1.52)
 	
-	def draw(self, context, layout, node):
-		layout.prop(self, 'tex2', text=self.name)
+	def draw(self, context, layout, node, text):
+		if self.is_linked:
+			layout.label(text=self.name)
+		else:
+			layout.prop(self, 'tex2', text=self.name)
 	
 	def draw_color(self, context, node):
 		return fresnel_socket_color
