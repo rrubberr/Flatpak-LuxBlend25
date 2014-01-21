@@ -66,7 +66,7 @@ from ..ui.materials import (
 )
 
 from ..ui.textures import (
-	main as tex_main, add, band, blender, bilerp, blackbody, brick, cauchy, constant, colordepth,
+	main as tex_main, abbe, add, band, blender, bilerp, blackbody, brick, cauchy, constant, colordepth,
 	checkerboard, dots, equalenergy, fbm, fresnelcolor, fresnelname, gaussian, harlequin, hitpointcolor, hitpointalpha, hitpointgrey, imagemap, imagesampling, normalmap,
 	lampspectrum, luxpop, marble, mix as tex_mix, multimix, sellmeier, scale, subtract, sopra, uv,
 	uvmask, windy, wrinkled, mapping, tabulateddata, transform

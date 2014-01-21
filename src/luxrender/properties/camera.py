@@ -709,7 +709,8 @@ class luxrender_film(declarative_property_group):
 			'items': [
 				('lum', 'Luminosity', 'Preserve luminosity'),
 				('hue', 'Hue', 'Preserve hue'),
-				('cut', 'Cut', 'Clip channels individually')
+				('cut', 'Cut', 'Clip channels individually'),
+				('darken', 'Darken', 'Darken highlights')
 			],
 			'default': 'cut'
 		},
@@ -1300,7 +1301,8 @@ class luxrender_tonemapping(declarative_property_group):
 				('linear', 'Linear (manual)', 'linear'),
 				('autolinear', 'Linear (auto-exposure)', 'autolinear'),
 				('contrast', 'Contrast', 'contrast'),
-				('maxwhite', 'Maxwhite', 'maxwhite')
+				('maxwhite', 'Maxwhite', 'maxwhite'),
+				('falsecolors', 'False Colors', 'false color')
 			]
 		},
 		

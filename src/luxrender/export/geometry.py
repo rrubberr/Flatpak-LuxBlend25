@@ -169,7 +169,8 @@ class GeometryExporter(object):
 					else:
 						ext_params.add_point('cam', obj.data.luxrender_mesh.ucam)
 				
-				mesh_definition = (ext_mesh_name, obj.active_material.name, obj.luxrender_object.proxy_type, obj.data.luxrender_mesh.get_shape_IsSpecial(), ext_params)
+				proxy_material = obj.active_material.name if obj.active_material else ""
+				mesh_definition = (ext_mesh_name, proxy_material, obj.luxrender_object.proxy_type, obj.data.luxrender_mesh.get_shape_IsSpecial(), ext_params)
 				mesh_definitions.append( mesh_definition )
 				
 				# Only export objectBegin..objectEnd and cache this mesh_definition if we plan to use instancing
