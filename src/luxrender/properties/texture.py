@@ -1450,7 +1450,7 @@ class luxrender_tex_brick(declarative_property_group):
 				('english', 'English', 'english'),
 				('herringbone', 'Herringbone', 'herringbone'),
 				('basket', 'Basket', 'basket'),
-				('chain link', 'Chain link', 'chain link')
+				('chain link', 'Chain link', 'chain Link')
 			],
 			'save_in_preset': True
 		},
@@ -2636,7 +2636,7 @@ class luxrender_tex_imagemap(declarative_property_group):
 				('green', 'Green', 'green'),
 				('blue', 'Blue', 'blue'),
 				('alpha', 'Alpha', 'alpha'),
-				('colored_mean', 'Colored mean', 'colored_mean')
+				('colored_mean', 'Colored Mean', 'colored_mean')
 			],
 			'save_in_preset': True
 		},
@@ -2655,9 +2655,9 @@ class luxrender_tex_imagemap(declarative_property_group):
 			'name': 'Filter type',
 			'items': [
 				('bilinear', 'Bilinear', 'bilinear'),
-				('mipmap_trilinear', 'MipMap trilinear', 'mipmap_trilinear'),
+				('mipmap_trilinear', 'MipMap Trilinear', 'mipmap_trilinear'),
 				('mipmap_ewa', 'MipMap EWA', 'mipmap_ewa'),
-				('nearest', 'Nearest neighbor', 'nearest'),
+				('nearest', 'Nearest Neighbor', 'nearest'),
 			],
 			'save_in_preset': True
 		},
@@ -2820,7 +2820,7 @@ class luxrender_tex_imagesampling(declarative_property_group):
 				('bilinear', 'Bilinear', 'bilinear'),
 				('mipmap_trilinear', 'MipMap trilinear', 'mipmap_trilinear'),
 				('mipmap_ewa', 'MipMap EWA', 'mipmap_ewa'),
-				('nearest', 'Nearest neighbor', 'nearest'),
+				('nearest', 'Nearest Neighbor', 'nearest'),
 			],
 			'save_in_preset': True
 		},
@@ -2918,9 +2918,9 @@ class luxrender_tex_normalmap(declarative_property_group):
 			'name': 'Filter type',
 			'items': [
 				('bilinear', 'Bilinear', 'bilinear'),
-				('mipmap_trilinear', 'MipMap trilinear', 'mipmap_trilinear'),
+				('mipmap_trilinear', 'MipMap Trilinear', 'mipmap_trilinear'),
 				('mipmap_ewa', 'MipMap EWA', 'mipmap_ewa'),
-				('nearest', 'Nearest neighbor', 'nearest'),
+				('nearest', 'Nearest Neighbor', 'nearest'),
 			],
 			'save_in_preset': True
 		},
@@ -4017,6 +4017,8 @@ class luxrender_tex_transform(declarative_property_group):
 			'name': 'Rotate',
 			'default': (0.0, 0.0, 0.0),
 			'precision': 5,
+			'subtype': 'DIRECTION',
+			'unit': 'ROTATION',
 			'save_in_preset': True
 		},
 		{
