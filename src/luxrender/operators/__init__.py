@@ -229,7 +229,7 @@ class LUXRENDER_OT_camera_setting_file(bpy.types.Operator):
 			obj_act.rotation_euler[2] = et[2]
 
 		if len(FOV) >= 0 :
-			obj_act.data.lens_unit = 'DEGREES'
+			obj_act.data.lens_unit = 'FOV'
 			obj_act.data.angle = math.radians(FOV[0])
 
 		if len(FDIST) >= 0 :
