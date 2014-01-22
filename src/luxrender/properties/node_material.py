@@ -88,29 +88,42 @@ class luxrender_material_type_node_carpaint(luxrender_material_node):
 	bl_label = 'Car Paint Material'
 	# Icon identifier
 	bl_icon = 'MATERIAL'
-	bl_width_min = 180
+	bl_width_min = 200
 
     #Get menu items from old material editor properties
 	for prop in luxrender_mat_carpaint.properties:
 		if prop['attr'].startswith('name'):
 			carpaint_items = prop['items']
 
+	def change_is_preset(self, context):
+		# Hide unused params when using presets
+		self.inputs['Diffuse Color'].enabled = self.carpaint_presets == '-'
+		self.inputs['Specular Color 1'].enabled = self.carpaint_presets == '-'
+		self.inputs['Specular Color 2'].enabled = self.carpaint_presets == '-'
+		self.inputs['Specular Color 3'].enabled = self.carpaint_presets == '-'
+		self.inputs['M1'].enabled = self.carpaint_presets == '-'
+		self.inputs['M2'].enabled = self.carpaint_presets == '-'
+		self.inputs['M3'].enabled = self.carpaint_presets == '-'
+		self.inputs['R1'].enabled = self.carpaint_presets == '-'
+		self.inputs['R2'].enabled = self.carpaint_presets == '-'
+		self.inputs['R3'].enabled = self.carpaint_presets == '-'
+
 	#Definitions for non-socket properties
-	carpaint_presets = bpy.props.EnumProperty(name='Car Paint Presets', description='Luxrender Carpaint Presets', items=carpaint_items, default='-')
+	carpaint_presets = bpy.props.EnumProperty(name='Car Paint Presets', description='Luxrender Carpaint Presets', items=carpaint_items, default='-', update=change_is_preset)
 
 	#Definitions for sockets
 	def init(self, context):
 		self.inputs.new('luxrender_TC_Kd_socket', 'Diffuse Color')
 		self.inputs.new('luxrender_TC_Ks1_socket', 'Specular Color 1')
-		self.inputs.new('NodeSocketFloat', 'R1')
-		self.inputs.new('NodeSocketFloat', 'M1')
+		self.inputs.new('luxrender_TF_R1_socket', 'R1')
+		self.inputs.new('luxrender_TF_M1_socket', 'M1')
 		self.inputs.new('luxrender_TC_Ks2_socket', 'Specular Color 2')
-		self.inputs.new('NodeSocketFloat', 'R2')
-		self.inputs.new('NodeSocketFloat', 'M2')
+		self.inputs.new('luxrender_TF_R2_socket', 'R2')
+		self.inputs.new('luxrender_TF_M2_socket', 'M2')
 		self.inputs.new('luxrender_TC_Ks3_socket', 'Specular Color 3')
-		self.inputs.new('NodeSocketFloat', 'R3')
-		self.inputs.new('NodeSocketFloat', 'M3')
-		self.inputs.new('luxrender_TC_Kd_socket', 'Absorption Color')
+		self.inputs.new('luxrender_TF_R3_socket', 'R3')
+		self.inputs.new('luxrender_TF_M3_socket', 'M3')
+		self.inputs.new('luxrender_TC_Ka_socket', 'Absorption Color')
 		self.inputs.new('luxrender_TF_d_socket', 'Absorption Depth')
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		
@@ -126,10 +139,10 @@ class luxrender_material_type_node_carpaint(luxrender_material_node):
 		
 		carpaint_params = ParamSet()
 		carpaint_params.update( get_socket_paramsets(self.inputs, make_texture) ) #have to export the sockets, or else bump/normal mapping won't work when using a preset
-	
+			
 		if self.carpaint_presets != '-':
 			carpaint_params.add_string('name', self.carpaint_presets)
-			
+
 		return make_material(mat_type, self.name, carpaint_params)
 		
 @LuxRenderAddon.addon_register_class
@@ -324,6 +337,7 @@ class luxrender_material_type_node_glossy(luxrender_material_node):
 		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 
+		self.inputs['U-Roughness'].name = 'Roughness'		
 		self.outputs.new('NodeSocketShader', 'Surface')
 
 	def draw_buttons(self, context, layout):
@@ -375,6 +389,7 @@ class luxrender_material_type_node_glossycoating(luxrender_material_node):
 		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 
+		self.inputs['U-Roughness'].name = 'Roughness'		
 		self.outputs.new('NodeSocketShader', 'Surface')
 		
 	def draw_buttons(self, context, layout):
@@ -437,6 +452,7 @@ class luxrender_material_type_node_glossytranslucent(luxrender_material_node):
 		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		
+		self.inputs['U-Roughness'].name = 'Roughness'		
 		self.outputs.new('NodeSocketShader', 'Surface')
 	
 	def draw_buttons(self, context, layout):
@@ -590,6 +606,7 @@ class luxrender_material_type_node_metal(luxrender_material_node):
 		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		
+		self.inputs['U-Roughness'].name = 'Roughness'		
 		self.outputs.new('NodeSocketShader', 'Surface')
 	
 	def draw_buttons(self, context, layout):
@@ -635,7 +652,7 @@ class luxrender_material_type_node_metal2(luxrender_material_node):
 	def change_use_anistropy(self, context):
 		self.inputs['U-Roughness'].sync_vroughness = not self.use_anisotropy
 		self.inputs['V-Roughness'].enabled = self.use_anisotropy
-		self.inputs['U-Roughness'].name = 'Roughness' if not self.use_anisotropy else 'U-Roughness'
+		self.inputs['U-Roughness'].name = 'Roughness' if not self.use_anisotropy == True else 'U-Roughness'
 
 # 	metal2_type = bpy.props.EnumProperty(name='Type', description='Luxrender Metal2 Type', items=metal2_types, default='preset')
 # 	metal2_preset = bpy.props.EnumProperty(name='Preset', description='Luxrender Metal2 Preset', items=metal2_presets, default='aluminium')
@@ -650,6 +667,7 @@ class luxrender_material_type_node_metal2(luxrender_material_node):
 		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		
+		self.inputs['U-Roughness'].name = 'Roughness'		
 		self.outputs.new('NodeSocketShader', 'Surface')
 	
 	def draw_buttons(self, context, layout):
@@ -774,6 +792,7 @@ class luxrender_material_type_node_roughglass(luxrender_material_node):
 		self.inputs['V-Roughness'].enabled = False # initial state is disabled
 		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 
+		self.inputs['U-Roughness'].name = 'Roughness'		
 		self.outputs.new('NodeSocketShader', 'Surface')
 
 	def draw_buttons(self, context, layout):
