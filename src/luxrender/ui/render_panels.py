@@ -36,188 +36,6 @@ class render_panel(bl_ui.properties_render.RenderButtonsPanel, property_group_re
 	'''
 	
 	COMPAT_ENGINES = 'LUXRENDER_RENDER'
-
-@LuxRenderAddon.addon_register_class
-class layer_selector(render_panel):
-	'''
-	Render Layers UI panel
-	'''
-	
-	bl_label = 'Layers'
-	bl_options = {'HIDE_HEADER'}
-	bl_context = "render_layer"
-	
-	def draw(self, context):
-		#Add in Blender's layer chooser, this taken from Blender's startup/properties_render_layer.py
-		layout = self.layout
-		
-		scene = context.scene
-		rd = scene.render
-		
-		row = layout.row()
-		row.template_list("RENDERLAYER_UL_renderlayers", "", rd, "layers", rd.layers, "active_index", rows=2)
-		
-		col = row.column(align=True)
-		col.operator("scene.render_layer_add", icon='ZOOMIN', text="")
-		col.operator("scene.render_layer_remove", icon='ZOOMOUT', text="")
-		
-		row = layout.row()
-		rl = rd.layers.active
-		if rl:
-			row.prop(rl, "name")
-		
-		row.prop(rd, "use_single_layer", text="", icon_only=True)
-
-@LuxRenderAddon.addon_register_class
-class layers(render_panel):
-	'''
-	Render Layers UI panel
-	'''
-	
-	bl_label = 'Layers'
-	bl_options = {'DEFAULT_CLOSED'}
-	bl_context = "render_layer"
-	
-	def draw(self, context): 
-		#Add in Blender's layer stuff, this taken from Blender's startup/properties_render_layer.py
-		layout = self.layout
-
-		scene = context.scene
-		rd = scene.render
-		rl = rd.layers.active
-		
-		split = layout.split()
-
-		col = split.column()
-		col.prop(scene, "layers", text="Scene")
-		col.label(text="")
-		col = split.column()
-		col.prop(rl, "layers", text="Layer")
-
-@LuxRenderAddon.addon_register_class
-class passes(render_panel):
-	'''
-	Render passes UI panel
-	'''
-	
-	bl_label = 'Passes'
-	bl_options = {'DEFAULT_CLOSED'}
-	bl_context = "render_layer"
-	
-	display_property_groups = [
-	   ( ('scene',), 'luxrender_lightgroups' )
-	]
-	
-	def draw(self, context):
-		#Add in the relevant bits from Blender's passes stuff, this taken from Blender's startup/properties_render_layer.py
-		layout = self.layout
-		
-		scene = context.scene
-		rd = scene.render
-		rl = rd.layers.active
-		
-		split = layout.split()
-
-		col = split.column()
-		col.label(text="Passes:")
-		col.prop(rl, "use_pass_combined")
-		col.prop(rl, "use_pass_z")
-		
-		super().draw(context)
-		
-		#Light groups, this is a "special" panel section
-		for lg_index in range(len(context.scene.luxrender_lightgroups.lightgroups)):
-			lg = context.scene.luxrender_lightgroups.lightgroups[lg_index]
-			row = self.layout.row()
-			row.prop(lg, 'lg_enabled', text="")
-			subrow=row.row()
-			subrow.enabled = lg.lg_enabled
-			subrow.prop(lg, 'name', text="")
-			# Here we draw the currently selected luxrender_volumes_data property group
-			for control in lg.controls:
-				self.draw_column(
-								 control,
-								 subrow.column(),
-								 lg,
-								 context,
-								 property_group = lg
-								 )
-			row.operator('luxrender.lightgroup_remove', text="", icon="ZOOMOUT").lg_index=lg_index
-			
-@LuxRenderAddon.addon_register_class
-class postprocessing(render_panel):
-	'''
-	Post Pro UI panel
-	'''
-	
-	bl_label = 'Post Processing'
-	bl_options = {'DEFAULT_CLOSED'}
-
-	
-	#We make our own post-pro panel so we can have one without BI's option here. Theoretically, if Lux gains the ability to do lens effects through the command line/API, we could add that here
-	
-	def draw(self, context):
-		layout = self.layout
-
-		rd = context.scene.render
-
-		split = layout.split()
-
-		col = split.column()
-		col.prop(rd, "use_compositing")
-		col.prop(rd, "use_sequencer")
-
-		split.prop(rd, "dither_intensity", text="Dither", slider=True)
-
-@LuxRenderAddon.addon_register_class
-class opengl_render(render_panel):
-	'''
-		OpenGL Render UI panel
-		'''
-	#Copy of Cycles' OpenGL Render panel, allows configuring of GLSL-renderer's AA and alpha settings without switching back to BI
-	
-	bl_label = "OpenGL Render"
-	bl_options = {'DEFAULT_CLOSED'}
-	
-	def draw(self, context):
-		layout = self.layout
-		
-		rd = context.scene.render
-		
-		split = layout.split()
-		
-		col = split.column()
-		col.prop(rd, "use_antialiasing")
-		sub = col.row()
-		sub.active = rd.use_antialiasing
-		sub.prop(rd, "antialiasing_samples", expand=True)
-		
-		col = split.column()
-		col.label(text="Alpha:")
-		col.prop(rd, "alpha_mode", text="")
-
-@LuxRenderAddon.addon_register_class
-class engine(render_panel):
-	'''
-	Engine settings UI Panel
-	'''
-	
-	bl_label = 'LuxRender Engine Configuration'
-	bl_options = {'DEFAULT_CLOSED'}
-	
-	display_property_groups = [
-		( ('scene',), 'luxrender_engine' )
-	]
-	
-	def draw(self, context):
-		super().draw(context)
-		
-		row = self.layout.row(align=True)
-		rd = context.scene.render
-		if bpy.app.version < (2, 63, 19 ):
-			row.prop(rd, "use_color_management")
-			if rd.use_color_management == True:
-				row.prop(rd, "use_color_unpremultiply")
 		
 @LuxRenderAddon.addon_register_class
 class render_settings(render_panel):
@@ -246,16 +64,26 @@ class render_settings(render_panel):
 		row.operator("luxrender.preset_engine_add", text="", icon="ZOOMOUT").remove_active = True
 		
 		super().draw(context)
-	
-	
+
 @LuxRenderAddon.addon_register_class
-class testing(render_panel):
-	bl_label = 'LuxRender Test/Debugging Options'
+class translator(render_panel):
+	'''
+	Translator settings UI Panel
+	'''
+	
+	bl_label = 'LuxRender Translator'
 	bl_options = {'DEFAULT_CLOSED'}
 	
 	display_property_groups = [
-		( ('scene',), 'luxrender_testing' )
-	]
+	   ( ('scene',), 'luxrender_engine' ),
+	   ( ('scene',), 'luxrender_testing' )
+	   ]
+	
+	def draw(self, context):
+		super().draw(context)
+		
+		row = self.layout.row(align=True)
+		rd = context.scene.render
 
 @LuxRenderAddon.addon_register_class
 class networking(render_panel):
@@ -280,3 +108,160 @@ class networking(render_panel):
 		row.operator("luxrender.preset_networking_add", text="", icon="ZOOMOUT").remove_active = True
 		
 		super().draw(context)
+
+@LuxRenderAddon.addon_register_class
+class postprocessing(render_panel):
+	'''
+	Post Pro UI panel
+	'''
+	
+	bl_label = 'Post Processing'
+	bl_options = {'DEFAULT_CLOSED'}
+	
+	
+	#We make our own post-pro panel so we can have one without BI's options here. Theoretically, if Lux gains the ability to do lens effects through the command line/API, we could add that here
+	
+	def draw(self, context):
+		layout = self.layout
+		
+		rd = context.scene.render
+		
+		split = layout.split()
+		
+		col = split.column()
+		col.prop(rd, "use_compositing")
+		col.prop(rd, "use_sequencer")
+		
+		split.prop(rd, "dither_intensity", text="Dither", slider=True)
+
+@LuxRenderAddon.addon_register_class
+class opengl_render(render_panel):
+	'''
+	OpenGL Render UI panel
+	'''
+	#Copy of Cycles' OpenGL Render panel, allows configuring of GLSL-renderer's AA and alpha settings without switching back to BI
+	
+	bl_label = "OpenGL Render"
+	bl_options = {'DEFAULT_CLOSED'}
+	
+	def draw(self, context):
+		layout = self.layout
+		
+		rd = context.scene.render
+		
+		split = layout.split()
+		
+		col = split.column()
+		col.prop(rd, "use_antialiasing")
+		sub = col.row()
+		sub.active = rd.use_antialiasing
+		sub.prop(rd, "antialiasing_samples", expand=True)
+		
+		col = split.column()
+		col.label(text="Alpha:")
+		col.prop(rd, "alpha_mode", text="")
+
+@LuxRenderAddon.addon_register_class
+class layer_selector(render_panel):
+	'''
+	Render Layers Selector panel
+	'''
+	
+	bl_label = 'Layer Selector'
+	bl_options = {'HIDE_HEADER'}
+	bl_context = "render_layer"
+	
+	def draw(self, context):
+		#Add in Blender's layer chooser, this is taken from Blender's startup/properties_render_layer.py
+		layout = self.layout
+		
+		scene = context.scene
+		rd = scene.render
+		
+		row = layout.row()
+		row.template_list("RENDERLAYER_UL_renderlayers", "", rd, "layers", rd.layers, "active_index", rows=2)
+		
+		col = row.column(align=True)
+		col.operator("scene.render_layer_add", icon='ZOOMIN', text="")
+		col.operator("scene.render_layer_remove", icon='ZOOMOUT', text="")
+		
+		row = layout.row()
+		rl = rd.layers.active
+		if rl:
+			row.prop(rl, "name")
+		
+		row.prop(rd, "use_single_layer", text="", icon_only=True)
+
+@LuxRenderAddon.addon_register_class
+class layers(render_panel):
+	'''
+	Render Layers panel
+	'''
+	
+	bl_label = 'Layer'
+	bl_context = "render_layer"
+	
+	def draw(self, context):
+		#Add in Blender's layer stuff, this is taken from Blender's startup/properties_render_layer.py
+		layout = self.layout
+		
+		scene = context.scene
+		rd = scene.render
+		rl = rd.layers.active
+		
+		split = layout.split()
+		
+		col = split.column()
+		col.prop(scene, "layers", text="Scene")
+		col.label(text="")
+		col = split.column()
+		col.prop(rl, "layers", text="Layer")
+
+@LuxRenderAddon.addon_register_class
+class passes(render_panel):
+	'''
+	Render passes UI panel
+	'''
+	
+	bl_label = 'Passes'
+	bl_options = {'DEFAULT_CLOSED'}
+	bl_context = "render_layer"
+	
+	display_property_groups = [
+							   ( ('scene',), 'luxrender_lightgroups' )
+							   ]
+	
+	def draw(self, context):
+		#Add in the relevant bits from Blender's passes stuff, this is taken from Blender's startup/properties_render_layer.py
+		layout = self.layout
+		
+		scene = context.scene
+		rd = scene.render
+		rl = rd.layers.active
+		
+		split = layout.split()
+		
+		col = split.column()
+		col.label(text="Passes:")
+		col.prop(rl, "use_pass_combined")
+		col.prop(rl, "use_pass_z")
+		
+		super().draw(context)
+		
+		#Light groups, this is a "special" panel section
+		for lg_index in range(len(context.scene.luxrender_lightgroups.lightgroups)):
+			lg = context.scene.luxrender_lightgroups.lightgroups[lg_index]
+			row = self.layout.row()
+			row.prop(lg, 'lg_enabled', text="")
+			subrow=row.row()
+			subrow.enabled = lg.lg_enabled
+			subrow.prop(lg, 'name', text="")
+			for control in lg.controls:
+				self.draw_column(
+					 control,
+					 subrow.column(),
+					 lg,
+					 context,
+					 property_group = lg
+					 )
+			row.operator('luxrender.lightgroup_remove', text="", icon="ZOOMOUT").lg_index=lg_index
