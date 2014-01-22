@@ -73,20 +73,6 @@ class luxrender_volumeintegrator(declarative_property_group):
 			'save_in_preset': True
 		},
 		{
-			'type': 'float',
-			'attr': 'stepsize',
-			'name': 'Step Size',
-			'description': 'Ray-marching step size. Only used for smoke simulations',
-			'default': 1.0,
-			'min': 0.0,
-			'soft_min': 0.0,
-			'max': 100.0,
-			'soft_max': 100.0,
-			'subtype': 'DISTANCE',
-			'unit': 'LENGTH',
-			'save_in_preset': True
-		},
-		{
 			'type': 'bool',
 			'attr': 'advanced',
 			'name': 'Advanced',
@@ -104,9 +90,6 @@ class luxrender_volumeintegrator(declarative_property_group):
 		'''
 		
 		params = ParamSet()
-		
-		if self.volumeintegrator != 'none':
-			params.add_float('stepsize', self.stepsize)
 		
 		return self.volumeintegrator, params
 
@@ -424,7 +407,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'maxdepth',
-			'name': 'Max. depth',
+			'name': 'Max. Depth',
 			'description': 'Max recursion depth for ray casting from eye',
 			'default': 16,
 			'min': 1,
@@ -477,7 +460,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'directsampleall',
-			'name': 'Sample all',
+			'name': 'Sample All',
 			'default': True,
 			'save_in_preset': True
 		},
@@ -512,7 +495,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'indirectsampleall',
-			'name': 'Sample all',
+			'name': 'Sample All',
 			'default': False,
 			'save_in_preset': True
 		},
@@ -542,12 +525,12 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'text',
 			'attr': 'lbl_diffuse',
-			'name': 'Diffuse settings',
+			'name': 'Diffuse Settings',
 		},
 		{
 			'type': 'int',
 			'attr': 'diffusereflectdepth',
-			'name': 'Reflection depth',
+			'name': 'Reflection Depth',
 			'description': 'Max recursion depth after bouncing from a diffuse surface',
 			'default': 3,
 			'min': 0,
@@ -556,8 +539,8 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'diffusereflectsamples',
-			'name': 'Reflection samples',
-			'description': 'Number of paths to start from a diffuse-reflection vertex',
+			'name': 'Reflection Samples',
+			'description': 'Number of paths to start from a diffuse surface',
 			'default': 1,
 			'min': 0,
 			'save_in_preset': True
@@ -565,8 +548,8 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'diffuserefractdepth',
-			'name': 'Refraction depth',
-			'description': 'Max recursion depth after bouncing through a diffuse-refraction (translucent) surface',
+			'name': 'Refraction Depth',
+			'description': 'Max recursion depth after bouncing through a translucent surface',
 			'default': 5,
 			'min': 0,
 			'save_in_preset': True
@@ -574,8 +557,8 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'diffuserefractsamples',
-			'name': 'Refraction samples',
-			'description': 'Number of paths to start from a diffuse-refraction (translucent) vertex',
+			'name': 'Refraction Samples',
+			'description': 'Number of paths to start from a translucent surface',
 			'default': 1,
 			'min': 0,
 			'save_in_preset': True
@@ -584,12 +567,12 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'text',
 			'attr': 'lbl_glossy',
-			'name': 'Glossy settings',
+			'name': 'Glossy Settings',
 		},
 		{
 			'type': 'int',
 			'attr': 'glossyreflectdepth',
-			'name': 'Reflection depth',
+			'name': 'Reflection Depth',
 			'description': 'Max recursion depth after bouncing from a glossy surface',
 			'default': 2,
 			'min': 0,
@@ -598,8 +581,8 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'glossyreflectsamples',
-			'name': 'Reflection samples',
-			'description': 'Number of paths to start from a glossy-reflection vertex',
+			'name': 'Reflection Samples',
+			'description': 'Number of paths to start from a glossy surface',
 			'default': 1,
 			'min': 0,
 			'save_in_preset': True
@@ -607,7 +590,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'glossyrefractdepth',
-			'name': 'Refraction depth',
+			'name': 'Refraction Depth',
 			'description': 'Max recursion depth after bouncing through a glossy-refraction surface, such as rough glass',
 			'default': 5,
 			'min': 0,
@@ -616,8 +599,8 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'glossyrefractsamples',
-			'name': 'Refraction samples',
-			'description': 'Number of paths to start from a glossy-refraction vertex, such as rough glass',
+			'name': 'Refraction Samples',
+			'description': 'Number of paths to start from a glossy-refraction surface, such as rough glass',
 			'default': 1,
 			'min': 0,
 			'save_in_preset': True
@@ -626,12 +609,12 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'text',
 			'attr': 'lbl_specular',
-			'name': 'Specular settings',
+			'name': 'Specular Settings',
 		},
 		{
 			'type': 'int',
 			'attr': 'specularreflectdepth',
-			'name': 'Reflection depth',
+			'name': 'Reflection Depth',
 			'description': 'Max recursion depth after a specular reflection',
 			'default': 3,
 			'min': 0,
@@ -640,7 +623,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'specularrefractdepth',
-			'name': 'Refraction depth',
+			'name': 'Refraction Depth',
 			'description': 'Max recursion depth after a specular transmission, such as glass or null',
 			'default': 5,
 			'min': 0,
@@ -712,7 +695,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'maxphotondepth',
-			'name': 'Max. photon depth',
+			'name': 'Max. Photon Depth',
 			'description': 'Max recursion depth for photon tracing',
 			'default': 16,
 			'min': 1,
@@ -722,7 +705,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'directphotons',
-			'name': 'Direct photons',
+			'name': 'Direct Photons',
 			'description': 'Target number of direct light photons',
 			'default': 1000000,
 			'save_in_preset': True
@@ -730,15 +713,15 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'causticphotons',
-			'name': 'Caustic photons',
-			'description': 'Target number of caustic photons',
+			'name': 'Caustic Photons',
+			'description': 'Target number of caustic photons. Use 0 to disable caustics, glass will cast solid shadows',
 			'default': 20000,
 			'save_in_preset': True
 		},
 		{
 			'type': 'int',
 			'attr': 'indirectphotons',
-			'name': 'Indirect photons',
+			'name': 'Indirect Photons',
 			'description': 'Target number of soft-indirect photons',
 			'default': 200000,
 			'save_in_preset': True
@@ -746,7 +729,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'radiancephotons',
-			'name': 'Radiance photons',
+			'name': 'Radiance Photons',
 			'description': 'Target number of final gather photons',
 			'default': 200000,
 			'save_in_preset': True
@@ -754,7 +737,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'nphotonsused',
-			'name': 'Number of photons used',
+			'name': 'Number of Photons Used',
 			'default': 50,
 			'min': 1,
 			'save_in_preset': True
@@ -762,7 +745,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'float',
 			'attr': 'maxphotondist',
-			'name': 'Max. photon distance',
+			'name': 'Max. Photon Distance',
 			'default': 0.1,
 			'min': 0.01,
 			'save_in_preset': True
@@ -777,16 +760,16 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'finalgathersamples',
-			'name': 'Final gather samples',
-			'description': 'Number of final gather samples to shoot for each ray',
-			'default': 32,
+			'name': 'Final Gather Samples',
+			'description': 'Number of final gather rays to cast for each primary ray. Higher values reduce indirect light noise at the cost of overall speed',
+			'default': 16,
 			'save_in_preset': True
 		},
 		{
 			'type': 'float',
 			'attr': 'gatherangle',
 			'name': 'Gather angle',
-			'description': 'Reject final gather rays beyond this angle. Adjusts final gather accuracy',
+			'description': 'Reject final gather rays beyond this angle. Adjusts final gather accuracy, higher values reduce noise at the cost of possible light leaks',
 			'default': 10.0,
 			'save_in_preset': True
 		},
@@ -795,9 +778,10 @@ class luxrender_integrator(declarative_property_group):
 			'attr': 'renderingmode',
 			'name': 'Eye-Pass Mode',
 			'default': 'directlighting',
+			'description': 'Switch between direct light + final gather, or experimental photon map-guided path tracing',
 			'items': [
-				('directlighting', 'Direct Lighting', 'directlighting'),
-				('path', 'Path', 'path'),
+				('directlighting', 'Direct Lighting', 'Direct light sampling with final gathering'),
+				('path', 'Path', 'Experimental path tracer guided by the photon map'),
 			],
 			'save_in_preset': True
 		},
@@ -813,7 +797,8 @@ class luxrender_integrator(declarative_property_group):
 			'type': 'string',
 			'subtype': 'FILE_PATH',
 			'attr': 'photonmapsfile',
-			'name': 'Photonmaps file',
+			'name': 'Photon Maps File',
+			'description': 'Photon map storage path. If no map is found here, the current one will be saved for next time',
 			'default': '',
 			'save_in_preset': True
 		},
@@ -920,7 +905,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'maxeyedepth',
-			'name': 'Max. eye depth',
+			'name': 'Max. Eye Depth',
 			'default': 48,
 			'description': 'Max recursion depth for ray casting from eye',
 			'min': 1,
@@ -930,7 +915,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'photonperpass',
-			'name': 'Photons per pass',
+			'name': 'Photons Per Pass',
 			'description': 'Number of photons to gather before going on to the next pass',
 			'default': 1000000,
 			'save_in_preset': True
@@ -938,7 +923,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'int',
 			'attr': 'hitpointperpass',
-			'name': 'Hit points per pass',
+			'name': 'Hit Points Per Pass',
 			'description': 'Number of hit points to store per eye-pass before moving on. Lower values can decrease memory useage at the cost of some performance. 0=one hitpoint per pixel',
 			'default': 0,
 			'save_in_preset': True
@@ -946,7 +931,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'float',
 			'attr': 'startradius',
-			'name': 'Starting radius',
+			'name': 'Starting Radius',
 			'description': 'Photon radius used for initial pass. Try lowering this if the first pass renders very slowly',
 			'default': 2.0,
 			'min': 0.0001,
@@ -974,7 +959,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'storeglossy',
-			'name': 'Store on glossy',
+			'name': 'Store on Glossy',
 			'description': 'Use the photon pass to render glossy and metal surfaces. Can introduce noise, but is needed for some corner cases',
 			'default': False,
 			'save_in_preset': True
@@ -982,7 +967,7 @@ class luxrender_integrator(declarative_property_group):
 		{
 			'type': 'enum',
 			'attr': 'lookupaccel',
-			'name': 'Lookup accelerator',
+			'name': 'Lookup Accelerator',
 			'description': 'Acceleration structure for hitpoints (not scene geometry)',
 			'default': 'hybridhashgrid',
 			'items': [
@@ -1070,7 +1055,7 @@ class luxrender_integrator(declarative_property_group):
 		
 		#Exphotonmap is not compatible with light groups, warn here instead of light export code so this warning only shows once instead of per lamp
 		if scene.luxrender_lightgroups.ignore == False and self.surfaceintegrator == 'exphotonmap':
-			LuxLog('WARNING: Ex-Photon Map does not support light groups, exporting all lights in the default group.')
+			LuxLog('WARNING: Ex. Photon Map does not support light groups, exporting all lights in the default group.')
 			
 		#Warn about multi volume integrator and homogeneous exterior
 		if scene.luxrender_world.default_exterior_volume != '':
@@ -1083,7 +1068,8 @@ class luxrender_integrator(declarative_property_group):
 		
 		if self.surfaceintegrator == 'bidirectional':
 			params.add_integer('eyedepth', self.eyedepth) \
-				  .add_integer('lightdepth', self.lightdepth)
+				  .add_integer('lightdepth', self.lightdepth) \
+				  .add_integer('lightraycount', self.lightraycount)
 			if not self.advanced:
 				params.add_string('lightpathstrategy', self.lightstrategy if not hybrid_compat else 'one') #Export the regular light strategy setting for lightpath strat when in non-advanced mode, advanced mode allows them to be set independently
 			if self.advanced:
@@ -1091,8 +1077,7 @@ class luxrender_integrator(declarative_property_group):
 					  .add_float('lightrrthreshold', self.lightrrthreshold) \
 					  .add_string('lightpathstrategy', self.lightpathstrategy if not hybrid_compat else 'one') \
 					  .add_integer('shadowraycount', self.shadowraycount) \
-					  .add_integer('lightraycount', self.lightraycount)
-		
+
 		if self.surfaceintegrator == 'directlighting':
 			params.add_integer('maxdepth', self.maxdepth)
 			if self.advanced:
@@ -1215,7 +1200,7 @@ class luxrender_integrator(declarative_property_group):
 			if self.advanced:
 				params.add_integer('shadowraycount', self.shadowraycount)
 		
-		if self.surfaceintegrator != 'sppm':
+		if self.surfaceintegrator not in ('sppm', 'distributedpath'):
 			params.add_string('lightstrategy', self.lightstrategy if not hybrid_compat else 'one') \
 		
 		return self.surfaceintegrator, params

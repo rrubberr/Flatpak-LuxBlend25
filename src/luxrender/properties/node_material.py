@@ -769,10 +769,10 @@ class luxrender_material_type_node_roughglass(luxrender_material_node):
 		self.inputs.new('luxrender_TC_Kr_socket', 'Reflection Color')
 		self.inputs.new('luxrender_TF_ior_socket', 'IOR')
 		self.inputs.new('luxrender_TF_cauchyb_socket', 'Cauchy B')
-		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 		self.inputs.new('luxrender_TF_uroughness_socket', 'U-Roughness')
 		self.inputs.new('luxrender_TF_vroughness_socket', 'V-Roughness')
 		self.inputs['V-Roughness'].enabled = False # initial state is disabled
+		self.inputs.new('luxrender_TF_bump_socket', 'Bump')
 
 		self.outputs.new('NodeSocketShader', 'Surface')
 
@@ -1011,6 +1011,9 @@ class luxrender_material_output_node(luxrender_node):
 				
 				print('Exporting material "%s", type: "%s", name: "%s"' % (material_name, mat_type, mat_name))
 				mat_params.add_string('type', mat_type)
+				# DistributedPath compositing. Don't forget these!
+				if scene.luxrender_integrator.surfaceintegrator == 'distributedpath':
+					mat_params.update( material.luxrender_material.luxrender_mat_compositing.get_paramset() )
 				ExportedMaterials.makeNamedMaterial(lux_context, material_name, mat_params)
 				ExportedMaterials.export_new_named(lux_context)
 				
@@ -1031,6 +1034,9 @@ class luxrender_material_output_node(luxrender_node):
 				
 				print('Exporting material "%s", type: "%s", name: "%s"' % (material_name, mat_type, mat_name))
 				mat_params.add_string('type', mat_type)
+				# DistributedPath compositing. Don't forget these!
+				if scene.luxrender_integrator.surfaceintegrator == 'distributedpath':
+					mat_params.update( material.luxrender_material.luxrender_mat_compositing.get_paramset() )
 				ExportedMaterials.makeNamedMaterial(lux_context, material_name, mat_params)
 				ExportedMaterials.export_new_named(lux_context)
 				

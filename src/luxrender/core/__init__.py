@@ -69,7 +69,8 @@ from ..ui.materials import (
 #Legacy texture editor panels
 from ..ui.textures import (
 	main as tex_main, abbe, add, band, blender, bilerp, blackbody, brick, cauchy, constant, colordepth,
-	checkerboard, dots, equalenergy, fbm, fresnelcolor, fresnelname, gaussian, harlequin, hitpointcolor, hitpointalpha, hitpointgrey, imagemap, imagesampling, normalmap,
+	checkerboard, densitygrid, dots, equalenergy, fbm, fresnelcolor, fresnelname, gaussian, harlequin, hitpointcolor,
+        hitpointalpha, hitpointgrey, imagemap, imagesampling, normalmap,
 	lampspectrum, luxpop, marble, mix as tex_mix, multimix, sellmeier, scale, subtract, sopra, uv,
 	uvmask, windy, wrinkled, mapping, tabulateddata, transform
 )
@@ -148,16 +149,8 @@ def lux_output_hints(self, context):
 				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "restart_flm", text="Restart FLM")
 				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "write_flm_direct", text="Write FLM Directly")
 		row = self.layout.row()
-	
-		if not context.scene.luxrender_engine.integratedimaging or context.scene.luxrender_engine.export_type == 'EXT':
-			row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "output_alpha", text="Alpha Channel") # Alpha and coupled premul option for all modes but integrated imaging
-		else:
-			row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "output_alpha", text="Transparent Background") # Integrated imaging always with premul named according to Blender usage
-				
-		if (context.scene.camera.data.luxrender_camera.luxrender_film.output_alpha):
-			if not context.scene.luxrender_engine.integratedimaging or context.scene.luxrender_engine.export_type == 'EXT': # Premul only availyble for non integrated imaging
-				row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "premultiply_alpha", text="Premultiply Alpha")
-		
+
+		row.prop(context.scene.camera.data.luxrender_camera.luxrender_film, "output_alpha", text="Transparent Background") # Integrated imaging always with premul named according to Blender usage
 
 _register_elm(bl_ui.properties_render.RENDER_PT_output.append(lux_output_hints))
 
@@ -484,9 +477,14 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				LuxLog('Updating preview (%ix%i - %s)' % (xres, yres, preview_context.getAttribute('renderer_statistics_formatted_short', '_recommended_string')))
 				
 				result = self.begin_result(0, 0, xres, yres)
-				lay = result.layers[0]
 				
-				lay.rect  = preview_context.blenderCombinedDepthRects()[0]
+				if hasattr(preview_context, 'blenderCombinedDepthBuffers'):
+					# use fast buffers
+					pb, zb = preview_context.blenderCombinedDepthBuffers()
+					result.layers.foreach_set("rect", pb)
+				else:
+					lay = result.layers[0]
+					lay.rect = preview_context.blenderCombinedDepthRects()[0]
 				
 				self.end_result(result, 0) if bpy.app.version > (2, 63, 17 ) else self.end_result(result) # cycles tiles adaption
 		except Exception as exc:

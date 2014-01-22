@@ -24,8 +24,9 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
-import hashlib
+import hashlib, os
 import math
+
 import bpy
 
 from extensions_framework import declarative_property_group
@@ -35,12 +36,33 @@ from extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 from .. import LuxRenderAddon
 from ..export import ParamSet, get_worldscale, process_filepath_data
 from ..export.materials import add_texture_parameter, convert_texture
+from ..export.volumes import export_smoke
 from ..outputs import LuxManager
 from ..util import dict_merge, bdecode_string2file
 
 #------------------------------------------------------------------------------ 
 # Texture property group construction helpers
 #------------------------------------------------------------------------------ 
+def ObjectParameter(attr, name, description, property_group):
+	return [
+		{
+			'attr': '%s_object' % attr,
+			'type': 'string',
+			'name': '%s' % name,
+			'description': '%s' % description,
+			'save_in_preset': True
+		},
+		{
+			'type': 'prop_search',
+			'attr': attr,
+			'src': lambda s,c: s.scene,
+			'src_attr': 'objects',
+			'trg': lambda s,c: getattr(c, property_group),
+			'trg_attr': '%s_object' % attr,
+			'name': name,
+		},
+	]
+
 
 def shorten_name(n):
 	return hashlib.md5(n.encode()).hexdigest()[:21] if len(n) > 21 else n
@@ -660,6 +682,7 @@ tex_names = (
 		('imagemap', 'Image Map'),
 		('normalmap', 'Normal Map'),
 		('marble', 'Marble'),
+		('densitygrid', 'Smoke Data'),
 		('hitpointcolor', 'Vertex Color'),
 		('hitpointgrey', 'Vertex Grey'),
 		('hitpointalpha', 'Vertex Alpha'),
@@ -2155,6 +2178,84 @@ class luxrender_tex_colordepth(declarative_property_group):
 				setattr(self, psi['name'], psi['value'])
 		TC_Kt.load_paramset(self, ps)
 
+@LuxRenderAddon.addon_register_class
+class luxrender_tex_densitygrid(declarative_property_group):
+	ef_attach_to = ['luxrender_texture']
+	alert = {}
+	controls = [
+		'domain',
+		'source',
+		'wrapping'
+	]
+	
+	properties = [
+	] + \
+		ObjectParameter('domain', 'Domain', 'Domain object for smoke simulation', 'luxrender_tex_densitygrid') + \
+	[
+		{
+			'attr': 'source',
+			'name': 'Source',
+			'type': 'enum',
+			'items': [
+				('density', 'Density', ''),
+				('fire', 'Fire', ''),
+				('temperature', 'Temperature', ''),
+				('velocity', 'Velocity', '')		
+			],
+			'default': 'density',
+			'save_in_preset': True
+		},
+		{
+			'attr': 'wrapping',
+			'name': 'Wrapping',
+			'type': 'enum',
+			'items': [
+				('repeat', 'Repeat', 'repeat'),
+				('black', 'Black', 'black'),
+				('white', 'White', 'white'),
+				('clamp', 'Clamp', 'clamp')
+			],
+			'default': 'black',
+			'save_in_preset': True
+		},
+		{
+			'type': 'string',
+			'attr': 'variant',
+			'default': 'float'
+		},
+		
+	]
+	
+	def get_paramset(self, scene, texture):
+		grid = export_smoke(self.domain_object, self.source)
+		nx = grid[0]
+		ny = grid[1]
+		nz = grid[2]
+		density = grid[3]
+#		smoke_path = export_smoke(self.domain_object, self.source)
+#				
+#		smokedata_params = ParamSet() .add_string('wrap', self.wrapping) \
+#			.add_string('filename', smoke_path)
+		
+		smokedata_params = ParamSet() \
+			.add_string('wrap', self.wrapping) \
+			.add_integer('nx', nx) \
+			.add_integer('ny', ny) \
+			.add_integer('nz', nz) \
+			.add_float('density', density)
+
+		return {'3DMAPPING'}, smokedata_params		
+		
+	def load_paramset(self, variant, ps):
+		psi_accept = {
+			'domain_object': 'string',
+			'source': 'string',
+			'wrapping': 'string'			
+		}
+		psi_accept_keys = psi_accept.keys()
+		for psi in ps:
+			if psi['name'] in psi_accept_keys and psi['type'].lower() == psi_accept[psi['name']]:
+				setattr(self, psi['name'].lower(), psi['value'])
 
 @LuxRenderAddon.addon_register_class
 class luxrender_tex_dots(declarative_property_group):
@@ -3984,9 +4085,15 @@ class luxrender_tex_transform(declarative_property_group):
 		'translate',
 		'rotate',
 		'scale',
+		'lbl_smoke_domain',
 	]
 	
-	visibility = {}
+	visibility = {
+	'translate': { 'coordinates': O(['global', 'globalnormal', 'local', 'localnormal', 'uv']) },
+	'rotate': { 'coordinates': O(['global', 'globalnormal', 'local', 'localnormal', 'uv']) },
+	'scale': { 'coordinates': O(['global', 'globalnormal', 'local', 'localnormal', 'uv']) },
+	'lbl_smoke_domain': { 'coordinates': 'smoke_domain' },
+	}
 	
 	properties = [
 		{
@@ -3999,6 +4106,7 @@ class luxrender_tex_transform(declarative_property_group):
 				('local', 'Object', 'Use object local 3D coordinates'),
 				('localnormal', 'Object Normal', 'Use object local surface normals'),
 				('uv', 'UV', 'Use UV coordinates (x=u y=v z=0)'),
+				('smoke_domain', 'Smoke_Domain', 'Use Smoke Domain Coordinates'),
 			],
 			'default': 'global',
 			'save_in_preset': True
@@ -4017,7 +4125,7 @@ class luxrender_tex_transform(declarative_property_group):
 			'name': 'Rotate',
 			'default': (0.0, 0.0, 0.0),
 			'precision': 5,
-			'subtype': 'DIRECTION',
+#			'subtype': 'DIRECTION',
 			'unit': 'ROTATION',
 			'save_in_preset': True
 		},
@@ -4029,6 +4137,11 @@ class luxrender_tex_transform(declarative_property_group):
 			'precision': 5,
 			'save_in_preset': True
 		},
+		{
+		'type': 'text',
+		'attr': 'lbl_smoke_domain',
+		'name': 'Auto Using Smoke Domain Data'
+		},
 	]
 	
 	def get_paramset(self, scene):
@@ -4036,10 +4149,23 @@ class luxrender_tex_transform(declarative_property_group):
 		
 		ws = get_worldscale(as_scalematrix=False)
 		
-		transform_params.add_string('coordinates', self.coordinates)
-		transform_params.add_vector('translate', [i*ws for i in self.translate])
 		transform_params.add_vector('rotate', self.rotate)
-		transform_params.add_vector('scale', [i*ws for i in self.scale])
+		
+		if self.coordinates == 'smoke_domain':
+			for tex in bpy.data.textures:
+				if bpy.data.textures[tex.name].luxrender_texture.type == 'densitygrid':
+					domain = bpy.data.textures[tex.name].luxrender_texture.luxrender_tex_densitygrid.domain_object
+			obj = bpy.context.scene.objects[domain]
+			vloc = bpy.context.scene.objects[domain].data.vertices[0]
+			vloc_global = obj.matrix_world * vloc.co
+			d_dim = bpy.data.objects[domain].dimensions
+			transform_params.add_string('coordinates', 'global')
+			transform_params.add_vector('translate', vloc_global)
+			transform_params.add_vector('scale', d_dim)
+		else:
+			transform_params.add_string('coordinates', self.coordinates)
+			transform_params.add_vector('translate', [i*ws for i in self.translate])
+			transform_params.add_vector('scale', [i*ws for i in self.scale])
 		
 		return transform_params
 	

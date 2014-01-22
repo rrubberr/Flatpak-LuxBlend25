@@ -705,28 +705,29 @@ class GeometryExporter(object):
 			LuxLog('WARNING: material slot %d on object "%s" is unassigned!' %(me_mat_index+1, mat_object.name))
 
 		#Emission check
-		output_node = find_node(ob_mat, 'luxrender_material_output_node')
-		if ob_mat.luxrender_material.nodetree:
-			object_is_emitter = False
-		if output_node != None:
-			light_socket = output_node.inputs[3]
-			if light_socket.is_linked:
-				light_node = light_socket.links[0].from_node
-				object_is_emitter = light_socket.is_linked
-		else: #no node tree, so check the classic mat editor
-			object_is_emitter = ob_mat.luxrender_emission.use_emission
-		
-		if object_is_emitter:
-			# Only add the AreaLightSource if this object's emission lightgroup is enabled
-			if self.visibility_scene.luxrender_lightgroups.is_enabled(ob_mat.luxrender_emission.lightgroup):
-				if not self.visibility_scene.luxrender_lightgroups.ignore:
-					self.lux_context.lightGroup(ob_mat.luxrender_emission.lightgroup, [])
-				if not ob_mat.luxrender_material.nodetree:
-					self.lux_context.areaLightSource( *ob_mat.luxrender_emission.api_output(ob_mat) )
-				else:
-					# texture exporting
-					tex_maker = luxrender_texture_maker(self.lux_context, ob_mat.luxrender_material.nodetree)
-					self.lux_context.areaLightSource( *light_node.export(tex_maker.make_texture) )
+		if ob_mat != None:
+			output_node = find_node(ob_mat, 'luxrender_material_output_node')
+			if ob_mat.luxrender_material.nodetree:
+				object_is_emitter = False
+			if output_node != None:
+				light_socket = output_node.inputs[3]
+				if light_socket.is_linked:
+					light_node = light_socket.links[0].from_node
+					object_is_emitter = light_socket.is_linked
+			else: #no node tree, so check the classic mat editor
+				object_is_emitter = ob_mat.luxrender_emission.use_emission
+			
+			if object_is_emitter:
+				# Only add the AreaLightSource if this object's emission lightgroup is enabled
+				if self.visibility_scene.luxrender_lightgroups.is_enabled(ob_mat.luxrender_emission.lightgroup):
+					if not self.visibility_scene.luxrender_lightgroups.ignore:
+						self.lux_context.lightGroup(ob_mat.luxrender_emission.lightgroup, [])
+					if not ob_mat.luxrender_material.nodetree:
+						self.lux_context.areaLightSource( *ob_mat.luxrender_emission.api_output(ob_mat) )
+					else:
+						# texture exporting
+						tex_maker = luxrender_texture_maker(self.lux_context, ob_mat.luxrender_material.nodetree)
+						self.lux_context.areaLightSource( *light_node.export(tex_maker.make_texture) )
 
 		self.lux_context.shape(me_shape_type, me_shape_params)
 
@@ -1023,7 +1024,7 @@ class GeometryExporter(object):
 				col = None
 				seg_length = 1.0				
 				for step in range(0, steps):
-					co = psys.co_hair(obj, mod, pindex, step)                               
+					co = psys.co_hair(obj, mod, pindex, step) if bpy.app.version < (2, 68, 5 ) else psys.co_hair(obj, pindex, step) # blender api change in r60251 - removed modifier argument
 					if (step > 0): seg_length = (co-obj.matrix_world*points[len(points)-1]).length_squared 
 					if not (co.length_squared == 0 or seg_length == 0):
 						points.append(transform*co)
@@ -1157,7 +1158,7 @@ class GeometryExporter(object):
 				points = []
 
 				for step in range(0,steps):
-					co = psys.co_hair(obj, mod, pindex, step)
+					co = psys.co_hair(obj, mod, pindex, step) if bpy.app.version < (2, 68, 5 ) else psys.co_hair(obj, pindex, step) # blender api change in r60251 - removed modifier argument
 					if not co.length_squared == 0:
 						points.append(co)
 						
@@ -1333,11 +1334,6 @@ class GeometryExporter(object):
 				
 				if obj.parent and obj.parent.is_duplicator:
 					raise UnexportableObjectException(' -> parent is duplicator')
-				
-				for mod in obj.modifiers:
-					if mod.name == 'Smoke':
-						if mod.smoke_type == 'DOMAIN':
-							raise UnexportableObjectException(' -> Smoke domain')
 				
 				number_psystems = len(obj.particle_systems)
 				

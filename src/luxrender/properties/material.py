@@ -490,8 +490,11 @@ class luxrender_material(declarative_property_group):
 		
 	
 	def export(self, scene, lux_context, material, mode='indirect'):
+		mat_is_transparent = False
+		if self.type in ['glass', 'glass2', 'null']:
+			mat_is_transparent == True
 		
-		if scene.luxrender_testing.clay_render and self.type not in ['glass', 'glass2']:
+		if scene.luxrender_testing.clay_render and mat_is_transparent == False:
 			return {'CLAY'}
 		
 		if self.nodetree != '':
@@ -779,7 +782,7 @@ class luxrender_mat_compositing(declarative_property_group):
 		{
 			'type': 'bool',
 			'attr': 'use_compositing',
-			'name': 'Use compositing settings',
+			'name': 'Use Compositing Settings',
 			'default': False,
 			'save_in_preset': True
 		},
@@ -788,12 +791,14 @@ class luxrender_mat_compositing(declarative_property_group):
 			'attr': 'visible_material',
 			'name': 'Visible Material',
 			'default': True,
+			'description': 'Disable to render this material as a holdout (mask). The normal material will still be visible in reflections and GI',
 			'save_in_preset': True
 		},
 		{
 			'type': 'bool',
 			'attr': 'visible_emission',
 			'name': 'Visible Emission',
+			'description': 'If disabled, an emitting object will not appear to shine, even when acting as a light emitter',
 			'default': True,
 			'save_in_preset': True
 		},
@@ -801,6 +806,7 @@ class luxrender_mat_compositing(declarative_property_group):
 			'type': 'bool',
 			'attr': 'visible_indirect_material',
 			'name': 'Visible Indirect Material',
+ 			'description': 'Disable to hide this object from GI',
 			'default': True,
 			'save_in_preset': True
 		},
@@ -808,6 +814,7 @@ class luxrender_mat_compositing(declarative_property_group):
 			'type': 'bool',
 			'attr': 'visible_indirect_emission',
 			'name': 'Visible Indirect Emission',
+			'description': 'If disabled, an emitting object will not cast light, even though it appears to shine when viewed directly',
 			'default': True,
 			'save_in_preset': True
 		},
@@ -815,6 +822,7 @@ class luxrender_mat_compositing(declarative_property_group):
 			'type': 'bool',
 			'attr': 'override_alpha',
 			'name': 'Override Alpha',
+			'description': 'If enabled along with disabling visible-direct, the resulting alpha value will the value set below rather than 0',
 			'default': False,
 			'save_in_preset': True
 		},
@@ -823,6 +831,7 @@ class luxrender_mat_compositing(declarative_property_group):
 			'attr': 'override_alpha_value',
 			'name': 'Override Alpha Value',
 			'default': 0.0,
+			'description': 'Alternate alpha value to use with Override-Alpha',
 			'min': 0.0,
 			'soft_min': 0.0,
 			'max': 1.0,

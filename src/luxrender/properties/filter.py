@@ -41,6 +41,7 @@ class luxrender_filter(declarative_property_group):
 		'spacer',
 		'filter',
 		
+		'filter_width',
 		'sharpness',
 		
 		['xwidth', 'ywidth'],
@@ -52,6 +53,7 @@ class luxrender_filter(declarative_property_group):
 	
 	visibility = {
 		'spacer':		{ 'advanced': True },
+		'filter_width':	{ 'advanced': False },
 		'sharpness':	{ 'advanced': False, 'filter': 'mitchell' },
 		'xwidth':		{ 'advanced': True },
 		'ywidth':		{ 'advanced': True },
@@ -75,11 +77,13 @@ class luxrender_filter(declarative_property_group):
 			'description': 'Pixel splatting filter',
 			'default': 'mitchell',
 			'items': [
-				('box', 'Box', 'box'),
-				('gaussian', 'Gaussian', 'gaussian'),
-				('mitchell', 'Mitchell', 'mitchell'),
-				('sinc', 'Sinc', 'sinc'),
-				('triangle', 'Triangle', 'triangle'),
+				('box', 'Box', 'Box filter'),
+				('gaussian', 'Gaussian', 'Gaussian filter'),
+				('mitchell', 'Mitchell', 'Mitchell-Netravali filter'),
+				('sinc', 'Sinc', 'Sinc filter'),
+				('triangle', 'Triangle', 'Triangle filter'),
+				('catmullrom', 'Catmull-Rom', 'Catmull-Rom filter'),
+				('blackmanharris', 'Blackman-Harris', 'Blackman-Harris filter'),
 			],
 			'save_in_preset': True
 		},
@@ -89,6 +93,18 @@ class luxrender_filter(declarative_property_group):
 			'name': 'Advanced',
 			'description': 'Configure advanced filter settings',
 			'default': False,
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'filter_width',
+			'name': 'Filter Width',
+			'description': 'Width of pixel filter curve. Higher values are smoother and more blurred',
+			'default': 2.0,
+			'min': 0.5,
+			'soft_min': 0.5,
+			'max': 10.0,
+			'soft_max': 4.0,
 			'save_in_preset': True
 		},
 		#The values for sharpness are not actually tied to the values of B/C, they are completely independent controls!
@@ -111,10 +127,10 @@ class luxrender_filter(declarative_property_group):
 			'name': 'X Width',
 			'description': 'Width of filter in X dimension',
 			'default': 2.0,
-			'min': 0.0,
-			'soft_min': 0.0,
+			'min': 0.5,
+			'soft_min': 0.5,
 			'max': 10.0,
-			'soft_max': 10.0,
+			'soft_max': 4.0,
 			'save_in_preset': True
 		},
 		{
@@ -123,10 +139,10 @@ class luxrender_filter(declarative_property_group):
 			'name': 'Y Width',
 			'description': 'Width of filter in Y dimension',
 			'default': 2.0,
-			'min': 0.0,
-			'soft_min': 0.0,
+			'min': 0.5,
+			'soft_min': 0.5,
 			'max': 10.0,
-			'soft_max': 10.0,
+			'soft_max': 4.0,
 			'save_in_preset': True
 		},
 		{
@@ -213,6 +229,10 @@ class luxrender_filter(declarative_property_group):
 				params.add_float('B', self.b)
 				params.add_float('C', self.c)
 		
+		if not self.advanced:
+			params.add_float('xwidth', self.filter_width)
+			params.add_float('ywidth', self.filter_width)
+
 		if self.advanced:
 			params.add_float('xwidth', self.xwidth)
 			params.add_float('ywidth', self.ywidth)

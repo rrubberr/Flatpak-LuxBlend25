@@ -688,7 +688,7 @@ class luxrender_film(declarative_property_group):
 			'attr': 'outlierrejection_k',
 			'name': 'Firefly rejection',
 			'description': 'Firefly (outlier) rejection k parameter. 0=disabled',
-			'default': 5,
+			'default': 2,
 			'min': 0,
 			'soft_min': 0,
 		},
@@ -828,7 +828,7 @@ class luxrender_film(declarative_property_group):
 		
 		if self.output_alpha:
 			output_channels = 'RGBA'
-			params.add_bool('premultiplyalpha', self.premultiply_alpha)
+			params.add_bool('premultiplyalpha', True)
 		else:
 			output_channels = 'RGB'
 								
@@ -1293,12 +1293,12 @@ class luxrender_tonemapping(declarative_property_group):
 			'description': 'Choose tonemapping type',
 			'default': 'autolinear',
 			'items': [
-				('reinhard', 'Reinhard', 'reinhard'),
-				('linear', 'Linear (manual)', 'linear'),
-				('autolinear', 'Linear (auto-exposure)', 'autolinear'),
-				('contrast', 'Contrast', 'contrast'),
-				('maxwhite', 'Maxwhite', 'maxwhite'),
-				('falsecolors', 'False Colors', 'false color')
+				('reinhard', 'Reinhard', 'Reinhard non-linear tonemapping'),
+				('linear', 'Linear (manual)', 'Linear tonemapping using camera controls'),
+				('autolinear', 'Linear (auto-exposure)', 'Simple auto-exposure'),
+				('contrast', 'Contrast', 'Scaleable contrast-based tonemapping'),
+				('maxwhite', 'Maxwhite', 'Set brightest pixel as RGB 1.0'),
+				('falsecolors', 'False Colors', 'Convert image to a false color readout of irradiance levels')
 			]
 		},
 		
