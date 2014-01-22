@@ -50,7 +50,10 @@ def cycles_panel_node_draw(layout, id_data, output_type, input_name):
 
 def node_tree_selector_draw(layout, id_data, output_type):
 	#layout.prop_search(mat.luxrender_material, "nodetree", bpy.data, "node_groups")
-	layout.prop_search(id_data.luxrender_material, "nodetree", bpy.data, "node_groups")
+	try:
+		layout.prop_search(id_data.luxrender_material, "nodetree", bpy.data, "node_groups")
+	except:
+		return False
 	
 	node = find_node(id_data, output_type)
 	if not node:
@@ -157,7 +160,12 @@ class ui_luxrender_material_db(luxrender_material_base):
 
 	@classmethod
 	def poll(cls, context):
-		return context.material.luxrender_material.nodetree == '' and context.scene.render.engine == 'LUXRENDER_RENDER'
+		if context.scene.render.engine != 'LUXRENDER_RENDER':
+			return False
+		try:
+			return context.material.luxrender_material.nodetree == ''
+		except:
+			return False
 
 @LuxRenderAddon.addon_register_class
 class ui_luxrender_material_utils(luxrender_material_base):
@@ -181,7 +189,12 @@ class ui_luxrender_material_utils(luxrender_material_base):
 
 	@classmethod
 	def poll(cls, context):
-		return context.material.luxrender_material.nodetree == '' and context.scene.render.engine == 'LUXRENDER_RENDER'
+		if context.scene.render.engine != 'LUXRENDER_RENDER':
+			return False
+		try:
+			return context.material.luxrender_material.nodetree == ''
+		except:
+			return False
 
 @LuxRenderAddon.addon_register_class
 class ui_luxrender_material_emission(luxrender_material_base):
@@ -201,7 +214,12 @@ class ui_luxrender_material_emission(luxrender_material_base):
 
 	@classmethod
 	def poll(cls, context):
-		return context.material.luxrender_material.nodetree == '' and context.scene.render.engine == 'LUXRENDER_RENDER'
+		if context.scene.render.engine != 'LUXRENDER_RENDER':
+			return False
+		try:
+			return context.material.luxrender_material.nodetree == ''
+		except:
+			return False
 
 @LuxRenderAddon.addon_register_class
 class ui_luxrender_material_transparency(luxrender_material_base):
@@ -223,8 +241,12 @@ class ui_luxrender_material_transparency(luxrender_material_base):
 	def poll(cls, context):
 		if not hasattr(context.material, 'luxrender_transparency'):
 			return False
-		return super().poll(context) and context.material.luxrender_material.type != 'null' and context.material.luxrender_material.nodetree == '' and context.scene.render.engine == 'LUXRENDER_RENDER'
-
+		if context.scene.render.engine != 'LUXRENDER_RENDER':
+			return False
+		try:
+			return super().poll(context) and context.material.luxrender_material.type != 'null' and context.material.luxrender_material.nodetree == ''
+		except:
+			return super().poll(context)
 
 @LuxRenderAddon.addon_register_class
 class ui_luxrender_material_coating(luxrender_material_base):
@@ -263,7 +285,12 @@ class ui_luxrender_material_coating(luxrender_material_base):
 	def poll(cls, context):
 		if not hasattr(context.material, 'luxrender_coating'):
 			return False
-		return super().poll(context) and context.material.luxrender_material.nodetree == ''
+		if context.scene.render.engine != 'LUXRENDER_RENDER':
+			return False
+		try:
+			return super().poll(context) and context.material.luxrender_material.nodetree == ''
+		except:
+			return super().poll(context)
 
 @LuxRenderAddon.addon_register_class
 class ui_luxrender_material_node_volume(luxrender_material_base):
@@ -277,7 +304,12 @@ class ui_luxrender_material_node_volume(luxrender_material_base):
 	
 	@classmethod
 	def poll(cls, context):
-		return context.material.luxrender_material.nodetree != '' and context.scene.render.engine == 'LUXRENDER_RENDER'
+		if context.scene.render.engine != 'LUXRENDER_RENDER':
+			return False
+		try:
+			return context.material.luxrender_material.nodetree != ''
+		except:
+			return False
 
 @LuxRenderAddon.addon_register_class
 class ui_luxrender_material_node_emit(luxrender_material_base):
@@ -290,4 +322,9 @@ class ui_luxrender_material_node_emit(luxrender_material_base):
 	
 	@classmethod
 	def poll(cls, context):
-		return context.material.luxrender_material.nodetree != '' and context.scene.render.engine == 'LUXRENDER_RENDER'
+		if context.scene.render.engine != 'LUXRENDER_RENDER':
+			return False
+		try:
+			return context.material.luxrender_material.nodetree != ''
+		except:
+			return False

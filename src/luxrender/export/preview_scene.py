@@ -31,6 +31,8 @@ from ..export.geometry import GeometryExporter
 from ..export.materials import ExportedTextures, convert_texture, get_material_volume_defs, get_preview_flip, get_preview_zoom
 from ..outputs import LuxLog, LuxManager
 from ..outputs.pure_api import LUXRENDER_VERSION
+from ..properties import find_node
+from ..properties.node_material import luxrender_texture_maker
 
 def export_preview_texture(lux_context, texture):
 	texture_name = texture.name
@@ -101,6 +103,7 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 		.add_bool('write_resume_flm', False) \
 		.add_integer('displayinterval', 300) \
 		.add_float('haltthreshold', 0.005) \
+		.add_integer('halttime', 30) \
 		.add_string('tonemapkernel', 'linear') \
 		.add_string('ldr_clamp_method', 'hue') \
 		.add_integer('tilecount', 2) \
@@ -139,7 +142,9 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 		.add_string('lightstrategy', 'all') \
 		.add_string('lightpathstrategy', 'all') \
 		.add_integer('eyedepth', 12) \
-		.add_integer('lightdepth', 8)
+		.add_integer('lightdepth', 8) \
+		.add_integer('lightraycount', 1) \
+		.add_integer('shadowraycount', 1)
 	lux_context.surfaceIntegrator('bidirectional', surfaceintegrator_params)
 	
 	# Volume Integrator
@@ -431,11 +436,24 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
 						lux_context.interior(bl_scene.luxrender_world.default_interior_volume)
 					if ext_v == '' and bl_scene.luxrender_world.default_exterior_volume != '':
 						lux_context.exterior(bl_scene.luxrender_world.default_exterior_volume)
-							
-					object_is_emitter = hasattr(mat, 'luxrender_emission') and mat.luxrender_emission.use_emission
+					
+					output_node = find_node(mat, 'luxrender_material_output_node')
+					if mat.luxrender_material.nodetree:
+						object_is_emitter = False
+						if output_node != None:
+							light_socket = output_node.inputs[3]
+							if light_socket.is_linked:
+								light_node = light_socket.links[0].from_node
+								object_is_emitter = light_socket.is_linked
+					else:
+						object_is_emitter = hasattr(mat, 'luxrender_emission') and mat.luxrender_emission.use_emission
 					if object_is_emitter:
+						if not mat.luxrender_material.nodetree:
 						# lux_context.lightGroup(mat.luxrender_emission.lightgroup, [])
-						lux_context.areaLightSource( *mat.luxrender_emission.api_output(obj) )
+							lux_context.areaLightSource( *mat.luxrender_emission.api_output(obj) )
+						else:
+							tex_maker = luxrender_texture_maker(lux_context, mat.luxrender_material.nodetree)
+							lux_context.areaLightSource( *light_node.export(tex_maker.make_texture) )
 
 				lux_context.shape(mesh_type, mesh_params)
 		else:

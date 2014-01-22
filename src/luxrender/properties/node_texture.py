@@ -33,20 +33,21 @@ from extensions_framework import declarative_property_group
 from .. import LuxRenderAddon
 from ..properties import (luxrender_texture_node, get_linked_node, check_node_export_texture, check_node_get_paramset)
 from ..properties.texture import (
-	FloatTextureParameter, ColorTextureParameter, FresnelTextureParameter,
 	import_paramset_to_blender_texture, shorten_name, refresh_preview
 )
 from ..export import ParamSet, get_worldscale, process_filepath_data
 from ..export.materials import (
-	MaterialCounter, ExportedMaterials, ExportedTextures, add_texture_parameter, get_texture_from_scene
+	ExportedTextures, add_texture_parameter, get_texture_from_scene
 )
 from ..outputs import LuxManager, LuxLog
-from ..util import dict_merge
+
 from ..properties.texture import (
 	luxrender_tex_brick, luxrender_tex_imagemap, luxrender_tex_normalmap, luxrender_tex_transform, luxrender_tex_mapping
 )
-from ..properties.node_material import (
-	float_socket_color, color_socket_color, fresnel_socket_color, get_socket_paramsets
+from ..properties.node_material import get_socket_paramsets
+
+from ..properties.node_sockets import (
+	luxrender_TF_brickmodtex_socket, luxrender_TF_bricktex_socket, luxrender_TF_mortartex_socket, luxrender_TC_brickmodtex_socket, luxrender_TC_bricktex_socket, luxrender_TC_mortartex_socket, luxrender_transform_socket, luxrender_coordinate_socket
 )
 
 #Define the list of noise types globally, this gets used by a few different nodes
@@ -80,115 +81,50 @@ triple_variant_items = [
 	]
 
 @LuxRenderAddon.addon_register_class
-class luxrender_3d_coordinates_node(luxrender_texture_node):
-	'''3D texture coordinates node'''
-	bl_idname = 'luxrender_3d_coordinates_node'
-	bl_label = '3D Texture Coordinate'
-	bl_icon = 'TEXTURE'
-	bl_width_min = 260
-
-	for prop in luxrender_tex_transform.properties:
-		if prop['attr'].startswith('coordinates'):
-			coordinate_items = prop['items']
-
-	coordinates = bpy.props.EnumProperty(name='Coordinates', items=coordinate_items)
-	translate = bpy.props.FloatVectorProperty(name='Translate')
-	rotate = bpy.props.FloatVectorProperty(name='Rotate', subtype='DIRECTION', unit='ROTATION')
-	scale = bpy.props.FloatVectorProperty(name='Scale', default=(1.0, 1.0, 1.0))
-
-
-	def init(self, context):
-		self.outputs.new('luxrender_coordinate_socket', '3D Coordinate')
-		
-	def draw_buttons(self, context, layout):
-		layout.prop(self, 'coordinates')
-		layout.prop(self, 'translate')
-		layout.prop(self, 'rotate')
-		layout.prop(self, 'scale')
-		
-	def get_paramset(self):
-		coord_params = ParamSet()
-		
-		ws = get_worldscale(as_scalematrix=False)
-		
-		coord_params.add_string('coordinates', self.coordinates)
-		coord_params.add_vector('translate', [i*ws for i in self.translate])
-		coord_params.add_vector('rotate', self.rotate)
-		coord_params.add_vector('scale', [i*ws for i in self.scale])
-		
-		return coord_params
-		
-@LuxRenderAddon.addon_register_class
-class luxrender_2d_coordinates_node(luxrender_texture_node):
-	'''2D texture coordinates node'''
-	bl_idname = 'luxrender_2d_coordinates_node'
-	bl_label = '2D Texture Coordinate'
+class luxrender_texture_type_node_blender_blend(luxrender_texture_node):
+	'''Blend texture node'''
+	bl_idname = 'luxrender_texture_blender_blend_node'
+	bl_label = 'Blend Texture'
 	bl_icon = 'TEXTURE'
 	bl_width_min = 180
-
-	for prop in luxrender_tex_mapping.properties:
-		if prop['attr'].startswith('type'):
-			coordinate_items = prop['items']
-
-	coordinates = bpy.props.EnumProperty(name='Coordinates', items=coordinate_items)
-	center_map = bpy.props.BoolProperty(name='Center Map', default=False)
-	uscale = bpy.props.FloatProperty(name='U Scale', default=1.0, min=-500.0, max=500.0)
-	vscale = bpy.props.FloatProperty(name='V Scale', default=1.0, min=-500.0, max=500.0)
-	udelta = bpy.props.FloatProperty(name='U Offset', default=0.0, min=-500.0, max=500.0)
-	vdelta = bpy.props.FloatProperty(name='V Offset', default=0.0, min=-500.0, max=500.0)
-	v1 = bpy.props.FloatVectorProperty(name='V1', default=(1.0, 0.0, 0.0))
-	v2 = bpy.props.FloatVectorProperty(name='V2', default=(0.0, 1.0, 0.0))
-
-
+	
+	progression_items = [
+		('lin', 'Linear', 'linear'),
+		('quad', 'Quadratic', 'quadratic'),
+		('ease', 'Easing', 'easing'),
+		('diag', 'Diagonal', 'diagonal'),
+		('sphere', 'Spherical', 'spherical'),
+		('halo', 'Quadratic Sphere', 'quadratic sphere'),
+		('radial', 'Radial', 'radial'),
+		]
+	
+	flipxy = bpy.props.BoolProperty(name='Flip XY', description='Switch between horizontal and linear gradient', default=False)
+	type = bpy.props.EnumProperty(name='Progression', description='progression', items=progression_items, default='lin')
+	bright = bpy.props.FloatProperty(name='Brightness', default=1.0)
+	contrast = bpy.props.FloatProperty(name='Contrast', default=1.0)
+	
 	def init(self, context):
-		self.outputs.new('luxrender_transform_socket', '2D Coordinate')
-		
+		self.inputs.new('luxrender_coordinate_socket', '3D Coordinate')
+		self.outputs.new('NodeSocketFloat', 'Float')
+	
 	def draw_buttons(self, context, layout):
-		layout.prop(self, 'coordinates')
-		if self.coordinates == 'planar':
-			layout.prop(self, 'v1')
-			layout.prop(self, 'v2')
-			layout.prop(self, 'udelta')
-		else:
-			layout.prop(self, 'uscale')
-			layout.prop(self, 'vscale')
-			layout.prop(self, 'udelta')
-			layout.prop(self, 'vdelta')
-		if self.coordinates == 'uv':
-			layout.prop(self, 'center_map')
-
-	def get_paramset(self):
-		coord_params = ParamSet()
-
-		coord_params.add_string('mapping', self.coordinates)
-		if self.coordinates == 'planar':
-			coord_params.add_vector('v1', self.v1)
-			coord_params.add_vector('v2', self.v2)
-			coord_params.add_float('udelta', self.udelta)
-			coord_params.add_float('vdelta', self.vdelta)
+		layout.prop(self, 'flipxy')
+		layout.prop(self, 'type')
+		layout.prop(self, 'bright')
+		layout.prop(self, 'contrast')
+	
+	def export_texture(self, make_texture):
+		blend_params = ParamSet() \
+			.add_bool('flipxy', self.flipxy) \
+			.add_string('type', self.type) \
+			.add_float('bright', self.bright) \
+			.add_float('contrast', self.contrast)
 		
-		if self.coordinates =='cylindrical':
-			coord_params.add_float('uscale', self.uscale)
-			coord_params.add_float('udelta', self.udelta)
+		coord_node = get_linked_node(self.inputs[0])
+		if coord_node and check_node_get_paramset(coord_node):
+			blend_params.update( coord_node.get_paramset() )
 		
-		if self.coordinates == 'spherical':
-			coord_params.add_float('uscale', self.uscale)
-			coord_params.add_float('vscale', self.vscale)
-			coord_params.add_float('udelta', self.udelta)
-			coord_params.add_float('vdelta', self.vdelta)
-		
-		if self.coordinates == 'uv':
-			coord_params.add_float('uscale', self.uscale)
-			coord_params.add_float('vscale', self.vscale * -1) # flip to match blender
-			
-			if self.center_map ==  False:
-				coord_params.add_float('udelta', self.udelta)
-				coord_params.add_float('vdelta', self.vdelta + 1) # correction for clamped types, does not harm repeat type
-			else:
-				coord_params.add_float('udelta', self.udelta +0.5*(1.0-self.uscale)) # auto-center the mapping
-				coord_params.add_float('vdelta', self.vdelta * -1 + 1-(0.5*(1.0-self.vscale))) # auto-center the mapping
-		
-		return coord_params
+		return make_texture('float', 'blender_blend', self.name, blend_params)
 
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_brick(luxrender_texture_node):
@@ -269,34 +205,6 @@ class luxrender_texture_type_node_brick(luxrender_texture_node):
 		return make_texture(self.variant, 'brick', self.name, brick_params)
 
 @LuxRenderAddon.addon_register_class
-class luxrender_texture_type_node_bump_map(luxrender_texture_node):
-	'''Bump map texture node'''
-	bl_idname = 'luxrender_texture_bump_map_node'
-	bl_label = 'Bump Map Texture'
-	bl_icon = 'TEXTURE'
-	bl_width_min = 180
-
-	bump_height = bpy.props.FloatProperty(name='Bump Height', description='Height of the bump map', default=.001, precision=6, subtype='DISTANCE', unit='LENGTH', step=.001)
-
-	def init(self, context):
-		self.inputs.new('NodeSocketFloat', 'Bump Value')
-		self.outputs.new('NodeSocketFloat', 'Float')
-		
-	def draw_buttons(self, context, layout):
-		layout.prop(self, 'bump_height')
-		
-	def export_texture(self, make_texture):
-		bumpmap_params = ParamSet() \
-			.add_float('tex1', self.bump_height)
-			
-		tex_node = get_linked_node(self.inputs[0])
-		if tex_node and check_node_export_texture(tex_node):
-			bumpmap_name = tex_node.export_texture(make_texture)
-			bumpmap_params.add_texture("tex2", bumpmap_name)
-		
-		return make_texture('float', 'scale', self.name, bumpmap_params)
-
-@LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_blender_clouds(luxrender_texture_node):
 	'''Clouds texture node'''
 	bl_idname = 'luxrender_texture_blender_clouds_node'
@@ -338,6 +246,8 @@ class luxrender_texture_type_node_blender_clouds(luxrender_texture_node):
 		
 		return make_texture('float', 'blender_clouds', self.name, clouds_params)
 
+
+
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_blender_distortednoise(luxrender_texture_node):
 	'''Distorted noise texture node'''
@@ -350,7 +260,7 @@ class luxrender_texture_type_node_blender_distortednoise(luxrender_texture_node)
 	type = bpy.props.EnumProperty(name='Noise Basis', description='Type of noise used', items=noise_basis_items, default='blender_original')
 	distamount = bpy.props.FloatProperty(name='Distortion', default=1.00)
 	noisesize = bpy.props.FloatProperty(name='Noise Size', default=0.25)
-	noisedepth = bpy.props.IntProperty(name='Noise Depth', default=2)
+	nabla = bpy.props.FloatProperty(name='Nabla', default=0.025)
 	bright = bpy.props.FloatProperty(name='Brightness', default=1.0)
 	contrast = bpy.props.FloatProperty(name='Contrast', default=1.0)
 	
@@ -363,7 +273,7 @@ class luxrender_texture_type_node_blender_distortednoise(luxrender_texture_node)
 		layout.prop(self, 'type')
 		layout.prop(self, 'distamount')
 		layout.prop(self, 'noisesize')
-		layout.prop(self, 'noisedepth')
+		layout.prop(self, 'nabla')
 		layout.prop(self, 'bright')
 		layout.prop(self, 'contrast')
 	
@@ -373,7 +283,7 @@ class luxrender_texture_type_node_blender_distortednoise(luxrender_texture_node)
 			.add_string('type', self.type) \
 			.add_float('noisesize', self.noisesize) \
 			.add_float('distamount', self.distamount) \
-			.add_integer('noisedepth', self.noisedepth) \
+			.add_float('nabla', self.nabla) \
 			.add_float('bright', self.bright) \
 			.add_float('contrast', self.contrast)
 		
@@ -412,6 +322,20 @@ class luxrender_texture_type_node_fbm(luxrender_texture_node):
 			fbm_params.update( coord_node.get_paramset() )
 		
 		return make_texture('float', 'fbm', self.name, fbm_params)
+
+@LuxRenderAddon.addon_register_class
+class luxrender_texture_type_node_harlequin(luxrender_texture_node):
+	'''Harlequin texture node'''
+	bl_idname = 'luxrender_texture_harlequin_node'
+	bl_label = 'Harlequin Texture'
+	bl_icon = 'TEXTURE'
+	
+	def init(self, context):
+		self.outputs.new('NodeSocketColor', 'Color')
+	
+	def export_texture(self, make_texture):
+		harlequin_params = ParamSet()
+		return make_texture('color', 'harlequin', self.name, harlequin_params)
 		
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_image_map(luxrender_texture_node):
@@ -489,6 +413,69 @@ class luxrender_texture_type_node_image_map(luxrender_texture_node):
 			imagemap_params.add_float('vscale', -1.0)
 
 		return make_texture(self.variant, 'imagemap', self.name, imagemap_params)
+
+@LuxRenderAddon.addon_register_class
+class luxrender_texture_type_node_blender_marble(luxrender_texture_node):
+	'''Marble texture node'''
+	bl_idname = 'luxrender_texture_blender_marble_node'
+	bl_label = 'Marble Texture'
+	bl_icon = 'TEXTURE'
+	bl_width_min = 180
+
+	marble_type_items = [
+		('soft', 'Soft', ''),
+		('sharp', 'Sharp', ''),
+		('sharper', 'Sharper', ''),
+	]
+	
+	marble_noise_items = [
+		('sin', 'Sin', ''),
+		('saw', 'Saw', ''),
+		('tri', 'Tri', ''),
+	]
+
+	type = bpy.props.EnumProperty(name='Type', description='Type of noise used', items=marble_type_items, default='soft')
+	noisebasis = bpy.props.EnumProperty(name='Noise Basis', description='Basis of noise used', items=noise_basis_items, default='blender_original')
+	noisebasis2 = bpy.props.EnumProperty(name='Noise Basis 2', description='Second basis of noise used', items=marble_noise_items, default='sin')
+	noisetype = bpy.props.EnumProperty(name='Noise Type', description='Soft or hard noise', items=noise_type_items, default='soft_noise')
+	noisesize = bpy.props.FloatProperty(name='Noise Size', default=0.25)
+	noisedepth = bpy.props.IntProperty(name='Noise Depth', default=2)
+	turbulence = bpy.props.FloatProperty(name='Turbulence', default=5.0)
+	bright = bpy.props.FloatProperty(name='Brightness', default=1.0)
+	contrast = bpy.props.FloatProperty(name='Contrast', default=1.0)
+
+	def init(self, context):
+		self.inputs.new('luxrender_coordinate_socket', '3D Coordinate')
+		self.outputs.new('NodeSocketFloat', 'Float')
+		
+	def draw_buttons(self, context, layout):
+		layout.prop(self, 'type')
+		layout.prop(self, 'noisebasis')
+		layout.prop(self, 'noisebasis2')
+		layout.prop(self, 'noisetype')
+		layout.prop(self, 'noisesize')
+		layout.prop(self, 'noisedepth')
+		layout.prop(self, 'turbulence')
+		layout.prop(self, 'bright')
+		layout.prop(self, 'contrast')
+
+	def export_texture(self, make_texture):
+		marble_params = ParamSet()
+		marble_params.add_string('type', self.type)
+		marble_params.add_string('noisebasis', self.noisebasis)
+		marble_params.add_string('noisebasis2', self.noisebasis2)
+		marble_params.add_string('noisetype', self.noisetype)
+		marble_params.add_float('noisesize', self.noisesize)
+		marble_params.add_integer('noisedepth', self.noisedepth)
+		marble_params.add_float('turbulence', self.turbulence)
+		marble_params.add_float('bright', self.bright)
+		marble_params.add_float('contrast', self.contrast)
+		
+		coord_node = get_linked_node(self.inputs[0])
+		if coord_node and check_node_get_paramset(coord_node):
+			marble_params.update( coord_node.get_paramset() )
+		
+		return make_texture('float', 'blender_marble', self.name, marble_params)
 		
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_blender_musgrave(luxrender_texture_node):
@@ -613,51 +600,144 @@ class luxrender_texture_type_node_normal_map(luxrender_texture_node):
 			normalmap_params.add_float('vscale', -1.0)
 
 		return make_texture('float', 'normalmap', self.name, normalmap_params)
-		
+
 @LuxRenderAddon.addon_register_class
-class luxrender_texture_type_node_hitpointcolor(luxrender_texture_node):
-	'''Vertex Colors texture node'''
-	bl_idname = 'luxrender_texture_hitpointcolor_node'
-	bl_label = 'Vertex Colors'
+class luxrender_texture_type_node_blender_stucci(luxrender_texture_node):
+	'''Stucci texture node'''
+	bl_idname = 'luxrender_texture_blender_stucci_node'
+	bl_label = 'Stucci Texture'
 	bl_icon = 'TEXTURE'
+	bl_width_min = 180
+
+	stucci_type_items = [
+		('plastic', 'Plastic', ''),
+		('wall_in', 'Wall In', ''),
+		('wall_out', 'Wall Out', ''),
+	]
+
+	type = bpy.props.EnumProperty(name='Type', description='Type of noise used', items=stucci_type_items, default='plastic')
+	noisebasis = bpy.props.EnumProperty(name='Noise Basis', description='Basis of noise used', items=noise_basis_items, default='blender_original')
+	noisetype = bpy.props.EnumProperty(name='Noise Type', description='Soft or hard noise', items=noise_type_items, default='soft_noise')
+	noisesize = bpy.props.FloatProperty(name='Noise Size', default=0.25)
+	turbulence = bpy.props.FloatProperty(name='Turbulence', default=5.0)
+	bright = bpy.props.FloatProperty(name='Brightness', default=1.0)
+	contrast = bpy.props.FloatProperty(name='Contrast', default=1.0)
 
 	def init(self, context):
+		self.inputs.new('luxrender_coordinate_socket', '3D Coordinate')
+		self.outputs.new('NodeSocketFloat', 'Float')
+		
+	def draw_buttons(self, context, layout):
+		layout.prop(self, 'type')
+		layout.prop(self, 'noisebasis')
+		layout.prop(self, 'noisetype')
+		layout.prop(self, 'noisesize')
+		layout.prop(self, 'turbulence')
+		layout.prop(self, 'bright')
+		layout.prop(self, 'contrast')
+
+	def export_texture(self, make_texture):
+		stucci_params = ParamSet()
+		stucci_params.add_string('type', self.type)
+		stucci_params.add_string('noisebasis', self.noisebasis)
+		stucci_params.add_string('noisetype', self.noisetype)
+		stucci_params.add_float('noisesize', self.noisesize)
+		stucci_params.add_float('turbulence', self.noisesize)
+		stucci_params.add_float('bright', self.bright)
+		stucci_params.add_float('contrast', self.contrast)
+		
+		coord_node = get_linked_node(self.inputs[0])
+		if coord_node and check_node_get_paramset(coord_node):
+			stucci_params.update( coord_node.get_paramset() )
+		
+		return make_texture('float', 'blender_stucci', self.name, stucci_params)
+
+@LuxRenderAddon.addon_register_class
+class luxrender_texture_type_node_uv(luxrender_texture_node):
+	'''UV texture node'''
+	bl_idname = 'luxrender_texture_uv_node'
+	bl_label = 'UV Test Texture'
+	bl_icon = 'TEXTURE'
+	
+	def init(self, context):
+		self.inputs.new('luxrender_transform_socket', '2D Transform')
+		
 		self.outputs.new('NodeSocketColor', 'Color')
-		
+	
 	def export_texture(self, make_texture):
-		hitpointcolor_params = ParamSet()
-				
-		return make_texture('color', 'hitpointcolor', self.name, hitpointcolor_params)
+		uvtest_params = ParamSet()
 		
-@LuxRenderAddon.addon_register_class
-class luxrender_texture_type_node_hitpointgrey(luxrender_texture_node):
-	'''Vertex Grey texture node'''
-	bl_idname = 'luxrender_texture_hitpointgrey_node'
-	bl_label = 'Vertex Mask'
-	bl_icon = 'TEXTURE'
+		coord_node = get_linked_node(self.inputs[0])
+		if coord_node and check_node_get_paramset(coord_node):
+			uvtest_params.update( coord_node.get_paramset() )
+		else:
+			uvtest_params.add_float('vscale', -1.0)
+		
+		return make_texture('color', 'uv', self.name, uvtest_params)
 
-	def init(self, context):
-		self.outputs.new('NodeSocketFloat', 'Float')
-		
-	def export_texture(self, make_texture):
-		hitpointgrey_params = ParamSet()
-				
-		return make_texture('float', 'hitpointgrey', self.name, hitpointgrey_params)
-		
 @LuxRenderAddon.addon_register_class
-class luxrender_texture_type_node_hitpointalpha(luxrender_texture_node):
-	'''Vertex Alpha texture node'''
-	bl_idname = 'luxrender_texture_hitpointalpha_node'
-	bl_label = 'Vertex Alpha'
+class luxrender_texture_type_node_blender_voronoi(luxrender_texture_node):
+	'''Voronoi texture node'''
+	bl_idname = 'luxrender_texture_blender_voronoi_node'
+	bl_label = 'Voronoi Texture'
 	bl_icon = 'TEXTURE'
-
+	bl_width_min = 180
+	
+	distance_items = [
+		('actual_distance', 'Actual Distance', 'actual distance'),
+		('distance_squared', 'Distance Squared', 'distance squared'),
+		('manhattan', 'Manhattan', 'manhattan'),
+		('chebychev', 'Chebychev', 'chebychev'),
+		('minkovsky_half', 'Minkowsky 1/2', 'minkowsky half'),
+		('minkovsky_four', 'Minkowsky 4', 'minkowsky four'),
+		('minkovsky', 'Minkowsky', 'minkowsky'),
+		]
+	
+	distmetric = bpy.props.EnumProperty(name='Distance Metric', description='Algorithm used to calculate distance of sample points to feature points', items=distance_items, default='actual_distance')
+	minkowsky_exp = bpy.props.FloatProperty(name='Exponent', default=1.0)
+	noisesize = bpy.props.FloatProperty(name='Noise Size', default=0.25)
+	nabla = bpy.props.FloatProperty(name='Nabla', default=0.025)
+	w1 = bpy.props.FloatProperty(name='Weight 1', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
+	w2 = bpy.props.FloatProperty(name='Weight 2', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
+	w3 = bpy.props.FloatProperty(name='Weight 3', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
+	w4 = bpy.props.FloatProperty(name='Weight 4', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
+	bright = bpy.props.FloatProperty(name='Brightness', default=1.0)
+	contrast = bpy.props.FloatProperty(name='Contrast', default=1.0)
+	
 	def init(self, context):
+		self.inputs.new('luxrender_coordinate_socket', '3D Coordinate')
 		self.outputs.new('NodeSocketFloat', 'Float')
-		
+	
+	def draw_buttons(self, context, layout):
+		layout.prop(self, 'distmetric')
+		layout.prop(self, 'minkowsky_exp')
+		layout.prop(self, 'noisesize')
+		layout.prop(self, 'nabla')
+		layout.prop(self, 'w1')
+		layout.prop(self, 'w2')
+		layout.prop(self, 'w3')
+		layout.prop(self, 'w4')
+		layout.prop(self, 'bright')
+		layout.prop(self, 'contrast')
+	
 	def export_texture(self, make_texture):
-		hitpointalpha_params = ParamSet()
-				
-		return make_texture('float', 'hitpointalpha', self.name, hitpointalpha_params)
+		voronoi_params = ParamSet() \
+			.add_string('distmetric', self.distmetric) \
+			.add_float('minkovsky_exp', self.minkowsky_exp) \
+			.add_float('noisesize', self.noisesize) \
+			.add_float('nabla', self.nabla) \
+			.add_float('w1', self.w1) \
+			.add_float('w2', self.w2) \
+			.add_float('w3', self.w3) \
+			.add_float('w4', self.w4) \
+			.add_float('bright', self.bright) \
+			.add_float('contrast', self.contrast)
+		
+		coord_node = get_linked_node(self.inputs[0])
+		if coord_node and check_node_get_paramset(coord_node):
+			voronoi_params.update( coord_node.get_paramset() )
+		
+		return make_texture('float', 'blender_voronoi', self.name, voronoi_params)
 		
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_windy(luxrender_texture_node):
@@ -679,6 +759,67 @@ class luxrender_texture_type_node_windy(luxrender_texture_node):
 			wrinkled_params.update( coord_node.get_paramset() )
 		
 		return make_texture('float', 'windy', self.name, windy_params)
+
+@LuxRenderAddon.addon_register_class
+class luxrender_texture_type_node_blender_wood(luxrender_texture_node):
+	'''Wood texture node'''
+	bl_idname = 'luxrender_texture_blender_wood_node'
+	bl_label = 'Wood Texture'
+	bl_icon = 'TEXTURE'
+	bl_width_min = 180
+
+	wood_type_items = [
+		('bands', 'Bands', ''),
+		('rings', 'Rings', ''),
+		('bandnoise', 'Band Noise', ''),
+		('ringnoise', 'Ring Noise', ''),						 
+	]
+	
+	wood_noise_items = [
+		('sin', 'Sin', ''),
+		('saw', 'Saw', ''),
+		('tri', 'Tri', ''),
+	]
+
+	type = bpy.props.EnumProperty(name='Type', description='Type of noise used', items=wood_type_items, default='bands')
+	noisebasis = bpy.props.EnumProperty(name='Noise Basis', description='Basis of noise used', items=noise_basis_items, default='blender_original')
+	noisebasis2 = bpy.props.EnumProperty(name='Noise Basis 2', description='Second basis of noise used', items=wood_noise_items, default='sin')
+	noisetype = bpy.props.EnumProperty(name='Noise Type', description='Soft or hard noise', items=noise_type_items, default='soft_noise')
+	noisesize = bpy.props.FloatProperty(name='Noise Size', default=0.25)
+	turbulence = bpy.props.FloatProperty(name='Turbulence', default=5.0)
+	bright = bpy.props.FloatProperty(name='Brightness', default=1.0)
+	contrast = bpy.props.FloatProperty(name='Contrast', default=1.0)
+
+	def init(self, context):
+		self.inputs.new('luxrender_coordinate_socket', '3D Coordinate')
+		self.outputs.new('NodeSocketFloat', 'Float')
+		
+	def draw_buttons(self, context, layout):
+		layout.prop(self, 'type')
+		layout.prop(self, 'noisebasis')
+		layout.prop(self, 'noisebasis2')
+		layout.prop(self, 'noisetype')
+		layout.prop(self, 'noisesize')
+		layout.prop(self, 'turbulence')
+		layout.prop(self, 'bright')
+		layout.prop(self, 'contrast')
+
+	def export_texture(self, make_texture):
+		wood_params = ParamSet()
+		wood_params.add_string('type', self.type)
+		wood_params.add_string('noisebasis', self.noisebasis)
+		marble_params.add_string('noisebasis2', self.noisebasis2)
+		wood_params.add_string('noisetype', self.noisetype)
+		wood_params.add_float('noisesize', self.noisesize)
+		wood_params.add_float('turbulence', self.turbulence)
+		wood_params.add_float('bright', self.bright)
+		wood_params.add_float('contrast', self.contrast)
+		
+		coord_node = get_linked_node(self.inputs[0])
+		if coord_node and check_node_get_paramset(coord_node):
+			wood_params.update( coord_node.get_paramset() )
+		
+		return make_texture('float', 'blender_wood', self.name, wood_params)
 		
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_wrinkled(luxrender_texture_node):
@@ -710,241 +851,130 @@ class luxrender_texture_type_node_wrinkled(luxrender_texture_node):
 			wrinkled_params.update( coord_node.get_paramset() )
 		
 		return make_texture('float', 'wrinkled', self.name, wrinkled_params)
-		
-#3D coordinate socket, 2D coordinates is luxrender_transform_socket. Blender does not like numbers in these names
-@LuxRenderAddon.addon_register_class
-class luxrender_coodinate_socket(bpy.types.NodeSocket):
-	# Description string
-	'''coordinate socket'''
-	# Optional identifier string. If not explicitly defined, the python class name is used.
-	bl_idname = 'luxrender_coordinate_socket'
-	# Label for nice name display
-	bl_label = 'Coordinate socket'
-	
-	# Optional function for drawing the socket input value
-	def draw(self, context, layout, node, text):
-		layout.label(text=self.name)
-	
-	# Socket color
-	def draw_color(self, context, node):
-		return (0.50, 0.25, 0.60, 1.0)
-			
-	
-@LuxRenderAddon.addon_register_class
-class luxrender_transform_socket(bpy.types.NodeSocket):
-	'''2D transform socket'''
-	bl_idname = 'luxrender_transform_socket'
-	bl_label = 'Transform socket'
-	
-	def draw(self, context, layout, node, text):
-		layout.label(text=self.name)
-	
-	def draw_color(self, context, node):
-		return (0.65, 0.55, 0.75, 1.0)
 
 @LuxRenderAddon.addon_register_class
-class luxrender_TC_brickmodtex_socket(bpy.types.NodeSocket):
-	'''brickmodtex socket'''
-	bl_idname = 'luxrender_TC_brickmodtex_socket'
-	bl_label = 'Brick modulation texture socket'
+class luxrender_texture_type_node_vol_exponential(luxrender_texture_node):
+	'''Cloud volume texture node'''
+	bl_idname = 'luxrender_texture_vol_cloud_node'
+	bl_label = 'Cloud Volume Texture'
+	bl_icon = 'TEXTURE'
+	bl_width_min = 180
 	
-	brickmodtex = bpy.props.FloatVectorProperty(name='Brick Modulation Texture', subtype='COLOR', min=0.0, max=1.0, default=(0.9, 0.9, 0.9))
+	radius = bpy.props.FloatProperty(name='Radius', default=0.5, min=0.0, soft_max=0.5, description='Overall cloud radius inside the base cube')
+	noisescale = bpy.props.FloatProperty(name='Noise Scale', default=0.5, min=0.0, max=1.0, description='Strength of the noise')
+	turbulence = bpy.props.FloatProperty(name='Turbulence', default=0.01, min=0.0, soft_max=0.2, description='Size of the noise displacement')
+	sharpness = bpy.props.FloatProperty(name='Sharpness', default=6.00, description='Noise sharpness - increase for more spikey appearance')
+	noiseoffset = bpy.props.FloatProperty(name='Noise Offset', default=0.00, min=0.0, max=1.0)
+	spheres = bpy.props.IntProperty(name='Spheres', default=0, description='If greater than 0, the cloud will consist of a bunch of random spheres to mimic a cumulus, this is the number of random spheres. If set to 0, the cloud will consist of single displaced sphere')
+	octaves = bpy.props.IntProperty(name='Octaves', default=1, description='Number of octaves for the noise function')
+	omega = bpy.props.FloatProperty(name='Omega', default=0.75, min=0.0, max=1.0, description='Amount of noise per octave')
+	variability = bpy.props.FloatProperty(name='Variability', default=0.9, min=0.0, max=1.0, description='Amount of extra noise')
+	baseflatness = bpy.props.FloatProperty(name='Base Flatness', default=0.8, min=0.0, max=0.99, description='How much the base of the cloud is flattened')
+	spheresize = bpy.props.FloatProperty(name='Sphere Size', default=0.15, min=0.0, description='Maxiumum size of cumulus spheres')
 	
-	def draw(self, context, layout, node, text):
-		if self.is_linked:
-			layout.label(text=self.name)
-		else:
-			row = layout.row()
-			row.alignment = 'LEFT'
-			row.prop(self, 'brickmodtex', text='')
-			row.label(text=self.name)
+	def init(self, context):
+		self.inputs.new('luxrender_coordinate_socket', '3D Coordinate')
+		self.outputs.new('NodeSocketFloat', 'Float')
 	
-	def draw_color(self, context, node):
-		return color_socket_color
+	def draw_buttons(self, context, layout):
+		layout.prop(self, 'radius')
+		layout.prop(self, 'noisescale')
+		layout.prop(self, 'turbulence')
+		layout.prop(self, 'sharpness')
+		layout.prop(self, 'noiseoffset')
+		layout.prop(self, 'spheres')
+		layout.prop(self, 'octaves')
+		layout.prop(self, 'omega')
+		layout.prop(self, 'variability')
+		layout.prop(self, 'baseflatness')
+		layout.prop(self, 'spheresize')
 	
-	def get_paramset(self, make_texture):
-		tex_node = get_linked_node(self)
-		if tex_node:
-			if not check_node_export_texture(tex_node):
-				return ParamSet()
-			
-			tex_name = tex_node.export_texture(make_texture)
-			
-			brickmodtex_params = ParamSet() \
-				.add_texture('brickmodtex', tex_name)
-		else:
-			brickmodtex_params = ParamSet() \
-				.add_color('brickmodtex', self.brickmodtex)
+	def export_texture(self, make_texture):
+		cloud_vol_params = ParamSet() \
+			.add_float('radius', self.radius) \
+			.add_float('noisescale', self.noisescale) \
+			.add_float('turbulence', self.turbulence) \
+			.add_float('sharpness', self.sharpness) \
+			.add_float('noiseoffset', self.noiseoffset) \
+			.add_integer('spheres', self.spheres) \
+			.add_integer('octaves', self.octaves) \
+			.add_float('omega', self.omega) \
+			.add_float('variability', self.variability) \
+			.add_float('baseflatness', self.baseflatness) \
+			.add_float('spheresize', self.spheresize)
+	
+		coord_node = get_linked_node(self.inputs[0])
+		if coord_node and check_node_get_paramset(coord_node):
+			cloud_vol_params.update( coord_node.get_paramset() )
 		
-		return brickmodtex_params
+		return make_texture('float', 'cloud', self.name, cloud_vol_params)
 
 @LuxRenderAddon.addon_register_class
-class luxrender_TC_bricktex_socket(bpy.types.NodeSocket):
-	'''bricktex socket'''
-	bl_idname = 'luxrender_TC_bricktex_socket'
-	bl_label = 'Brick texture socket'
+class luxrender_texture_type_node_vol_exponential(luxrender_texture_node):
+	'''Exponential texture node'''
+	bl_idname = 'luxrender_texture_vol_exponential_node'
+	bl_label = 'Exponential Volume Texture'
+	bl_icon = 'TEXTURE'
+	bl_width_min = 230
 	
-	bricktex = bpy.props.FloatVectorProperty(name='Brick Texture', subtype='COLOR', min=0.0, max=1.0, default=(0.8, 0.8, 0.8))
+	origin = bpy.props.FloatVectorProperty(name='Origin', description='The reference point to compute the exponential decay', default=[0.0, 0.0, 0.0])
+	updir = bpy.props.FloatVectorProperty(name='Up Vector', description='The direction of the exponential decay', default=[0.0, 0.0, 1.0])
+	decay = bpy.props.FloatProperty(name='Decay Rate', default=1.00)
 	
-	def draw(self, context, layout, node, text):
-		if self.is_linked:
-			layout.label(text=self.name)
-		else:
-			row = layout.row()
-			row.alignment = 'LEFT'
-			row.prop(self, 'bricktex', text='')
-			row.label(text=self.name)
+	def init(self, context):
+		self.outputs.new('NodeSocketFloat', 'Float')
 	
-	def draw_color(self, context, node):
-		return color_socket_color
+	def draw_buttons(self, context, layout):
+		layout.prop(self, 'origin')
+		layout.prop(self, 'updir')
+		layout.prop(self, 'decay')
 	
-	def get_paramset(self, make_texture):
-		tex_node = get_linked_node(self)
-		if tex_node:
-			if not check_node_export_texture(tex_node):
-				return ParamSet()
-			
-			tex_name = tex_node.export_texture(make_texture)
-			
-			bricktex_params = ParamSet() \
-				.add_texture('bricktex', tex_name)
-		else:
-			bricktex_params = ParamSet() \
-				.add_color('bricktex', self.bricktex)
+	def export_texture(self, make_texture):
+		exponential_params = ParamSet() \
+			.add_vector('updir', self.updir) \
+			.add_point('origin', self.origin) \
+			.add_float('decay', self.decay)
 		
-		return bricktex_params
+		return make_texture('float', 'exponential', self.name, exponential_params)
 
 @LuxRenderAddon.addon_register_class
-class luxrender_TC_mortartex_socket(bpy.types.NodeSocket):
-	'''mortartex socket'''
-	bl_idname = 'luxrender_TC_mortartex_socket'
-	bl_label = 'Mortar texture socket'
+class luxrender_texture_type_node_vol_smoke_data(luxrender_texture_node):
+	'''Smoke Data node'''
+	bl_idname = 'luxrender_texture_vol_smoke_data_node'
+	bl_label = 'Smoke Data Texture'
+	bl_icon = 'TEXTURE'
+	bl_width_min = 230
 	
-	mortartex = bpy.props.FloatVectorProperty(name='Mortar Texture', subtype='COLOR', min=0.0, max=1.0, default=(0.1, 0.1, 0.1))
+	for prop in luxrender_tex_imagemap.properties:
+		if prop['attr'].startswith('wrap'):
+			wrap_items = prop['items']
 	
-	def draw(self, context, layout, node, text):
-		if self.is_linked:
-			layout.label(text=self.name)
-		else:
-			row = layout.row()
-			row.alignment = 'LEFT'
-			row.prop(self, 'mortartex', text='')
-			row.label(text=self.name)
+	smoke_channels = [
+	('density', 'Density', ''),
+	('fire', 'Fire', ''),
+	('temperature', 'Temperature', ''),
+	('velocity', 'Velocity', '')					  
+	]
 	
-	def draw_color(self, context, node):
-		return color_socket_color
-	
-	def get_paramset(self, make_texture):
-		tex_node = get_linked_node(self)
-		if tex_node:
-			if not check_node_export_texture(tex_node):
-				return ParamSet()
-			
-			tex_name = tex_node.export_texture(make_texture)
-			
-			mortartex_params = ParamSet() \
-				.add_texture('mortartex', tex_name)
-		else:
-			mortartex_params = ParamSet() \
-				.add_color('mortartex', self.mortartex)
+	domain = bpy.props.StringProperty(name='Domain Object')
+	source = bpy.props.EnumProperty(name='Source', items=smoke_channels, default='density')
+	wrap = bpy.props.EnumProperty(name='Wrapping', items=wrap_items, default='black')
 		
-		return mortartex_params
+	def init(self, context):
+		self.inputs.new('luxrender_coordinate_socket', '3D Coordinate')
+		self.outputs.new('NodeSocketFloat', 'Float')
+	
+	def draw_buttons(self, context, layout):
+		layout.prop_search(self, "domain", bpy.data, "objects")
+		layout.prop(self, 'source')
+		layout.prop(self, 'wrap')
+	
+	def export_texture(self, make_texture):
+		smokedata_params = ParamSet() \
+			.add_string('wrap', self.wrap)
 		
-@LuxRenderAddon.addon_register_class
-class luxrender_TF_brickmodtex_socket(bpy.types.NodeSocket):
-	'''brickmodtex socket'''
-	bl_idname = 'luxrender_TF_brickmodtex_socket'
-	bl_label = 'Brick modulation texture socket'
-	
-	brickmodtex = bpy.props.FloatProperty(name='Brick Modulation Texture', min=0.0, max=1.0, default=0.9)
-	
-	def draw(self, context, layout, node, text):
-		if self.is_linked:
-			layout.label(text=self.name)
-		else:
-			layout.prop(self, 'brickmodtex', text=self.name)
-	
-	def draw_color(self, context, node):
-		return float_socket_color
-	
-	def get_paramset(self, make_texture):
-		tex_node = get_linked_node(self)
-		if tex_node:
-			if not check_node_export_texture(tex_node):
-				return ParamSet()
-			
-			tex_name = tex_node.export_texture(make_texture)
-			
-			brickmodtex_params = ParamSet() \
-				.add_texture('brickmodtex', tex_name)
-		else:
-			brickmodtex_params = ParamSet() \
-				.add_float('brickmodtex', self.brickmodtex)
+		coord_node = get_linked_node(self.inputs[0])
+		if coord_node and check_node_get_paramset(coord_node):
+			smokedata_params.update( coord_node.get_paramset() )
 		
-		return brickmodtex_params
-
-@LuxRenderAddon.addon_register_class
-class luxrender_TF_bricktex_socket(bpy.types.NodeSocket):
-	'''bricktex socket'''
-	bl_idname = 'luxrender_TF_bricktex_socket'
-	bl_label = 'Brick texture socket'
-	
-	bricktex = bpy.props.FloatProperty(name='Brick Texture', min=0.0, max=1.0, default=1.0)
-	
-	def draw(self, context, layout, node, text):
-		if self.is_linked:
-			layout.label(text=self.name)
-		else:
-			layout.prop(self, 'bricktex', text=self.name)
-	
-	def draw_color(self, context, node):
-		return float_socket_color
-	
-	def get_paramset(self, make_texture):
-		tex_node = get_linked_node(self)
-		if tex_node:
-			if not check_node_export_texture(tex_node):
-				return ParamSet()
-			
-			tex_name = tex_node.export_texture(make_texture)
-			
-			bricktex_params = ParamSet() \
-				.add_texture('bricktex', tex_name)
-		else:
-			bricktex_params = ParamSet() \
-				.add_float('bricktex', self.bricktex)
-		
-		return bricktex_params
-
-@LuxRenderAddon.addon_register_class
-class luxrender_TF_mortartex_socket(bpy.types.NodeSocket):
-	'''mortartex socket'''
-	bl_idname = 'luxrender_TF_mortartex_socket'
-	bl_label = 'Mortar texture socket'
-	
-	mortartex = bpy.props.FloatProperty(name='Mortar Texture', min=0.0, max=1.0, default=0.0)
-	
-	def draw(self, context, layout, node, text):
-		if self.is_linked:
-			layout.label(text=self.name)
-		else:
-			layout.prop(self, 'mortartex', text=self.name)
-	
-	def draw_color(self, context, node):
-		return float_socket_color
-	
-	def get_paramset(self, make_texture):
-		tex_node = get_linked_node(self)
-		if tex_node:
-			if not check_node_export_texture(tex_node):
-				return ParamSet()
-			
-			tex_name = tex_node.export_texture(make_texture)
-			
-			mortartex_params = ParamSet() \
-				.add_texture('mortartex', tex_name)
-		else:
-			mortartex_params = ParamSet() \
-				.add_float('mortartex', self.mortartex)
-		
-		return mortartex_params
+		return make_texture('float', 'densitygrid', self.name, smokedata_params)

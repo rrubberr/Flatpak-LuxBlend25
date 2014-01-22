@@ -39,6 +39,8 @@ from ..export import fix_matrix_order
 from ..export.materials import get_material_volume_defs
 from ..export import LuxManager
 from ..export import is_obj_visible
+from ..properties import find_node
+from ..properties.node_material import luxrender_texture_maker
 
 class InvalidGeometryException(Exception):
 	pass
@@ -668,7 +670,7 @@ class GeometryExporter(object):
 		else:
 			return not self.is_preview
 	
-	def exportShapeDefinition(self, obj, mesh_definition):
+	def exportShapeDefinition(self, obj, mesh_definition, parent=None):
 		"""
 		If the mesh is valid and instancing is allowed for this object, export
 		an objectBegin..objectEnd block containing the Shape definition.
@@ -676,8 +678,9 @@ class GeometryExporter(object):
 
 		# Aldo: Resolve possible problem on [2:5] index
 		me_name = mesh_definition[0]
+		me_mat_index = mesh_definition[1]
 		me_shape_type, me_shape_IsSpecial, me_shape_params = mesh_definition[2:5]
-		
+
 		if len(me_shape_params) == 0: return
 
 		if me_shape_IsSpecial: return
@@ -690,9 +693,45 @@ class GeometryExporter(object):
 		if obj.type == 'MESH' and obj.data.luxrender_mesh.portal:
 			self.lux_context.transform( matrix_to_list(obj.matrix_world, apply_worldscale=True) )
 		me_shape_params.add_string('name', obj.name)
-		self.lux_context.shape(me_shape_type, me_shape_params)
-		self.lux_context.objectEnd()
+
+		if parent != None:
+			mat_object = parent
+		else:
+			mat_object = obj
+		try:
+			ob_mat = mat_object.material_slots[me_mat_index].material
+		except IndexError:
+			ob_mat = None
+			LuxLog('WARNING: material slot %d on object "%s" is unassigned!' %(me_mat_index+1, mat_object.name))
+
+		#Emission check
+		output_node = find_node(ob_mat, 'luxrender_material_output_node')
+		if ob_mat.luxrender_material.nodetree:
+			object_is_emitter = False
+		if output_node != None:
+			light_socket = output_node.inputs[3]
+			if light_socket.is_linked:
+				light_node = light_socket.links[0].from_node
+				object_is_emitter = light_socket.is_linked
+		else: #no node tree, so check the classic mat editor
+			object_is_emitter = ob_mat.luxrender_emission.use_emission
 		
+		if object_is_emitter:
+			# Only add the AreaLightSource if this object's emission lightgroup is enabled
+			if self.visibility_scene.luxrender_lightgroups.is_enabled(ob_mat.luxrender_emission.lightgroup):
+				if not self.visibility_scene.luxrender_lightgroups.ignore:
+					self.lux_context.lightGroup(ob_mat.luxrender_emission.lightgroup, [])
+				if not ob_mat.luxrender_material.nodetree:
+					self.lux_context.areaLightSource( *ob_mat.luxrender_emission.api_output(ob_mat) )
+				else:
+					# texture exporting
+					tex_maker = luxrender_texture_maker(self.lux_context, ob_mat.luxrender_material.nodetree)
+					self.lux_context.areaLightSource( *light_node.export(tex_maker.make_texture) )
+
+		self.lux_context.shape(me_shape_type, me_shape_params)
+
+		self.lux_context.objectEnd()
+
 		LuxLog('Mesh definition exported: %s' % me_name)
 	
 	def is_object_animated(self, obj, matrix=None):
@@ -778,7 +817,7 @@ class GeometryExporter(object):
 			
 			if ob_mat is not None:
 				
-				# Export material definition && check for emission
+				# Export material definition
 				if self.lux_context.API_TYPE == 'FILE':
 					self.lux_context.set_output_file(Files.MATS)
 					mat_export_result = ob_mat.luxrender_material.export(self.visibility_scene, self.lux_context, ob_mat, mode='indirect')
@@ -788,14 +827,29 @@ class GeometryExporter(object):
 				elif self.lux_context.API_TYPE == 'PURE':
 					mat_export_result = ob_mat.luxrender_material.export(self.visibility_scene, self.lux_context, ob_mat, mode='direct')
 				
-				object_is_emitter = ob_mat.luxrender_emission.use_emission
+				#We need to check the material's output node for a light-emission connection
+				output_node = find_node(ob_mat, 'luxrender_material_output_node')
+				if ob_mat.luxrender_material.nodetree:
+					object_is_emitter = False
+				if output_node != None:
+					light_socket = output_node.inputs[3]
+					if light_socket.is_linked:
+						light_node = light_socket.links[0].from_node
+						object_is_emitter = light_socket.is_linked
+				else: #no node tree, so check the classic mat editor
+					object_is_emitter = ob_mat.luxrender_emission.use_emission
 				
-				if object_is_emitter:
+				if object_is_emitter and not self.allow_instancing(mat_object): #If exporting an instance, we need to set emission in the ObjectBegin/End block
 					# Only add the AreaLightSource if this object's emission lightgroup is enabled
 					if self.visibility_scene.luxrender_lightgroups.is_enabled(ob_mat.luxrender_emission.lightgroup):
 						if not self.visibility_scene.luxrender_lightgroups.ignore:
 							self.lux_context.lightGroup(ob_mat.luxrender_emission.lightgroup, [])
-						self.lux_context.areaLightSource( *ob_mat.luxrender_emission.api_output(ob_mat) )
+						if not ob_mat.luxrender_material.nodetree:
+							self.lux_context.areaLightSource( *ob_mat.luxrender_emission.api_output(ob_mat) )
+						else:
+							# texture exporting
+							tex_maker = luxrender_texture_maker(self.lux_context, ob_mat.luxrender_material.nodetree)
+							self.lux_context.areaLightSource( *light_node.export(tex_maker.make_texture) )
 					else:
 						object_is_emitter = False
 				
@@ -814,8 +868,8 @@ class GeometryExporter(object):
 			
 			self.have_emitting_object |= object_is_emitter
 			
-			# If the object emits, don't export instance or motioninstance, just the Shape
-			if (not self.allow_instancing(mat_object)) or object_is_emitter or me_shape_IsSpecial:
+			# If instancing is forbidden, just export the Shape
+			if (not self.allow_instancing(mat_object)) or me_shape_IsSpecial:
 				self.lux_context.shape(me_shape_type, me_shape_params)
 			# motionInstance for motion blur
 			#elif is_object_animated:
@@ -875,10 +929,19 @@ class GeometryExporter(object):
 		if not psys.settings.type == 'HAIR':
 			LuxLog('ERROR: handler_Duplis_PATH can only handle Hair particle systems ("%s")' % psys.name)
 			return
+	
+		if bpy.context.scene.luxrender_engine.export_hair == False:
+			return
 			
 		for mod in obj.modifiers:
-			if mod.type == 'PARTICLE_SYSTEM' and mod.show_render == False:
-				return
+			if mod.type == 'PARTICLE_SYSTEM':
+				if mod.particle_system.name == psys.name:
+					break;
+
+		if not (mod.type == 'PARTICLE_SYSTEM'):
+			return
+		elif not mod.particle_system.name == psys.name or mod.show_render == False:
+			return
 				
 		LuxLog('Exporting Hair system "%s"...' % psys.name)
 
@@ -887,6 +950,12 @@ class GeometryExporter(object):
 		steps = 2**psys.settings.render_step
 		num_parents = len(psys.particles)
 		num_children = len(psys.child_particles)
+		if num_children == 0:
+			start = 0
+		else:
+			# Number of virtual parents reduces the number of exported children
+			num_virtual_parents = math.trunc(0.3 * psys.settings.virtual_parents * psys.settings.child_nbr * num_parents)
+			start = num_parents + num_virtual_parents
 		
 		partsys_name = '%s_%s'%(obj.name, psys.name)
 		det = DupliExportProgressThread()
@@ -912,6 +981,9 @@ class GeometryExporter(object):
 			uv_tex = None
 			colorflag = 0
 			uvflag = 0                      
+			image_width = 0
+			image_height = 0
+			image_pixels = []
 			
 			mesh = obj.to_mesh(self.geometry_scene, True, 'RENDER')
 			uv_textures = mesh.tessface_uv_textures
@@ -934,12 +1006,14 @@ class GeometryExporter(object):
 
 			info = 'Created by LuxBlend 2.6 exporter for LuxRender - www.luxrender.net'
 
-			transform = obj.matrix_world.inverted()         
-			for pindex in range(num_parents + num_children):                        
+			transform = obj.matrix_world.inverted()
+			total_strand_count = 0	
+				
+			for pindex in range(start, num_parents + num_children):                        
 				det.exported_objects += 1                               
 				point_count = 0
 				i = 0
-				
+
 				if num_children == 0:
 					i = pindex
 		
@@ -947,9 +1021,11 @@ class GeometryExporter(object):
 				# process: cache the uv_co and color value
 				uv_co = None
 				col = None
+				seg_length = 1.0				
 				for step in range(0, steps):
 					co = psys.co_hair(obj, mod, pindex, step)                               
-					if not co.length_squared == 0:
+					if (step > 0): seg_length = (co-obj.matrix_world*points[len(points)-1]).length_squared 
+					if not (co.length_squared == 0 or seg_length == 0):
 						points.append(transform*co)
 						point_count = point_count + 1
 
@@ -958,7 +1034,7 @@ class GeometryExporter(object):
 								uv_co = psys.uv_on_emitter(mod, psys.particles[i], pindex, uv_textures.active_index)
 							uv_coords.append(uv_co)
 
-						if psys.settings.luxrender_hair.export_color == 'uv_texture_map':
+						if psys.settings.luxrender_hair.export_color == 'uv_texture_map' and not len(image_pixels) == 0:
 							if not col:
 								x_co = round(uv_co[0] * (image_width - 1))
 								y_co = round(uv_co[1] * (image_height - 1))
@@ -975,8 +1051,12 @@ class GeometryExporter(object):
 								col = psys.mcol_on_emitter(mod, psys.particles[i], pindex, vertex_color.active_index)
 							colors.append(col)
 
-				if point_count > 1:
+				if point_count == 1:
+					points.pop()
+					point_count = point_count - 1
+				elif point_count > 1:
 					segments.append(point_count - 1)
+					total_strand_count = total_strand_count + 1
 					total_segments_count = total_segments_count + point_count - 1
 			hair_file_path = efutil.path_relative_to_export(hair_file_path)
 			with open(hair_file_path, 'wb') as hair_file:
@@ -985,7 +1065,7 @@ class GeometryExporter(object):
 				##
 				##File header
 				hair_file.write(b'HAIR')        #magic number
-				hair_file.write(struct.pack('<I', num_parents+num_children)) #total strand count
+				hair_file.write(struct.pack('<I', total_strand_count)) #total strand count
 				hair_file.write(struct.pack('<I', len(points))) #total point count 
 				hair_file.write(struct.pack('<I', 1+2+16*colorflag+32*uvflag)) #bit array for configuration
 				hair_file.write(struct.pack('<I', steps))       #default segments count
@@ -1144,6 +1224,7 @@ class GeometryExporter(object):
 		det.join()
 		
 		LuxLog('... done, exported %s hairs' % det.exported_objects)
+
 	
 	def handler_Duplis_GENERIC(self, obj, *args, **kwargs):
 		try:

@@ -35,19 +35,19 @@ from ..properties import (
   luxrender_texture_node, get_linked_node, check_node_export_texture, check_node_get_paramset
 )
 from ..properties.texture import (
-	FloatTextureParameter, ColorTextureParameter, FresnelTextureParameter,
 	import_paramset_to_blender_texture, shorten_name, refresh_preview
 )
 from ..export import ParamSet, process_filepath_data
 from ..export.materials import (
-	MaterialCounter, ExportedMaterials, ExportedTextures, add_texture_parameter, get_texture_from_scene
+	ExportedTextures, add_texture_parameter, get_texture_from_scene
 )
 from ..outputs import LuxManager, LuxLog
-from ..util import dict_merge
 
-from ..properties.node_material import (
-	luxrender_fresnel_socket, luxrender_TC_Kr_socket, get_socket_paramsets
+from ..properties.node_sockets import (
+	luxrender_fresnel_socket, luxrender_TC_Kr_socket
 )
+
+from ..properties.node_material import get_socket_paramsets
 from ..properties.texture import luxrender_tex_fresnelname
 
 @LuxRenderAddon.addon_register_class
@@ -149,3 +149,35 @@ class luxrender_texture_type_node_fresnelname(luxrender_texture_node):
 			# use a preset name
 			fresnelname_params.add_string('name', self.frname_preset)
 			return make_texture('fresnel', 'preset', self.name, fresnelname_params)
+
+@LuxRenderAddon.addon_register_class
+class luxrender_texture_type_node_cauchy(luxrender_texture_node):
+	'''Sellmeier Node'''
+	bl_idname = 'luxrender_texture_sellmeier_node'
+	bl_label = 'Sellmeier'
+	bl_icon = 'TEXTURE'
+	bl_width_min = 200
+	
+	advanced = bpy.props.BoolProperty(name='Advanced', default=False)
+	a = bpy.props.FloatProperty(name='A', default=1.0, min=0.001, max=10.0, precision=3)
+	b = bpy.props.FloatVectorProperty(name='B', default=(0.696, 0.408, 0.879), min=0.0, max=100.0, precision=6)
+	c = bpy.props.FloatVectorProperty(name='C', default=(0.0047, 0.0135, 97.93), min=0.0, max=100.0, precision=6)
+	
+	def init(self, context):
+		self.outputs.new('luxrender_fresnel_socket', 'Fresnel')
+	
+	def draw_buttons(self, context, layout):
+		layout.prop(self, 'advanced')
+		if self.advanced:
+			layout.prop(self, 'a')
+		layout.prop(self, 'b')
+		layout.prop(self, 'c')
+
+	def export_texture(self, make_texture):
+		sellmeier_params = ParamSet()
+		if self.advanced:
+			sellmeier_params.add_float('A', self.a)
+		sellmeier_params.add_float('B', tuple(self.b))
+		sellmeier_params.add_float('C', tuple(self.c))
+		
+		return make_texture('fresnel', 'sellmeier', self.name, sellmeier_params)

@@ -51,12 +51,12 @@ from ..outputs.pure_api import LUXRENDER_VERSION
 # Exporter Property Groups need to be imported to ensure initialisation
 from ..properties import (
 	accelerator, camera, engine, filter, integrator, ior_data, lamp, lampspectrum_data,
-	material, node_material, node_texture, node_spectrum, node_fresnel, node_utilities, mesh, object as prop_object, particles, rendermode, sampler, texture, world
+	material, node_material, node_inputs, node_texture, node_fresnel, node_converter, mesh, object as prop_object, particles, rendermode, sampler, texture, world
 )
 
 # Exporter Interface Panels need to be imported to ensure initialisation
 from ..ui import (
-	render_panels, camera, image, lamps, mesh, object as ui_object, particles, world
+	render_panels, camera, image, lamps, mesh, node_editor, object as ui_object, particles, world
 )
 
 #Legacy material editor panels, node editor UI is initialized above
@@ -109,9 +109,6 @@ _register_elm(bl_ui.properties_material.MATERIAL_PT_preview)
 _register_elm(bl_ui.properties_texture.TEXTURE_PT_preview)
 
 _register_elm(bl_ui.properties_data_lamp.DATA_PT_context_lamp)
-
-# Node-editor related stuff
-_register_elm(bpy.types.NODE_MT_add.append(node_material.luxrender_mat_node_editor.draw_add_menu))
 
 ### Some additions to Blender panels for better allocation in context
 ### Use this example for such overrides
@@ -225,7 +222,6 @@ def render_start_options(self, context):
 		col.prop(context.scene.luxrender_engine, "export_type", text="Export Type")
 		if context.scene.luxrender_engine.export_type == 'EXT':
 			col.prop(context.scene.luxrender_engine, "binary_name", text="Render Using")
-			col.prop(context.scene.luxrender_engine, "install_path", text="Path to LuxRender Installation")
 		if context.scene.luxrender_engine.export_type == 'INT':
 			row.prop(context.scene.luxrender_engine, "write_files", text="Write to Disk")
 			row.prop(context.scene.luxrender_engine, "integratedimaging", text="Integrated Imaging")
@@ -641,12 +637,16 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			'auto_start': start_rendering
 		}
 		
-		luxrender_path = efutil.filesystem_path( scene.luxrender_engine.install_path )
+		addon_prefs = LuxRenderAddon.get_prefs()
+		luxrender_path = efutil.filesystem_path( addon_prefs.install_path )
+		
+		print('luxrender_path: ', luxrender_path)
+		
+		if luxrender_path == '':
+			return ['']
+		
 		if luxrender_path[-1] != '/':
 			luxrender_path += '/'
-		
-		if os.path.isdir(luxrender_path) and os.path.exists(luxrender_path):
-			config_updates['install_path'] = luxrender_path
 		
 		if sys.platform == 'darwin':
 			luxrender_path += 'LuxRender.app/Contents/MacOS/%s' % scene.luxrender_engine.binary_name # Get binary from OSX bundle
