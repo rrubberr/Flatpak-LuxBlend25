@@ -29,9 +29,12 @@ import shutil
 import tempfile
 import os
 import platform
+import re
+
+def ToValidLuxCoreName(name):
+	return re.sub('[^_0-9a-zA-Z]+', '_', name)
 
 def LuxCoreLogHandler(msg):
-	print("[%s]%s" % (strftime("%Y-%m-%d %H:%M:%S", gmtime()), msg))
 	LuxLog(msg)
 
 if not 'PYLUXCORE_AVAILABLE' in locals():
