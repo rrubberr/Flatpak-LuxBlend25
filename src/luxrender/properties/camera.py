@@ -313,7 +313,7 @@ class luxrender_camera(declarative_property_group):
 		},
 	]
 	
-	def lookAt(self, camera, matrix = None, scene = LuxManager.CurrentScene):
+	def lookAt(self, camera, matrix = None):
 		'''
 		Derive a list describing 3 points for a LuxRender LookAt statement
 		
@@ -321,9 +321,9 @@ class luxrender_camera(declarative_property_group):
 		'''
 		if matrix is None:
 			matrix = camera.matrix_world.copy()
-		ws = get_worldscale(scene = scene)
+		ws = get_worldscale()
 		matrix *= ws
-		ws = get_worldscale(as_scalematrix = False, scene = scene)
+		ws = get_worldscale(as_scalematrix = False)
 		matrix = fix_matrix_order(matrix) # matrix indexing hack
 		matrix[0][3] *= ws
 		matrix[1][3] *= ws
@@ -472,7 +472,7 @@ class luxrender_camera(declarative_property_group):
 		cam = scene.camera.data
 		xr, yr = self.luxrender_film.resolution(scene)
 		
-		lookat = self.lookAt(scene.camera, scene = scene)
+		lookat = self.lookAt(scene.camera)
 		orig = list(lookat[0:3])
 		target = list(lookat[3:6])
 		up = list(lookat[6:9])
@@ -489,7 +489,7 @@ class luxrender_camera(declarative_property_group):
 			# Do not world-scale this, it is already in meters !
 			cameraPorps.Set(pyluxcore.Property("scene.camera.lensradius", (cam.lens / 1000.0) / (2.0 * self.fstop)));
 		
-		ws = get_worldscale(as_scalematrix = False, scene = scene)
+		ws = get_worldscale(as_scalematrix = False)
 		
 		if self.use_dof:
 			if cam.dof_object is not None:

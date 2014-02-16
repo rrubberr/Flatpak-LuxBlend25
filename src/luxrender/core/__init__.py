@@ -849,6 +849,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		from ..export.luxcore_scene import ConvertBlenderScene
 		
 		try:
+			LuxManager.SetCurrentScene(scene)
+			
 			# Configuration
 			cfgProps = pyluxcore.Properties()
 

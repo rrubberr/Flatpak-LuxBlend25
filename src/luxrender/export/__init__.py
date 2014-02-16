@@ -253,13 +253,13 @@ def is_obj_visible(scene, obj, is_dupli=False):
 		ov |= lv
 	return (ov or is_dupli) and not obj.hide_render
 
-def get_worldscale(as_scalematrix = True, scene = LuxManager.CurrentScene):
+def get_worldscale(as_scalematrix = True):
 	# For usability, previev_scale is not an own property but calculated from the object dimensions
 	# A user can directly judge mappings on an adjustable object_size, we simply scale the whole preview
 	preview_scale = bpy.context.scene.luxrender_world.preview_object_size / 2
-	ws = 1 / preview_scale if scene.name == "preview" else 1 # this is a safety net to prevent previewscale affecting render
+	ws = 1 / preview_scale if LuxManager.CurrentScene.name == "preview" else 1 # this is a safety net to prevent previewscale affecting render
 
-	scn_us = scene.unit_settings
+	scn_us = LuxManager.CurrentScene.unit_settings
 	
 	if scn_us.system in ['METRIC', 'IMPERIAL']:
 		# The units used in modelling are for display only. behind
