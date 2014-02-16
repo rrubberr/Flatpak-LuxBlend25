@@ -148,39 +148,40 @@ def ConvertBlenderObject(blScene, lcScene, obj):
 		LuxLog('Object export failed, skipping this object:\n%s' % err)
 		return []
 
-def ConvertBlenderScene(blScene):
-	########################################################################
+def ConvertBlenderScene(blScene, imageWidth = None, imageHeight = None):
+	############################################################################
 	# Create the scene
-	########################################################################
+	############################################################################
 
 	lcScene = pyluxcore.Scene()
 	scnProps = pyluxcore.Properties()
 
-	########################################################################
+	############################################################################
 	# Convert camera definition
-	########################################################################
+	############################################################################
 
-	scnProps.Set(blScene.camera.data.luxrender_camera.luxcore_output(blScene));
+	scnProps.Set(blScene.camera.data.luxrender_camera.luxcore_output(blScene,
+		imageWidth = imageWidth, imageHeight = imageHeight))
 	
-	########################################################################
+	############################################################################
 	# Add a sky definition
-	########################################################################
+	############################################################################
 	
 	scnProps.Set(pyluxcore.Property('scene.lights.skylight.type', ['sky']))
 	scnProps.Set(pyluxcore.Property('scene.lights.skylight.gain', [1.0, 1.0, 1.0]))
 	
-	########################################################################
+	############################################################################
 	# Add dummy material
-	########################################################################
+	############################################################################
 
 	scnProps.Set(pyluxcore.Property('scene.materials.dummymat.type', ['matte']))
 	scnProps.Set(pyluxcore.Property('scene.materials.dummymat.kd', [0.7, 0.7, 0.7]))
 
-	########################################################################
+	############################################################################
 	# Convert all objects
-	########################################################################
+	############################################################################
 
-	LuxLog('Object coneversion:')
+	LuxLog('Object conversion:')
 	meshDefinitions = []
 	for obj in blScene.objects:
 		LuxLog('  %s' % obj.name)
@@ -193,4 +194,36 @@ def ConvertBlenderScene(blScene):
 		
 	lcScene.Parse(scnProps)
 	
-	return lcScene
+	############################################################################
+	# Create the configuration
+	############################################################################
+	
+	cfgProps = pyluxcore.Properties()
+
+	cfgProps.Set(pyluxcore.Property('renderengine.type', ['PATHCPU']))
+	cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [False]))
+
+	# Film
+	if (not imageWidth is None) and (not imageHeight is None):
+		filmWidth = imageWidth
+		filmHeight = imageHeight
+	else:
+		filmWidth, filmHeight = blScene.camera.data.luxrender_camera.luxrender_film.resolution(blScene)
+
+	cfgProps.Set(pyluxcore.Property('film.width', [filmWidth]))
+	cfgProps.Set(pyluxcore.Property('film.height', [filmHeight]))
+
+	# Image Pipeline
+	cfgProps.Set(pyluxcore.Property('film.imagepipeline.0.type', ['TONEMAP_AUTOLINEAR']))
+	cfgProps.Set(pyluxcore.Property('film.imagepipeline.1.type', ['GAMMA_CORRECTION']))
+	cfgProps.Set(pyluxcore.Property('film.imagepipeline.1.value', [2.2]))
+
+	# Pixel Filter
+	cfgProps.Set(pyluxcore.Property('film.filter.type', ['MITCHELL_SS']))
+
+	# Sampler
+	cfgProps.Set(pyluxcore.Property('sampler.type', ['RANDOM']))
+	
+	lcConfig = pyluxcore.RenderConfig(cfgProps, lcScene)
+	
+	return lcConfig

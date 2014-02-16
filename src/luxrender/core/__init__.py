@@ -36,7 +36,7 @@ import sys
 import array
 
 # Blender libs
-import bpy, bl_ui
+import bpy, bgl, bl_ui
 
 # Framework libs
 from extensions_framework import util as efutil
@@ -303,6 +303,18 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				self.luxrender_render(scene)
 			else:
 				self.luxcore_render(scene)
+
+	def view_update(self, context):
+		selected_luxrender_api = bpy.data.scenes['Scene'].luxrender_engine.selected_luxrender_api
+
+		if selected_luxrender_api == 'luxcore':
+			self.luxcore_view_update(context)
+
+	def view_draw(self, context):
+		selected_luxrender_api = bpy.data.scenes['Scene'].luxrender_engine.selected_luxrender_api
+
+		if selected_luxrender_api == 'luxcore':
+			self.luxcore_view_draw(context)
 
 	def luxrender_render(self, scene):
 		prev_cwd = os.getcwd()
@@ -850,40 +862,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		
 		try:
 			LuxManager.SetCurrentScene(scene)
-			
-			# Configuration
-			cfgProps = pyluxcore.Properties()
-
-			cfgProps.Set(pyluxcore.Property('renderengine.type', ['PATHCPU']))
-			cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [False]))
-
-			# Film
-			filmWidth, filmHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
-			cfgProps.Set(pyluxcore.Property('film.width', [filmWidth]))
-			cfgProps.Set(pyluxcore.Property('film.height', [filmHeight]))
-
-			# Image Pipeline
-			cfgProps.Set(pyluxcore.Property('film.imagepipeline.0.type', ['TONEMAP_AUTOLINEAR']))
-			cfgProps.Set(pyluxcore.Property('film.imagepipeline.1.type', ['GAMMA_CORRECTION']))
-			cfgProps.Set(pyluxcore.Property('film.imagepipeline.1.value', [2.2]))
-
-			# Pixel Filter
-			cfgProps.Set(pyluxcore.Property('film.filter.type', ['MITCHELL_SS']))
-
-			# Sampler
-			cfgProps.Set(pyluxcore.Property('sampler.type', ['RANDOM']))
 
 			# Scene
-			lcScene = ConvertBlenderScene(scene)
-			
-			LuxLog('RenderConfig Properties:')
-			LuxLog(str(cfgProps))
-			LuxLog('Scene Properties:')
-			LuxLog(str(lcScene.GetProperties()))
+			lcConfig = ConvertBlenderScene(scene)
+#			LuxLog('RenderConfig Properties:')
+#			LuxLog(str(lcConfig.GetProperties()))
+#			LuxLog('Scene Properties:')
+#			LuxLog(str(lcConfig.GetScene().GetProperties()))
 
-			lcConfig = pyluxcore.RenderConfig(cfgProps, lcScene)
 			lcSession = pyluxcore.RenderSession(lcConfig)
 
+			filmWidth, filmHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
 			imageBufferFloat = array.array('f', [0.0] * (filmWidth * filmHeight * 3))
 
 			# Start the rendering
@@ -930,5 +919,73 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			import traceback
 			traceback.print_exc()
 
-	def luxcore_render_preview(self, scene):
+	def luxcore_render_preview(self, context):
 		LuxLog('luxcore_render_preview()')
+
+	viewSession = None
+	viewFilmWidth = -1
+	viewFilmHeight = -1
+	viewImageBufferFloat = None
+	
+	def luxcore_view_update(self, context):
+		# LuxCore libs
+		if not PYLUXCORE_AVAILABLE:
+			LuxLog('ERROR: LuxCore real-time rendering requires pyluxcore')
+			return
+		from .. import pyluxcore
+		from ..export.luxcore_scene import ConvertBlenderScene
+
+		if (self.viewSession != None):
+			self.viewSession.Stop()
+		
+		if (self.viewFilmWidth != context.region.width) or (self.viewFilmHeight != context.region.height):
+			self.viewFilmWidth = context.region.width
+			self.viewFilmHeight = context.region.height
+			self.viewImageBufferFloat = array.array('f', [0.0] * (self.viewFilmWidth * self.viewFilmHeight * 3))
+
+		########################################################################
+		# Setup the rendering
+		########################################################################
+		
+		LuxManager.SetCurrentScene(context.scene)
+
+		lcConfig = ConvertBlenderScene(context.scene,
+			imageWidth = self.viewFilmWidth,
+			imageHeight = self.viewFilmHeight)
+#		LuxLog('RenderConfig Properties:')
+#		LuxLog(str(lcConfig.GetProperties()))
+#		LuxLog('Scene Properties:')
+#		LuxLog(str(lcConfig.GetScene().GetProperties()))
+		
+		self.viewSession = pyluxcore.RenderSession(lcConfig)
+		self.viewSession.Start()
+
+	def luxcore_view_draw(self, context):
+		# LuxCore libs
+		if not PYLUXCORE_AVAILABLE:
+			LuxLog('ERROR: LuxCore real-time rendering requires pyluxcore')
+			return
+		from .. import pyluxcore
+
+		# Check if the size of the window is changed
+		if (self.viewFilmWidth != context.region.width) or (self.viewFilmHeight != context.region.height):
+			self.luxcore_view_update(context)
+
+		# Update statistics
+		self.viewSession.UpdateStats()
+
+		stats = self.viewSession.GetStats();
+		print("[Elapsed time: %3d][Samples %4d][Avg. samples/sec % 3.2fM on %.1fK tris]" % (
+				stats.Get("stats.renderengine.time").GetFloat(),
+				stats.Get("stats.renderengine.pass").GetInt(),
+				(stats.Get("stats.renderengine.total.samplesec").GetFloat()  / 1000000.0),
+				(stats.Get("stats.dataset.trianglecount").GetFloat() / 1000.0)))
+		
+		# Update the screen
+		self.viewSession.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, self.viewImageBufferFloat)
+		glBuffer = bgl.Buffer(bgl.GL_FLOAT, [self.viewFilmWidth * self.viewFilmHeight * 3], self.viewImageBufferFloat)
+		bgl.glRasterPos2i(0, 0)
+		bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, bgl.GL_RGB, bgl.GL_FLOAT, glBuffer);
+		
+		# Trigger another update
+		self.tag_redraw()

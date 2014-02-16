@@ -465,13 +465,17 @@ class luxrender_camera(declarative_property_group):
 		cam_type = 'orthographic' if cam.type == 'ORTHO' else self.type if bpy.app.version < (2, 63, 5 ) else 'environment' if cam.type == 'PANO' else 'perspective'
 		return cam_type, params
 	
-	def luxcore_output(self, scene):
+	def luxcore_output(self, scene, imageWidth = None, imageHeight = None):
 		from .. import pyluxcore
 		cameraPorps = pyluxcore.Properties()
 		
 		cam = scene.camera.data
-		xr, yr = self.luxrender_film.resolution(scene)
-		
+		if (not imageWidth is None) and (not imageHeight is None):
+			xr = imageWidth
+			yr = imageHeight
+		else:
+			xr, yr = self.luxrender_film.resolution(scene)
+
 		lookat = self.lookAt(scene.camera)
 		orig = list(lookat[0:3])
 		target = list(lookat[3:6])
