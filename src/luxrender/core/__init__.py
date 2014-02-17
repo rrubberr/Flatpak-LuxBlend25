@@ -858,17 +858,15 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			LuxLog('ERROR: LuxCore rendering requires pyluxcore')
 			return
 		from .. import pyluxcore
-		from ..export.luxcore_scene import ConvertBlenderScene
+		from ..export.luxcore_scene import BlenderSceneConverter
 		
 		try:
-			LuxManager.SetCurrentScene(scene)
-
-			# Scene
-			lcConfig = ConvertBlenderScene(scene)
+			# convert the Blender scene
+			lcConfig = BlenderSceneConverter(scene).Convert()
 #			LuxLog('RenderConfig Properties:')
 #			LuxLog(str(lcConfig.GetProperties()))
-#			LuxLog('Scene Properties:')
-#			LuxLog(str(lcConfig.GetScene().GetProperties()))
+			LuxLog('Scene Properties:')
+			LuxLog(str(lcConfig.GetScene().GetProperties()))
 
 			lcSession = pyluxcore.RenderSession(lcConfig)
 
@@ -933,7 +931,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			LuxLog('ERROR: LuxCore real-time rendering requires pyluxcore')
 			return
 		from .. import pyluxcore
-		from ..export.luxcore_scene import ConvertBlenderScene
+		from ..export.luxcore_scene import BlenderSceneConverter
 
 		if (self.viewSession != None):
 			self.viewSession.Stop()
@@ -949,7 +947,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		
 		LuxManager.SetCurrentScene(context.scene)
 
-		lcConfig = ConvertBlenderScene(context.scene,
+		# convert the Blender scene
+		lcConfig = BlenderSceneConverter(context.scene).Convert(
 			imageWidth = self.viewFilmWidth,
 			imageHeight = self.viewFilmHeight)
 #		LuxLog('RenderConfig Properties:')

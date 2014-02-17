@@ -27,203 +27,246 @@
 import bpy
 
 from .. import pyluxcore
-from ..outputs import LuxLog
+from ..outputs import LuxManager, LuxLog
 from ..outputs.luxcore_api import ToValidLuxCoreName
 
-def ConvertBlenderObject(blScene, lcScene, obj):
-	try:
-		mesh_definitions = []
+class BlenderSceneConverter(object):
+	blScene = None
+	lcScene = None
+	
+	scnProps = None
+	cfgProps = None
+	
+	materialsCache = set()
+	texturesCache = set()
+	
+	def __init__(self, blScene):
+		LuxManager.SetCurrentScene(blScene)
 
-		if obj.hide_render:
-			return mesh_definitions
-		
-		mesh = obj.to_mesh(blScene, True, 'RENDER')
-		if mesh is None:
-			LuxLog('Cannot create render/export object: %s' % obj.name)
-			return mesh_definitions
+		self.blScene = blScene
+		self.lcScene = pyluxcore.Scene()
+		self.scnProps = pyluxcore.Properties()
+		self.cfgProps = pyluxcore.Properties()
+	
+	def ConvertObjectGeometry(self, obj):
+		try:
+			mesh_definitions = []
 
-		mesh.transform(obj.matrix_world)
-		mesh.update(calc_tessface = True)
+			if obj.hide_render:
+				return mesh_definitions
 
-		# Collate faces by mat index
-		ffaces_mats = {}
-		mesh_faces = mesh.tessfaces
-		for f in mesh_faces:
-			mi = f.material_index
-			if mi not in ffaces_mats.keys():
-				ffaces_mats[mi] = []
-			ffaces_mats[mi].append(f)
-		material_indices = ffaces_mats.keys()
+			mesh = obj.to_mesh(self.blScene, True, 'RENDER')
+			if mesh is None:
+				LuxLog('Cannot create render/export object: %s' % obj.name)
+				return mesh_definitions
 
-		number_of_mats = len(mesh.materials)
-		if number_of_mats > 0:
-			iterator_range = range(number_of_mats)
-		else:
-			iterator_range = [0]
+			mesh.transform(obj.matrix_world)
+			mesh.update(calc_tessface = True)
 
-		for i in iterator_range:
-			try:
-				if i not in material_indices:
-					continue
+			# Collate faces by mat index
+			ffaces_mats = {}
+			mesh_faces = mesh.tessfaces
+			for f in mesh_faces:
+				mi = f.material_index
+				if mi not in ffaces_mats.keys():
+					ffaces_mats[mi] = []
+				ffaces_mats[mi].append(f)
+			material_indices = ffaces_mats.keys()
 
-				mesh_name = '%s-%s_m%03d' % (obj.data.name, blScene.name, i)
+			number_of_mats = len(mesh.materials)
+			if number_of_mats > 0:
+				iterator_range = range(number_of_mats)
+			else:
+				iterator_range = [0]
 
-				uv_textures = mesh.tessface_uv_textures
-				if len(uv_textures) > 0:
-					if uv_textures.active and uv_textures.active.data:
-						uv_layer = uv_textures.active.data
-				else:
-					uv_layer = None
+			for i in iterator_range:
+				try:
+					if i not in material_indices:
+						continue
 
-				# Export data
-				points = []
-				normals = []
-				uvs = []
-				face_vert_indices = []		# List of face vert indices
+					mesh_name = '%s-%s_m%03d' % (obj.data.name, self.blScene.name, i)
 
-				# Caches
-				vert_vno_indices = {}		# Mapping of vert index to exported vert index for verts with vert normals
-				vert_use_vno = set()		# Set of vert indices that use vert normals
+					uv_textures = mesh.tessface_uv_textures
+					if len(uv_textures) > 0:
+						if uv_textures.active and uv_textures.active.data:
+							uv_layer = uv_textures.active.data
+					else:
+						uv_layer = None
 
-				vert_index = 0				# Exported vert index
-				for face in ffaces_mats[i]:
-					fvi = []
-					for j, vertex in enumerate(face.vertices):
-						v = mesh.vertices[vertex]
+					# Export data
+					points = []
+					normals = []
+					uvs = []
+					face_vert_indices = []		# List of face vert indices
 
-						if face.use_smooth:
-							if uv_layer:
-								vert_data = (v.co[:], v.normal[:], uv_layer[face.index].uv[j][:])
+					# Caches
+					vert_vno_indices = {}		# Mapping of vert index to exported vert index for verts with vert normals
+					vert_use_vno = set()		# Set of vert indices that use vert normals
+
+					vert_index = 0				# Exported vert index
+					for face in ffaces_mats[i]:
+						fvi = []
+						for j, vertex in enumerate(face.vertices):
+							v = mesh.vertices[vertex]
+
+							if face.use_smooth:
+								if uv_layer:
+									vert_data = (v.co[:], v.normal[:], uv_layer[face.index].uv[j][:])
+								else:
+									vert_data = (v.co[:], v.normal[:], tuple())
+
+								if vert_data not in vert_use_vno:
+									vert_use_vno.add(vert_data)
+
+									points.append(vert_data[0])
+									normals.append(vert_data[1])
+									uvs.append(vert_data[2])
+
+									vert_vno_indices[vert_data] = vert_index
+									fvi.append(vert_index)
+
+									vert_index += 1
+								else:
+									fvi.append(vert_vno_indices[vert_data])
+
 							else:
-								vert_data = (v.co[:], v.normal[:], tuple())
+								# all face-vert-co-no are unique, we cannot
+								# cache them
+								points.append(v.co[:])
+								normals.append(face.normal[:])
+								if uv_layer:
+									uvs.append(uv_layer[face.index].uv[j][:])
 
-							if vert_data not in vert_use_vno:
-								vert_use_vno.add(vert_data)
-
-								points.append(vert_data[0])
-								normals.append(vert_data[1])
-								uvs.append(vert_data[2])
-
-								vert_vno_indices[vert_data] = vert_index
 								fvi.append(vert_index)
 
 								vert_index += 1
-							else:
-								fvi.append(vert_vno_indices[vert_data])
 
-						else:
-							# all face-vert-co-no are unique, we cannot
-							# cache them
-							points.append(v.co[:])
-							normals.append(face.normal[:])
-							if uv_layer:
-								uvs.append(uv_layer[face.index].uv[j][:])
+						# For Lux, we need to triangulate quad faces
+						face_vert_indices.append(tuple(fvi[0:3]))
+						if len(fvi) == 4:
+							face_vert_indices.append((fvi[0], fvi[2], fvi[3]))
 
-							fvi.append(vert_index)
+					del vert_vno_indices
+					del vert_use_vno
 
-							vert_index += 1
+					# Define a new mesh
+					lcObjName = ToValidLuxCoreName(mesh_name)
+					self.lcScene.DefineMesh('Mesh-' + lcObjName, points, face_vert_indices, normals, uvs if uv_layer else None, None, None)				
+					mesh_definitions.append((lcObjName, i))
 
-					# For Lux, we need to triangulate quad faces
-					face_vert_indices.append(tuple(fvi[0:3]))
-					if len(fvi) == 4:
-						face_vert_indices.append((fvi[0], fvi[2], fvi[3]))
+				except Exception as err:
+					LuxLog('Mesh export failed, skipping this mesh:\n%s' % err)
 
-				del vert_vno_indices
-				del vert_use_vno
+			del ffaces_mats
+			bpy.data.meshes.remove(mesh)
 
-				# Define a new mesh
-				lcObjName = ToValidLuxCoreName(mesh_name)
-				lcScene.DefineMesh('Mesh-' + lcObjName, points, face_vert_indices, normals, uvs if uv_layer else None, None, None)				
-				mesh_definitions.append((obj, lcObjName, i))
-				
-			except Exception as err:
-				LuxLog('Mesh export failed, skipping this mesh:\n%s' % err)
+			return mesh_definitions;
 
-		del ffaces_mats
-		bpy.data.meshes.remove(mesh)
+		except Exception as err:
+			LuxLog('Object export failed, skipping this object:\n%s' % err)
+			return []
+
+	def ConvertObject(self, obj):
+		########################################################################
+		# Convert the object geometry
+		########################################################################
+
+		meshDefinitions = []
+		meshDefinitions.extend(self.ConvertObjectGeometry(obj))
+
+		for meshDefinition in meshDefinitions:
+			objName = meshDefinition[0]
+			objMatIndex = meshDefinition[1]
+			
+			####################################################################
+			# Convert the material
+			####################################################################
+			
+			try:
+				objMat = obj.material_slots[objMatIndex].material
+			except IndexError:
+				objMat = None
+				LuxLog('WARNING: material slot %d on object "%s" is unassigned!' % (objMatIndex + 1, obj.name))
+			
+			if objMat is not None:
+				try:
+					objMatName = objMat.luxrender_material.luxcore_export(self.blScene, self.scnProps, objMat, self.materialsCache, self.texturesCache)
+				except Exception as err:
+					LuxLog('Material export failed, skipping material: %s\n%s' % (objMat.name, err))
+					import traceback
+					traceback.print_exc()
+					objMatName = 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
+			else:
+				objMatName = 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
+
+			####################################################################
+			# Create the mesh
+			####################################################################
+			
+			self.scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.material', [objMatName]))
+			self.scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.ply', ['Mesh-' + objName]))
 		
-		return mesh_definitions;
+	def Convert(self, imageWidth = None, imageHeight = None):
+		########################################################################
+		# Convert camera definition
+		########################################################################
 
-	except Exception as err:
-		LuxLog('Object export failed, skipping this object:\n%s' % err)
-		return []
+		self.scnProps.Set(self.blScene.camera.data.luxrender_camera.luxcore_output(self.blScene,
+			imageWidth = imageWidth, imageHeight = imageHeight))
 
-def ConvertBlenderScene(blScene, imageWidth = None, imageHeight = None):
-	############################################################################
-	# Create the scene
-	############################################################################
+		########################################################################
+		# Add a sky definition
+		########################################################################
 
-	lcScene = pyluxcore.Scene()
-	scnProps = pyluxcore.Properties()
+		self.scnProps.Set(pyluxcore.Property('scene.lights.skylight.type', ['sky']))
+		self.scnProps.Set(pyluxcore.Property('scene.lights.skylight.gain', [1.0, 1.0, 1.0]))
 
-	############################################################################
-	# Convert camera definition
-	############################################################################
+		########################################################################
+		# Add dummy material
+		########################################################################
 
-	scnProps.Set(blScene.camera.data.luxrender_camera.luxcore_output(blScene,
-		imageWidth = imageWidth, imageHeight = imageHeight))
-	
-	############################################################################
-	# Add a sky definition
-	############################################################################
-	
-	scnProps.Set(pyluxcore.Property('scene.lights.skylight.type', ['sky']))
-	scnProps.Set(pyluxcore.Property('scene.lights.skylight.gain', [1.0, 1.0, 1.0]))
-	
-	############################################################################
-	# Add dummy material
-	############################################################################
+		self.scnProps.Set(pyluxcore.Property('scene.materials.LUXBLEND_LUXCORE_CLAY_MATERIAL.type', ['matte']))
+		self.scnProps.Set(pyluxcore.Property('scene.materials.LUXBLEND_LUXCORE_CLAY_MATERIAL.kd', [0.7, 0.7, 0.7]))
 
-	scnProps.Set(pyluxcore.Property('scene.materials.dummymat.type', ['matte']))
-	scnProps.Set(pyluxcore.Property('scene.materials.dummymat.kd', [0.7, 0.7, 0.7]))
+		########################################################################
+		# Convert all objects
+		########################################################################
 
-	############################################################################
-	# Convert all objects
-	############################################################################
+		LuxLog('Object conversion:')
+		for obj in self.blScene.objects:
+			LuxLog('  %s' % obj.name)
+			self.ConvertObject(obj)
 
-	LuxLog('Object conversion:')
-	meshDefinitions = []
-	for obj in blScene.objects:
-		LuxLog('  %s' % obj.name)
-		meshDefinitions.extend(ConvertBlenderObject(blScene, lcScene, obj))
+		self.lcScene.Parse(self.scnProps)
 
-	for meshDefinition in meshDefinitions:
-		objName = meshDefinition[1]
-		scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.material', ['dummymat']))
-		scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.ply', ['Mesh-' + objName]))
-		
-	lcScene.Parse(scnProps)
-	
-	############################################################################
-	# Create the configuration
-	############################################################################
-	
-	cfgProps = pyluxcore.Properties()
+		########################################################################
+		# Create the configuration
+		########################################################################
 
-	cfgProps.Set(pyluxcore.Property('renderengine.type', ['PATHCPU']))
-	cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [False]))
+		self.cfgProps.Set(pyluxcore.Property('renderengine.type', ['PATHCPU']))
+		self.cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [False]))
 
-	# Film
-	if (not imageWidth is None) and (not imageHeight is None):
-		filmWidth = imageWidth
-		filmHeight = imageHeight
-	else:
-		filmWidth, filmHeight = blScene.camera.data.luxrender_camera.luxrender_film.resolution(blScene)
+		# Film
+		if (not imageWidth is None) and (not imageHeight is None):
+			filmWidth = imageWidth
+			filmHeight = imageHeight
+		else:
+			filmWidth, filmHeight = self.blScene.camera.data.luxrender_camera.luxrender_film.resolution(self.blScene)
 
-	cfgProps.Set(pyluxcore.Property('film.width', [filmWidth]))
-	cfgProps.Set(pyluxcore.Property('film.height', [filmHeight]))
+		self.cfgProps.Set(pyluxcore.Property('film.width', [filmWidth]))
+		self.cfgProps.Set(pyluxcore.Property('film.height', [filmHeight]))
 
-	# Image Pipeline
-	cfgProps.Set(pyluxcore.Property('film.imagepipeline.0.type', ['TONEMAP_AUTOLINEAR']))
-	cfgProps.Set(pyluxcore.Property('film.imagepipeline.1.type', ['GAMMA_CORRECTION']))
-	cfgProps.Set(pyluxcore.Property('film.imagepipeline.1.value', [2.2]))
+		# Image Pipeline
+		self.cfgProps.Set(pyluxcore.Property('film.imagepipeline.0.type', ['TONEMAP_AUTOLINEAR']))
+		self.cfgProps.Set(pyluxcore.Property('film.imagepipeline.1.type', ['GAMMA_CORRECTION']))
+		self.cfgProps.Set(pyluxcore.Property('film.imagepipeline.1.value', [2.2]))
 
-	# Pixel Filter
-	cfgProps.Set(pyluxcore.Property('film.filter.type', ['MITCHELL_SS']))
+		# Pixel Filter
+		self.cfgProps.Set(pyluxcore.Property('film.filter.type', ['MITCHELL_SS']))
 
-	# Sampler
-	cfgProps.Set(pyluxcore.Property('sampler.type', ['RANDOM']))
-	
-	lcConfig = pyluxcore.RenderConfig(cfgProps, lcScene)
-	
-	return lcConfig
+		# Sampler
+		self.cfgProps.Set(pyluxcore.Property('sampler.type', ['RANDOM']))
+
+		self.lcConfig = pyluxcore.RenderConfig(self.cfgProps, self.lcScene)
+
+		return self.lcConfig

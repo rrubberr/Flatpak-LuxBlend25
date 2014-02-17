@@ -36,8 +36,12 @@ from .. import LuxRenderAddon
 from ..export import ParamSet, get_worldscale, process_filepath_data
 from ..export.materials import add_texture_parameter, convert_texture
 from ..export.volumes import export_smoke
-from ..outputs import LuxManager
+from ..outputs import LuxManager, LuxLog
 from ..util import dict_merge, bdecode_string2file
+
+from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE
+if PYLUXCORE_AVAILABLE:
+	from .. import pyluxcore
 
 #------------------------------------------------------------------------------ 
 # Texture property group construction helpers
@@ -168,6 +172,17 @@ class TextureParameterBase(object):
 			return self.real_attr
 		else:
 			return self.attr
+
+	def luxcore_export(self, scnProps, texturesCache):
+		'''
+		Return a LuxCore texture name
+		'''
+		
+		LuxLog('WARNING: unimplemented luxcore_export() for: %s' % __name__)
+		import traceback
+		traceback.print_stack()
+		
+		return '0.0'
 
 def check_texture_variant(self, context, attr, expected_variant):
 	#print('CHECK TEXTURE: self        %s' % self)
@@ -330,6 +345,9 @@ class ColorTextureParameter(TextureParameterBase):
 			)
 		
 		return TC_params
+
+	def luxcore_export(self, property_group, scnProps, texturesCache):
+		return ' '.join(str(i) for i in getattr(property_group, '%s_color' % self.attr))
 
 class FloatTextureParameter(TextureParameterBase):
 	default				= 0.0
@@ -2295,7 +2313,17 @@ class luxrender_tex_constant(declarative_property_group):
 		for psi in ps:
 			if psi['name'] in psi_accept_keys and psi['type'].lower() == psi_accept[psi['name']]:
 				setattr(self, psi['name'], psi['value'])
-				
+
+	def luxcore_export(self, scnProps, texturesCache):
+		if self.variant == 'float':
+			return str(self.floatvalue)
+		if self.variant == 'color':
+			return str(self.colorvalue)
+		if self.variant == 'fresnel':
+			return str(self.value)
+		
+		return '0.0'
+
 @LuxRenderAddon.addon_register_class
 class luxrender_tex_colordepth(declarative_property_group):
 	ef_attach_to = ['luxrender_texture']
