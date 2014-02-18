@@ -24,18 +24,29 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
-from ..outputs import LuxLog
 import shutil
 import tempfile
 import os
 import platform
 import re
+import itertools
+
+from ..outputs import LuxLog
 
 def ToValidLuxCoreName(name):
 	return re.sub('[^_0-9a-zA-Z]+', '_', name)
 
 def LuxCoreLogHandler(msg):
 	LuxLog(msg)
+
+def UseLuxCoreVisibility(controls, withLuxCore):
+	visibility = dict()
+	for control in itertools.chain.from_iterable(controls):
+		if (type(control) is str):
+			visibility[control] = {
+				'importlib.import_module(\'bpy\').data.scenes[\'Scene\'].luxrender_engine.selected_luxrender_api' : 'luxcore' if withLuxCore else 'classic'
+			}
+	return visibility
 
 if not 'PYLUXCORE_AVAILABLE' in locals():
 	try:

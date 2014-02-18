@@ -209,7 +209,6 @@ _register_elm(bl_ui.properties_data_camera.DATA_PT_camera_dof.append(lux_use_dof
 
 # Add options by render image/anim buttons
 def render_start_options(self, context):
-
 	if context.scene.render.engine == 'LUXRENDER_RENDER':
 		col = self.layout.column()
 		row = self.layout.row()
@@ -325,7 +324,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			self.output_file			= 'default.png'
 
 			if scene.name == 'preview':
-				self.render_preview(scene)
+				self.luxrender_render_preview(scene)
 				return
 
 			if scene.display_settings.display_device != "sRGB":

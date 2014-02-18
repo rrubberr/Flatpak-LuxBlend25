@@ -13,6 +13,5 @@ liblzmadec*
 liblux*
 *.dll
 *.dylib
-*.orig
 *.patch
 

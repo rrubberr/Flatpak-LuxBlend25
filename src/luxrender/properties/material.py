@@ -43,7 +43,7 @@ from ..outputs import LuxManager, LuxLog
 from ..util import dict_merge
 from ..outputs.luxcore_api import ToValidLuxCoreName
 
-from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE
+from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCoreVisibility
 if PYLUXCORE_AVAILABLE:
 	from .. import pyluxcore
 
@@ -1990,7 +1990,7 @@ class luxrender_mat_matte(declarative_property_group):
 	
 	visibility = dict_merge(
 		TC_Kd.visibility,
-		TF_sigma.visibility
+		TF_sigma.visibility, UseLuxCoreVisibility(TF_sigma.controls, False),
 	)
 	
 	properties = [
