@@ -747,56 +747,6 @@ class luxrender_material(declarative_property_group):
 		
 		self.set_master_color(blender_mat)
 		blender_mat.preview_render_type = blender_mat.preview_render_type
-	
-	############################################################################
-	# LuxCore
-	############################################################################
-	
-#	def luxcore_export_node_tree(self, scene, scnProps, material, materialsCache, texturesCache):
-#		outputNode = find_node(material, 'luxrender_material_output_node')
-#		
-#		if outputNode is None:
-#			return 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
-#		
-#		return outputNode.export(scene, scnProps, material, materialsCache, texturesCache)
-	
-	def luxcore_export(self, scene, scnProps, material, materialsCache, texturesCache):
-		mat_is_transparent = False
-		if self.type in ['glass', 'glass2', 'null']:
-			mat_is_transparent == True
-		
-		if scene.luxrender_testing.clay_render and mat_is_transparent == False:
-			return 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
-		
-		matName = ToValidLuxCoreName(material.name)
-
-		# Check if it is an already defined material
-		if matName in materialsCache:
-			return matName
-		
-#		if self.nodetree != '':
-#			return self.luxcore_export_node_tree(scene, scnProps, materialsCache, texturesCache)
-		
-		with MaterialCounter(material.name):
-#			# First export all other referenced materials
-#			if self.type == 'mix':
-#				# First export the other mix mats
-#				m1_name = self.luxrender_mat_mix.namedmaterial1_material
-#				if m1_name == '':
-#					raise Exception('Unassigned mix material slot 1 on material %s' % material.name)
-#				m1 = bpy.data.materials[m1_name]
-#				m1.luxrender_material.luxcore_export(scene, scnProps, m1, materialsCache, texturesCache)
-#
-#				m2_name = self.luxrender_mat_mix.namedmaterial2_material
-#				if m2_name == '':
-#					raise Exception('Unassigned mix material slot 2 on material %s' % material.name)
-#				m2 = bpy.data.materials[m2_name]
-#				m2.luxrender_material.luxcore_export(scene, scnProps, m2, materialsCache, texturesCache)
-				
-			subtype = getattr(self, 'luxrender_mat_%s' % self.type)
-			subtype.luxcore_export(scnProps, material, materialsCache, texturesCache)
-				
-		return matName;
 
 @LuxRenderAddon.addon_register_class
 class luxrender_mat_compositing(declarative_property_group):
@@ -2015,11 +1965,6 @@ class luxrender_mat_matte(declarative_property_group):
 	def load_paramset(self, ps):
 		TC_Kd.load_paramset(self, ps)
 		TF_sigma.load_paramset(self, ps)
-
-	def luxcore_export(self, scnProps, material, materialsCache, texturesCache):
-		matName = ToValidLuxCoreName(material.name)
-		scnProps.Set(pyluxcore.Property('scene.materials.' + matName + '.type', ['matte']))
-		scnProps.Set(pyluxcore.Property('scene.materials.' + matName + '.kd', TC_Kd.luxcore_export(self, scnProps, texturesCache)))
 
 @LuxRenderAddon.addon_register_class
 class luxrender_mat_mattetranslucent(declarative_property_group):

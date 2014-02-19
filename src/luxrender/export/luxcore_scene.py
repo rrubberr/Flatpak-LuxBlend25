@@ -29,17 +29,9 @@ import bpy
 from .. import pyluxcore
 from ..outputs import LuxManager, LuxLog
 from ..outputs.luxcore_api import ToValidLuxCoreName
+from ..export.materials import get_texture_from_scene
 
 class BlenderSceneConverter(object):
-	blScene = None
-	lcScene = None
-	
-	scnProps = None
-	cfgProps = None
-	
-	materialsCache = set()
-	texturesCache = set()
-	
 	def __init__(self, blScene):
 		LuxManager.SetCurrentScene(blScene)
 
@@ -47,6 +39,9 @@ class BlenderSceneConverter(object):
 		self.lcScene = pyluxcore.Scene()
 		self.scnProps = pyluxcore.Properties()
 		self.cfgProps = pyluxcore.Properties()
+		
+		self.materialsCache = set()
+		self.texturesCache = set()
 	
 	def ConvertObjectGeometry(self, obj):
 		try:
@@ -166,6 +161,98 @@ class BlenderSceneConverter(object):
 			LuxLog('Object export failed, skipping this object:\n%s' % err)
 			return []
 
+	def ConvertMapping(self, prefix, texture):
+		luxMapping = getattr(texture.luxrender_texture, 'luxrender_tex_mapping')
+		
+		self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.type', ['uvmapping2d']))
+		self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.uvscale', [luxMapping.uscale, luxMapping.vscale * -1.0]))
+		if luxMapping.center_map ==  False:
+			self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.uvdelta', [luxMapping.udelta, luxMapping.vdelta + 1.0]))
+		else:
+			self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.uvdelta', [
+				luxMapping.udelta + 0.5 * (1.0 - luxMapping.uscale), luxMapping.vdelta * -1.0 + 1.0 - (0.5 * (1.0 - luxMapping.vscale))]))
+
+	def ConvertTexture(self, texture):
+		texType = texture.luxrender_texture.type
+
+		if texType != 'BLENDER':
+			texName = ToValidLuxCoreName(texture.name)
+			luxTex = getattr(texture.luxrender_texture, 'luxrender_tex_' + texType)
+
+			prefix = 'scene.textures.' + texName
+			if texType == 'imagemap':
+				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['imagemap']))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.file', [luxTex.filename]))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.gamma', [float(luxTex.gamma)]))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.gain', [float(luxTex.gain)]))
+				self.ConvertMapping(prefix, texture)
+			else:
+				raise Exception('Unknown type ' + texType + 'for texture: ' + texture.name)
+			
+			self.texturesCache.add(texName)
+			return texName
+		
+		raise Exception('Unknown texture type: ' + texture.name)
+
+	def ConvertMaterialChannel(self, luxMaterial, materialChannel, variant):
+		if getattr(luxMaterial, materialChannel + '_use' + variant + 'texture'):
+			texName = getattr(luxMaterial, '%s_%stexturename' % (materialChannel, variant))
+			validTexName = ToValidLuxCoreName(texName)
+			# Check if it is an already defined texture
+			if validTexName in self.texturesCache:
+				return validTexName
+			LuxLog('Texture: ' + texName)
+			
+			texture = get_texture_from_scene(self.blScene, texName)
+			
+			if texture != False:
+				return self.ConvertTexture(texture) 
+		else:
+			if variant == 'float':
+				return str(getattr(luxMaterial, materialChannel + '_floatvalue'))
+			elif variant == 'color':
+				return ' '.join(str(i) for i in getattr(luxMaterial, materialChannel + '_color'))
+			elif variant == 'fresnel':
+				return str(getattr(property_group, materialChannel + '_fresnelvalue'))
+
+		raise Exception('Unknown texture in channel' + materialChannel + ' for material ' + material.luxrender_material.type)
+
+	def ConvertMaterial(self, material):
+		try:
+			if material is None:
+				return 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
+
+			matIsTransparent = False
+			if material.type in ['glass', 'glass2', 'null']:
+				matIsTransparent == True
+
+			if self.blScene.luxrender_testing.clay_render and matIsTransparent == False:
+				return 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
+
+			matName = ToValidLuxCoreName(material.name)
+			# Check if it is an already defined material
+			if matName in self.materialsCache:
+				return matName
+			LuxLog('Material: ' + material.name)
+
+			matType = material.luxrender_material.type
+			luxMat = getattr(material.luxrender_material, 'luxrender_mat_' + matType)
+			
+			prefix = 'scene.materials.' + matName
+			if matType == 'matte':
+				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['matte']))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
+			else:
+				return 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
+			
+			self.materialsCache.add(matName)
+			return matName
+		except Exception as err:
+			LuxLog('Material export failed, skipping material: %s\n%s' % (material.name, err))
+			import traceback
+			traceback.print_exc()
+			return 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
+
 	def ConvertObject(self, obj):
 		########################################################################
 		# Convert the object geometry
@@ -188,16 +275,7 @@ class BlenderSceneConverter(object):
 				objMat = None
 				LuxLog('WARNING: material slot %d on object "%s" is unassigned!' % (objMatIndex + 1, obj.name))
 			
-			if objMat is not None:
-				try:
-					objMatName = objMat.luxrender_material.luxcore_export(self.blScene, self.scnProps, objMat, self.materialsCache, self.texturesCache)
-				except Exception as err:
-					LuxLog('Material export failed, skipping material: %s\n%s' % (objMat.name, err))
-					import traceback
-					traceback.print_exc()
-					objMatName = 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
-			else:
-				objMatName = 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
+			objMatName = self.ConvertMaterial(objMat)
 
 			####################################################################
 			# Create the mesh
@@ -232,9 +310,8 @@ class BlenderSceneConverter(object):
 		# Convert all objects
 		########################################################################
 
-		LuxLog('Object conversion:')
 		for obj in self.blScene.objects:
-			LuxLog('  %s' % obj.name)
+			LuxLog('Object: %s' % obj.name)
 			self.ConvertObject(obj)
 
 		self.lcScene.Parse(self.scnProps)
