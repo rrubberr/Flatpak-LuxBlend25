@@ -43,7 +43,7 @@ from ..outputs import LuxManager, LuxLog
 from ..util import dict_merge
 from ..outputs.luxcore_api import ToValidLuxCoreName
 
-from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCoreVisibility
+from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCoreVisibility, UseLuxCore
 if PYLUXCORE_AVAILABLE:
 	from .. import pyluxcore
 
@@ -174,6 +174,12 @@ mat_names = {
 	'null': 'Null',
 }
 
+# Here, I assume luxcore_mat_names is a sub-set of mat_names (i.e. it doesn't
+# include materials not included in mat_names)
+luxcore_mat_names = {
+	'matte': 'Matte',
+}
+
 @LuxRenderAddon.addon_register_class
 class MATERIAL_OT_set_luxrender_type(bpy.types.Operator):
 	bl_idname = 'material.set_luxrender_type'
@@ -196,7 +202,7 @@ class MATERIAL_MT_luxrender_type(bpy.types.Menu):
 	
 	def draw(self, context):
 		sl = self.layout
-		for m_name in sorted(mat_names.keys()):
+		for m_name in sorted(luxcore_mat_names.keys() if UseLuxCore() else mat_names.keys()):
 			op = sl.operator('MATERIAL_OT_set_luxrender_type', text=mat_names[m_name])
 			op.mat_name = m_name
 

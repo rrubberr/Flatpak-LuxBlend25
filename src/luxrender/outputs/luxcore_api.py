@@ -30,6 +30,7 @@ import os
 import platform
 import re
 import itertools
+import bpy
 
 from ..outputs import LuxLog
 
@@ -47,6 +48,9 @@ def UseLuxCoreVisibility(controls, withLuxCore):
 				'importlib.import_module(\'bpy\').data.scenes[\'Scene\'].luxrender_engine.selected_luxrender_api' : 'luxcore' if withLuxCore else 'classic'
 			}
 	return visibility
+
+def UseLuxCore():
+	return True if bpy.data.scenes['Scene'].luxrender_engine.selected_luxrender_api == 'luxcore' else False
 
 if not 'PYLUXCORE_AVAILABLE' in locals():
 	try:
