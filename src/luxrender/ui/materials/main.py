@@ -30,7 +30,7 @@ from ... import LuxRenderAddon
 from ...properties import (find_node, find_node_input)
 from ...ui.materials import luxrender_material_base
 from ...operators.lrmdb import lrmdb_state
-
+from ...outputs.luxcore_api import UseLuxCore
 
 def cycles_panel_node_draw(layout, id_data, output_type, input_name):
 	if not id_data.use_nodes:
@@ -214,6 +214,8 @@ class ui_luxrender_material_emission(luxrender_material_base):
 
 	@classmethod
 	def poll(cls, context):
+		if UseLuxCore():
+			return False
 		if context.scene.render.engine != 'LUXRENDER_RENDER':
 			return False
 		try:
@@ -239,6 +241,8 @@ class ui_luxrender_material_transparency(luxrender_material_base):
 	
 	@classmethod
 	def poll(cls, context):
+		if UseLuxCore():
+			return False
 		if not hasattr(context.material, 'luxrender_transparency'):
 			return False
 		if context.scene.render.engine != 'LUXRENDER_RENDER':
@@ -283,6 +287,8 @@ class ui_luxrender_material_coating(luxrender_material_base):
 	
 	@classmethod
 	def poll(cls, context):
+		if UseLuxCore():
+			return False
 		if not hasattr(context.material, 'luxrender_coating'):
 			return False
 		if context.scene.render.engine != 'LUXRENDER_RENDER':
