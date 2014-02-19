@@ -164,16 +164,16 @@ class BlenderSceneConverter(object):
 	def ConvertMapping(self, prefix, texture):
 		luxMapping = getattr(texture.luxrender_texture, 'luxrender_tex_mapping')
 		
-		if self.type == 'uv':
+		if luxMapping.type == 'uv':
 			self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.type', ['uvmapping2d']))
-			self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.uvscale', [luxMapping.uscale, luxMapping.vscale * -1.0]))
+			self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.uvscale', [luxMapping.uscale, luxMapping.vscale * - 1.0]))
 			if luxMapping.center_map ==  False:
 				self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.uvdelta', [luxMapping.udelta, luxMapping.vdelta + 1.0]))
 			else:
 				self.scnProps.Set(pyluxcore.Property(prefix + '.mapping.uvdelta', [
-					luxMapping.udelta + 0.5 * (1.0 - luxMapping.uscale), luxMapping.vdelta * -1.0 + 1.0 - (0.5 * (1.0 - luxMapping.vscale))]))
-
-		raise Exception('unsupported mapping for texture: ' + texture.name)
+					luxMapping.udelta + 0.5 * (1.0 - luxMapping.uscale), luxMapping.vdelta * - 1.0 + 1.0 - (0.5 * (1.0 - luxMapping.vscale))]))
+		else:
+			raise Exception('Unsupported mapping for texture: ' + texture.name)
 
 	def ConvertTexture(self, texture):
 		texType = texture.luxrender_texture.type
