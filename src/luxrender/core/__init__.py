@@ -48,7 +48,7 @@ from ..export.scene import SceneExporter
 from ..outputs import LuxManager, LuxFilmDisplay
 from ..outputs import LuxLog
 from ..outputs.pure_api import LUXRENDER_VERSION
-from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE
+from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCore
 
 # Exporter Property Groups need to be imported to ensure initialisation
 from ..properties import (
@@ -295,24 +295,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 				LuxLog('ERROR: Scene to render is not valid')
 				return
 
-			# if "scene" is the preview scene, it doesn't have selected_luxrender_api setting
-			selected_luxrender_api = bpy.data.scenes['Scene'].luxrender_engine.selected_luxrender_api
-
-			if selected_luxrender_api == 'classic':
-				self.luxrender_render(scene)
-			else:
+			if UseLuxCore():
 				self.luxcore_render(scene)
+			else:
+				self.luxrender_render(scene)
 
 	def view_update(self, context):
-		selected_luxrender_api = bpy.data.scenes['Scene'].luxrender_engine.selected_luxrender_api
-
-		if selected_luxrender_api == 'luxcore':
+		if UseLuxCore():
 			self.luxcore_view_update(context)
 
 	def view_draw(self, context):
-		selected_luxrender_api = bpy.data.scenes['Scene'].luxrender_engine.selected_luxrender_api
-
-		if selected_luxrender_api == 'luxcore':
+		if UseLuxCore():
 			self.luxcore_view_draw(context)
 
 	def luxrender_render(self, scene):

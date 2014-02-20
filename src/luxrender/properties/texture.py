@@ -2971,7 +2971,8 @@ class luxrender_tex_imagemap(declarative_property_group):
 			'discardmipmaps': { 'filtertype': O(['mipmap_trilinear', 'mipmap_ewa']) },
 			'maxanisotropy': { 'filtertype': O(['mipmap_trilinear', 'mipmap_ewa']) },
 		},
-		UseLuxCoreVisibility(['variant', 'channel', 'filtertype', 'discardmipmaps', 'maxanisotropy', 'wrap'], False))
+		UseLuxCoreVisibility(['variant', 'channel', 'filtertype', 'discardmipmaps', 'maxanisotropy', 'wrap'], False),
+		)
 	
 	properties = [
 		{

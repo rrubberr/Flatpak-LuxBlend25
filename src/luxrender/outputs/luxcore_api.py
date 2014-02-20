@@ -29,9 +29,9 @@ import tempfile
 import os
 import platform
 import re
-import itertools
 import bpy
 
+from collections import Iterable
 from ..outputs import LuxLog
 
 def ToValidLuxCoreName(name):
@@ -40,13 +40,21 @@ def ToValidLuxCoreName(name):
 def LuxCoreLogHandler(msg):
 	LuxLog(msg)
 
+def FlattenStrCollection(coll):
+	for i in coll:
+		if isinstance(i, Iterable):
+			if (type(i) is str):
+				yield i
+			else:
+				for subc in FlattenStrCollection(i):
+					yield subc
+
 def UseLuxCoreVisibility(controls, withLuxCore):
 	visibility = dict()
-	for control in itertools.chain.from_iterable(controls):
-		if (type(control) is str):
-			visibility[control] = {
-				'importlib.import_module(\'bpy\').data.scenes[\'Scene\'].luxrender_engine.selected_luxrender_api' : 'luxcore' if withLuxCore else 'classic'
-			}
+	for control in FlattenStrCollection(controls):
+		visibility[control] = {
+			'importlib.import_module(\'bpy\').data.scenes[\'Scene\'].luxrender_engine.selected_luxrender_api' : 'luxcore' if withLuxCore else 'classic'
+		}
 	return visibility
 
 def UseLuxCore():
