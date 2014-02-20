@@ -183,6 +183,9 @@ class BlenderSceneConverter(object):
 			luxTex = getattr(texture.luxrender_texture, 'luxrender_tex_' + texType)
 
 			prefix = 'scene.textures.' + texName
+			####################################################################
+			# Imagemap
+			####################################################################
 			if texType == 'imagemap':
 				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['imagemap']))
 				self.scnProps.Set(pyluxcore.Property(prefix + '.file', [luxTex.filename]))
@@ -242,6 +245,9 @@ class BlenderSceneConverter(object):
 			luxMat = getattr(material.luxrender_material, 'luxrender_mat_' + matType)
 			
 			prefix = 'scene.materials.' + matName
+			####################################################################
+			# Matte
+			####################################################################
 			if matType == 'matte':
 				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['matte']))
 				self.scnProps.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))

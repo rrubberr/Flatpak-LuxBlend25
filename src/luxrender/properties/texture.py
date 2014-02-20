@@ -39,6 +39,10 @@ from ..export.volumes import export_smoke
 from ..outputs import LuxManager, LuxLog
 from ..util import dict_merge, bdecode_string2file
 
+from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCoreVisibility, UseLuxCore, ToValidLuxCoreName
+if PYLUXCORE_AVAILABLE:
+	from .. import pyluxcore
+
 #------------------------------------------------------------------------------ 
 # Texture property group construction helpers
 #------------------------------------------------------------------------------ 
@@ -666,9 +670,9 @@ tex_names = (
 	(
 		('brick', 'Brick'),
 		('checkerboard', 'Checkerboard'),
-                ('cloud', 'Cloud'),
+        ('cloud', 'Cloud'),
 		('dots', 'Dots'),
-                ('exponential', 'Exponential'),
+        ('exponential', 'Exponential'),
 		('fbm', 'FBM'),
 		('imagemap', 'Image Map'),
 		('normalmap', 'Normal Map'),
@@ -716,8 +720,16 @@ tex_names = (
 		('uv', 'UV'),
 		('uvmask', 'UV Mask'),
 	)),
-
 )
+
+# Here, I assume luxcore_tex_names is a sub-set of tex_names (i.e. it doesn't
+# include materials not included in tex_names)
+luxcore_tex_names = {
+	'LuxRender Textures' :
+		{
+			'imagemap',
+		},
+}
 
 @LuxRenderAddon.addon_register_class
 class TEXTURE_OT_set_luxrender_type(bpy.types.Operator):
@@ -737,13 +749,15 @@ class TEXTURE_OT_set_luxrender_type(bpy.types.Operator):
 		context.texture.luxrender_texture.type_label = self.properties.tex_label
 		return {'FINISHED'}
 
-def draw_generator(operator, m_names):
+def draw_generator(operator, m_names, luxcoreEnabledList):
 	def draw(self, context):
 		sl = self.layout
 		for m_name, m_label in m_names:
-			op = sl.operator(operator, text=m_label)
-			op.tex_name = m_name
-			op.tex_label = m_label
+			if not UseLuxCore() or m_name in luxcoreEnabledList:
+				op = sl.operator(operator, text=m_label)
+				op.tex_name = m_name
+				op.tex_label = m_label
+
 	return draw
 
 @LuxRenderAddon.addon_register_class
@@ -754,20 +768,28 @@ class TEXTURE_MT_luxrender_type(bpy.types.Menu):
 	def draw(self, context):
 		sl = self.layout
 		for sm in self.submenus:
-			sl.menu(sm.bl_idname)
+			if UseLuxCore():
+				# Check if it is a menu to enable
+				if sm[1]:
+					sl.menu(sm[0].bl_idname)
+			else:
+				sl.menu(sm[0].bl_idname)
 	
 	for tex_cat, tex_cat_list in tex_names:
 		submenu_idname = 'TEXTURE_MT_luxrender_tex_cat%d'%len(submenus)
-		submenus.append(
+		submenus.append((
 			LuxRenderAddon.addon_register_class(type(
 				submenu_idname,
 				(bpy.types.Menu,),
 				{
 					'bl_idname': submenu_idname,
 					'bl_label': tex_cat,
-					'draw': draw_generator('TEXTURE_OT_set_luxrender_type', tex_cat_list)
+					'draw': draw_generator('TEXTURE_OT_set_luxrender_type', tex_cat_list,
+						luxcore_tex_names[tex_cat] if tex_cat in luxcore_tex_names else {})
 				}
-			))
+			)),
+			tex_cat in luxcore_tex_names
+			)
 		)
 
 @LuxRenderAddon.addon_register_class
@@ -2943,11 +2965,13 @@ class luxrender_tex_imagemap(declarative_property_group):
 		'wrap',
 	]
 	
-	visibility = {
-		'channel': { 'variant': 'float' },
-		'discardmipmaps': { 'filtertype': O(['mipmap_trilinear', 'mipmap_ewa']) },
-		'maxanisotropy': { 'filtertype': O(['mipmap_trilinear', 'mipmap_ewa']) },
-	}
+	visibility = dict_merge(
+		{
+			'channel': { 'variant': 'float' },
+			'discardmipmaps': { 'filtertype': O(['mipmap_trilinear', 'mipmap_ewa']) },
+			'maxanisotropy': { 'filtertype': O(['mipmap_trilinear', 'mipmap_ewa']) },
+		},
+		UseLuxCoreVisibility(['variant', 'channel', 'filtertype', 'discardmipmaps', 'maxanisotropy', 'wrap'], False))
 	
 	properties = [
 		{

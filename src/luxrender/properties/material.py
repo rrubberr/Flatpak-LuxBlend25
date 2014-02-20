@@ -41,9 +41,8 @@ from ..export.materials import (
 )
 from ..outputs import LuxManager, LuxLog
 from ..util import dict_merge
-from ..outputs.luxcore_api import ToValidLuxCoreName
 
-from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCoreVisibility, UseLuxCore
+from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCoreVisibility, UseLuxCore, ToValidLuxCoreName
 if PYLUXCORE_AVAILABLE:
 	from .. import pyluxcore
 
