@@ -377,7 +377,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		
 		from ..outputs.pure_api import PYLUX_AVAILABLE
 		if not PYLUX_AVAILABLE:
-			self.bl_use_preview = False
 			LuxLog('ERROR: Material previews require pylux')
 			return
 		
@@ -846,7 +845,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		
 		# LuxCore libs
 		if not PYLUXCORE_AVAILABLE:
-			self.bl_use_preview = False
 			LuxLog('ERROR: LuxCore rendering requires pyluxcore')
 			return
 		from .. import pyluxcore
@@ -909,14 +907,74 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 			import traceback
 			traceback.print_exc()
 
-	def luxcore_render_preview(self, context):
-		LuxLog('luxcore_render_preview()')
-
 	viewSession = None
 	viewFilmWidth = -1
 	viewFilmHeight = -1
 	viewImageBufferFloat = None
-	
+
+	def luxcore_render_preview(self, scene):
+		# LuxCore libs
+		if not PYLUXCORE_AVAILABLE:
+			LuxLog('ERROR: LuxCore preview rendering requires pyluxcore')
+			return
+		from .. import pyluxcore
+		from ..export.luxcore_scene import BlenderSceneConverter
+		
+		try:
+			xres, yres = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
+			
+			# Don't render the tiny images
+			if xres <= 96:
+				raise Exception('Skipping material thumbnail update, image too small (%ix%i)' % (xres,yres))
+
+			# convert the Blender scene
+			lcConfig = BlenderSceneConverter(scene).Convert()
+			LuxLog('RenderConfig Properties:')
+			LuxLog(str(lcConfig.GetProperties()))
+			LuxLog('Scene Properties:')
+			LuxLog(str(lcConfig.GetScene().GetProperties()))
+
+			lcSession = pyluxcore.RenderSession(lcConfig)
+
+			filmWidth, filmHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
+			imageBufferFloat = array.array('f', [0.0] * (filmWidth * filmHeight * 3))
+
+			# Start the rendering
+			lcSession.Start()
+
+			startTime = time.time()
+			while not self.test_break() and time.time()- startTime < 10.0:
+				time.sleep(0.2)
+				
+				# Print some information about the rendering progress
+
+				# Update statistics
+				lcSession.UpdateStats()
+
+				stats = lcSession.GetStats();
+				LuxLog('[Elapsed time: %3d][Samples %4d][Avg. samples/sec % 3.2fM on %.1fK tris]' % (
+						stats.Get('stats.renderengine.time').GetFloat(),
+						stats.Get('stats.renderengine.pass').GetInt(),
+						(stats.Get('stats.renderengine.total.samplesec').GetFloat()  / 1000000.0),
+						(stats.Get('stats.dataset.trianglecount').GetFloat() / 1000.0)))
+
+				# Update the image
+				lcSession.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, imageBufferFloat)
+
+				# Here we write the pixel values to the RenderResult
+				result = self.begin_result(0, 0, filmWidth, filmHeight)
+				layer = result.layers[0]
+				layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight, imageBufferFloat)
+				self.end_result(result)
+
+			lcSession.Stop()
+
+			LuxLog('Done.')
+		except Exception as exc:
+			LuxLog('Rendering aborted: %s' % exc)
+			import traceback
+			traceback.print_exc()
+
 	def luxcore_view_update(self, context):
 		# LuxCore libs
 		if not PYLUXCORE_AVAILABLE:

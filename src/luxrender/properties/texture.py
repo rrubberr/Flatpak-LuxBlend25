@@ -3427,9 +3427,9 @@ class luxrender_tex_mapping(declarative_property_group):
 			'name': 'Mapping Type',
 			'items': [
 				('uv','UV','uv'),
-				('planar','Planar','planar'),
-				('spherical','Spherical','spherical'),
-				('cylindrical','Cylindrical','cylindrical'),
+				('planar','Planar (not supported by LuxCore)','planar'),
+				('spherical','Spherical (not supported by LuxCore)','spherical'),
+				('cylindrical','Cylindrical (not supported by LuxCore)','cylindrical'),
 			],
 			'save_in_preset': True
 		},

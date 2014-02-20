@@ -464,48 +464,6 @@ class luxrender_camera(declarative_property_group):
 		
 		cam_type = 'orthographic' if cam.type == 'ORTHO' else self.type if bpy.app.version < (2, 63, 5 ) else 'environment' if cam.type == 'PANO' else 'perspective'
 		return cam_type, params
-	
-	def luxcore_output(self, scene, imageWidth = None, imageHeight = None):
-		from .. import pyluxcore
-		cameraPorps = pyluxcore.Properties()
-		
-		cam = scene.camera.data
-		if (not imageWidth is None) and (not imageHeight is None):
-			xr = imageWidth
-			yr = imageHeight
-		else:
-			xr, yr = self.luxrender_film.resolution(scene)
-
-		lookat = self.lookAt(scene.camera)
-		orig = list(lookat[0:3])
-		target = list(lookat[3:6])
-		up = list(lookat[6:9])
-		cameraPorps.Set(pyluxcore.Property('scene.camera.lookat.orig', orig))
-		cameraPorps.Set(pyluxcore.Property('scene.camera.lookat.target', target))
-		cameraPorps.Set(pyluxcore.Property('scene.camera.lookat.up', up))
-
-		if cam.type == 'PERSP' and self.type == 'perspective':
-			cameraPorps.Set(pyluxcore.Property('scene.camera.lookat.fieldofview', [math.degrees(scene.camera.data.angle)]))
-		
-		cameraPorps.Set(pyluxcore.Property("scene.camera.screenwindow", self.screenwindow(xr, yr, scene, cam)));
-		
-		if self.use_dof:
-			# Do not world-scale this, it is already in meters !
-			cameraPorps.Set(pyluxcore.Property("scene.camera.lensradius", (cam.lens / 1000.0) / (2.0 * self.fstop)));
-		
-		ws = get_worldscale(as_scalematrix = False)
-		
-		if self.use_dof:
-			if cam.dof_object is not None:
-				cameraPorps.Set(pyluxcore.Property("scene.camera.focaldistance", ws * ((scene.camera.location - cam.dof_object.location).length)));
-			elif cam.dof_distance > 0:
-				cameraPorps.Set(pyluxcore.Property("scene.camera.focaldistance"), ws * cam.dof_distance);
-			
-		if self.use_clipping:
-			cameraPorps.Set(pyluxcore.Property("scene.camera.cliphither", ws * cam.clip_start));
-			cameraPorps.Set(pyluxcore.Property("scene.camera.clipyon", ws * cam.clip_end));
-		
-		return cameraPorps
 
 @LuxRenderAddon.addon_register_class
 class luxrender_film(declarative_property_group):

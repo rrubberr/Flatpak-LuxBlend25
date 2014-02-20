@@ -25,10 +25,12 @@
 # ***** END GPL LICENCE BLOCK *****
 #
 import bpy
+import math
 
 from .. import pyluxcore
 from ..outputs import LuxManager, LuxLog
 from ..outputs.luxcore_api import ToValidLuxCoreName
+from ..export import get_worldscale
 from ..export.materials import get_texture_from_scene
 
 class BlenderSceneConverter(object):
@@ -292,14 +294,53 @@ class BlenderSceneConverter(object):
 			
 			self.scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.material', [objMatName]))
 			self.scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.ply', ['Mesh-' + objName]))
+	
+	def ConvertCamera(self, imageWidth = None, imageHeight = None):
+		blCamera = self.blScene.camera
+		blCameraData = blCamera.data
+		luxCamera = blCameraData.luxrender_camera
+
+		if (not imageWidth is None) and (not imageHeight is None):
+			xr = imageWidth
+			yr = imageHeight
+		else:
+			xr, yr = luxCamera.luxrender_film.resolution(self.blScene)
+
+		lookat = luxCamera.lookAt(blCamera)
+		orig = list(lookat[0:3])
+		target = list(lookat[3:6])
+		up = list(lookat[6:9])
+		self.scnProps.Set(pyluxcore.Property('scene.camera.lookat.orig', orig))
+		self.scnProps.Set(pyluxcore.Property('scene.camera.lookat.target', target))
+		self.scnProps.Set(pyluxcore.Property('scene.camera.lookat.up', up))
+
+		if blCameraData.type == 'PERSP' and luxCamera.type == 'perspective':
+			self.scnProps.Set(pyluxcore.Property('scene.camera.lookat.fieldofview', [math.degrees(blCameraData.angle)]))
 		
+		self.scnProps.Set(pyluxcore.Property("scene.camera.screenwindow", luxCamera.screenwindow(xr, yr, self.blScene, blCameraData)));
+		
+		if luxCamera.use_dof:
+			# Do not world-scale this, it is already in meters !
+			self.scnProps.Set(pyluxcore.Property("scene.camera.lensradius", (blCameraData.lens / 1000.0) / (2.0 * luxCamera.fstop)));
+		
+		ws = get_worldscale(as_scalematrix = False)
+		
+		if luxCamera.use_dof:
+			if blCameraData.dof_object is not None:
+				self.scnProps.Set(pyluxcore.Property("scene.camera.focaldistance", ws * ((scene.camera.location - blCameraData.dof_object.location).length)));
+			elif blCameraData.dof_distance > 0:
+				self.scnProps.Set(pyluxcore.Property("scene.camera.focaldistance"), ws * blCameraData.dof_distance);
+			
+		if luxCamera.use_clipping:
+			self.scnProps.Set(pyluxcore.Property("scene.camera.cliphither", ws * blCameraData.clip_start));
+			self.scnProps.Set(pyluxcore.Property("scene.camera.clipyon", ws * blCameraData.clip_end));
+
 	def Convert(self, imageWidth = None, imageHeight = None):
 		########################################################################
 		# Convert camera definition
 		########################################################################
 
-		self.scnProps.Set(self.blScene.camera.data.luxrender_camera.luxcore_output(self.blScene,
-			imageWidth = imageWidth, imageHeight = imageHeight))
+		self.ConvertCamera(imageWidth = imageWidth, imageHeight = imageHeight)
 
 		########################################################################
 		# Add a sky definition
