@@ -290,7 +290,7 @@ class luxrender_rendermode(declarative_property_group):
 				luxcore_renderengine_type = 'BIASPATHOCL'
 			elif self.rendermode == 'luxcorebidir':
 				luxcore_renderengine_type = 'BIDIRCPU'
-			elif self.rendermode == 'luxcorebidirvm':
+			elif self.rendermode == 'luxcorebidirvcm':
 				luxcore_renderengine_type = 'BIDIRCPUVM'
 			luxcore_params = '" "'.join((luxcore_params, 'renderengine.type = ' + luxcore_renderengine_type))
 
