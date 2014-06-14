@@ -2,6 +2,7 @@ syntax: regexp
 ^\.project$
 ^\.pydevproject$
 ^.settings
+^nbproject$
 syntax: glob
 *.pyc
 *.so
