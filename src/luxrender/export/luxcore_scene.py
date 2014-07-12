@@ -228,6 +228,26 @@ class BlenderSceneConverter(object):
 
 	def ConvertTexture(self, texture):
 		texType = texture.luxrender_texture.type
+		
+		if texType == 'BLENDER':
+			texName = ToValidLuxCoreName(texture.name)
+			bl_texType = getattr(texture, 'type')
+
+			prefix = 'scene.textures.' + texName
+			####################################################################
+			# CLOUDS
+			####################################################################
+			if bl_texType == 'CLOUDS':
+				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_clouds']))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.bright', [float(texture.intensity)]))
+				self.scnProps.Set(pyluxcore.Property(prefix + '.contrast', [float(texture.contrast)]))
+
+			self.texturesCache.add(texName)
+			return texName
 
 		if texType != 'BLENDER':
 			texName = ToValidLuxCoreName(texture.name)
@@ -247,7 +267,6 @@ class BlenderSceneConverter(object):
 			# Normalmap
 			####################################################################
 			elif texType == 'normalmap':
-#				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['normalmap'])) # no type property here ?
 				self.scnProps.Set(pyluxcore.Property(prefix + '.file', [luxTex.filename]))
 				self.ConvertMapping(prefix, texture)
 			####################################################################
