@@ -713,6 +713,12 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 		if scene.luxrender_engine.log_verbosity != 'default':
 			cmd_args.append('--' + scene.luxrender_engine.log_verbosity)
 		
+		# Epsilon values if any
+		if scene.luxrender_engine.min_epsilon:
+			cmd_args.append('--minepsilon=%.8f' % scene.luxrender_engine.min_epsilon)
+		if scene.luxrender_engine.max_epsilon:
+			cmd_args.append('--maxepsilon=%.8f' % scene.luxrender_engine.max_epsilon)
+				
 		if scene.luxrender_engine.binary_name == 'luxrender':
 			# Copy the GUI log to the console
 			cmd_args.append('--logconsole')
