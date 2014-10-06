@@ -130,6 +130,7 @@ class luxrender_engine(declarative_property_group):
 		['threads_auto', 'fixed_seed'],
 		'threads',
 		'log_verbosity',
+		['min_epsilon', 'max_epsilon'],
 		]
 		
 	visibility = {
@@ -144,6 +145,8 @@ class luxrender_engine(declarative_property_group):
 		'threads':					O([A([{'write_files': False}, { 'export_type': 'INT' }, {'threads_auto': False}]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }, {'threads_auto': False}])]), #Longest logic test in the whole plugin! threads-auto is in both sides, since we must check that it is false for either internal-pipe mode, or when using run-renderer.
 		'fixed_seed':				O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]),
 		'log_verbosity':			O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]),
+		'min_epsilon':				O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]),
+		'max_epsilon':				O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]),
 	}
 	
 	alert = {}
@@ -293,6 +296,30 @@ class luxrender_engine(declarative_property_group):
 				('quiet', 'Quiet', 'quiet'),
 				('very-quiet', 'Very quiet', 'very-quiet'),
 			],
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'min_epsilon',
+			'name': 'Min Epsilon',
+			'description': 'Minimum epsilon value (0 for auto)',
+			'default': 0,
+			'min': 0,
+			'soft_min': 0,
+			'max': 1.0,
+			'soft_max': 1.0,
+			'save_in_preset': True
+		},
+		{
+			'type': 'float',
+			'attr': 'max_epsilon',
+			'name': 'Max Epsilon',
+			'description': 'Maximum epsilon value (0 for auto)',
+			'default': 0,
+			'min': 0,
+			'soft_min': 0,
+			'max': 1.0,
+			'soft_max': 1.0,
 			'save_in_preset': True
 		},
 		{
