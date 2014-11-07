@@ -688,6 +688,7 @@ class luxrender_channels(declarative_property_group):
 	ef_attach_to = ['Scene']
 	
 	controls = [
+		'saveToDisk',
 		'RGB',
 		'RGBA',
 		'RGB_TONEMAPPED',
@@ -713,6 +714,13 @@ class luxrender_channels(declarative_property_group):
 	visibility = {}
 	
 	properties = [
+		{
+			'type': 'bool',
+			'attr': 'saveToDisk',
+			'name': 'Save passes to disk',
+			'description': 'Save the passes to the harddisk after rendering',
+			'default': False
+		},
 		{
 			'type': 'bool',
 			'attr': 'RGB',
