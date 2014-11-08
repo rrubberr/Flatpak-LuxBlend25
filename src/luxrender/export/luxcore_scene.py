@@ -336,7 +336,7 @@ class BlenderSceneConverter(object):
 				self.scnProps.Set(pyluxcore.Property(prefix + '.w4', [float(texture.weight_4)]))
 				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
 			####################################################################
-			# VORONOI
+			# IMAGE/MOVIE/SEQUENCE
 			####################################################################
 			elif bl_texType == 'IMAGE' and texture.image and texture.image.source in ['GENERATED', 'FILE', 'SEQUENCE']:
 				extract_path = os.path.join(
