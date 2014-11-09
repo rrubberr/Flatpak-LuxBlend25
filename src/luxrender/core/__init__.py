@@ -900,6 +900,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         return (stats.Get('stats.renderengine.convergence').GetFloat() == 1.0)
 
+    def normalizeChannel(self, channel_buffer):
+        # find max value
+        maxValue = 0.0
+        for elem in channel_buffer:
+            if elem > maxValue and not (math.isnan(elem) or math.isinf(elem)):
+                maxValue = elem
+
+        if maxValue > 0.0:
+            for i in range(0, len(channel_buffer)):
+                channel_buffer[i] = channel_buffer[i] / maxValue
+
     def luxcore_render(self, scene):
         if scene.name == 'preview':
             self.luxcore_render_preview(scene)
@@ -940,7 +951,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     # Update statistics
                     lcSession.UpdateStats()
 
-                    stats = lcSession.GetStats();
+                    stats = lcSession.GetStats()
                     done = self.PrintStats(lcConfig, stats)
 
                     # Update the image
@@ -991,18 +1002,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     
                     lcSession.GetFilm().GetOutputFloat(outputType, channel_buffer)
                 
-                    # normalize channel_buffer values (map to 0..1 range)
-                    if normalize:
-                        # find max value
-                        maxValue = 0.0
-                        for elem in channel_buffer:
-                            if elem > maxValue and not (math.isnan(elem) or math.isinf(elem)):
-                                maxValue = elem
-                        
-                        if maxValue > 0.0:
-                            for i in range(0, len(channel_buffer)):
-                                channel_buffer[i] = channel_buffer[i] / maxValue
-                
                     # spread value to RGBA format
                     
                     if channelName in ['DIRECT_SHADOW_MASK', 'INDIRECT_SHADOW_MASK']:
@@ -1011,22 +1010,40 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                             channel_buffer_converted.extend([channel_buffer[i], channel_buffer[i], channel_buffer[i], 1.0])
                         
                     elif arrayDepth == 1:
-                        for elem in channel_buffer:
-                            channel_buffer_converted.extend([elem, elem, elem, 1.0])
+                        if getattr(pyluxcore, "ConvertFilmChannelOutput_1xFloat_To_4xFloatList", None) != None:
+                            channel_buffer_converted = pyluxcore.ConvertFilmChannelOutput_1xFloat_To_4xFloatList(filmWidth, filmHeight, channel_buffer, normalize)
+                        else:
+                            # normalize channel_buffer values (map to 0..1 range)
+                            if normalize:
+                                self.normalizeChannel(channel_buffer)
+                            for elem in channel_buffer:
+                                channel_buffer_converted.extend([elem, elem, elem, 1.0])
                             
                     # UV channel, just add 0.0 for B and 1.0 for A components
                     elif arrayDepth == 2:
-                        i = 0
-                        while i < len(channel_buffer):
-                            channel_buffer_converted.extend([channel_buffer[i], channel_buffer[i + 1], 0.0, 1.0])
-                            i += 2
+                        if getattr(pyluxcore, "ConvertFilmChannelOutput_2xFloat_To_4xFloatList", None) != None:
+                            channel_buffer_converted = pyluxcore.ConvertFilmChannelOutput_2xFloat_To_4xFloatList(filmWidth, filmHeight, channel_buffer, normalize)
+                        else:
+                            # normalize channel_buffer values (map to 0..1 range)
+                            if normalize:
+                                self.normalizeChannel(channel_buffer)
+                            i = 0
+                            while i < len(channel_buffer):
+                                channel_buffer_converted.extend([channel_buffer[i], channel_buffer[i + 1], 0.0, 1.0])
+                                i += 2
                     
                     # RGB channels: just add 1.0 as alpha component
                     elif arrayDepth == 3:
-                        i = 0
-                        while i < len(channel_buffer):
-                            channel_buffer_converted.extend([channel_buffer[i], channel_buffer[i + 1], channel_buffer[i + 2], 1.0])
-                            i += 3
+                        if getattr(pyluxcore, "ConvertFilmChannelOutput_3xFloat_To_4xFloatList", None) != None:
+                            channel_buffer_converted = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_4xFloatList(filmWidth, filmHeight, channel_buffer, normalize)
+                        else:
+                            # normalize channel_buffer values (map to 0..1 range)
+                            if normalize:
+                                self.normalizeChannel(channel_buffer)
+                            i = 0
+                            while i < len(channel_buffer):
+                                channel_buffer_converted.extend([channel_buffer[i], channel_buffer[i + 1], channel_buffer[i + 2], 1.0])
+                                i += 3
                             
                     # RGBA channels: just copy the list
                     else:
@@ -1058,7 +1075,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
             channelCalcStartTime = time.time()
             LuxLog('Importing AOV channels into Blender...')
-            
+
             channels = scene.luxrender_channels
             
             if channels.RGB:
@@ -1152,7 +1169,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 # Update statistics
                 lcSession.UpdateStats()
 
-                stats = lcSession.GetStats();
+                stats = lcSession.GetStats()
                 self.PrintStats(lcConfig, stats)
 
                 # Update the image
@@ -1265,9 +1282,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 blcamera = context.scene.camera
                 #magic zoom formula for camera viewport zoom from blender source
                 zoom = self.viewCameraZoom
-                zoom = (1.41421 + zoom/50.0);
-                zoom = zoom*zoom;
-                zoom = 2.0/zoom;
+                zoom = (1.41421 + zoom/50.0)
+                zoom = zoom*zoom
+                zoom = 2.0/zoom
 
                 #camera plane offset in camera viewport
                 dx = 2.0*(self.viewCameraShiftX + self.viewCameraOffset[0]*xaspect*2.0)
@@ -1281,7 +1298,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 cam_lookat = list(lookat[3:6])
                 cam_up = list(lookat[6:9])
 
-            zoom = 2.0*zoom;
+            zoom = 2.0*zoom
 
             scr_left = -xaspect*zoom
             scr_right = xaspect*zoom
@@ -1320,7 +1337,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if self.viewSessionRunning:
             self.viewSession.UpdateStats()
 
-            stats = self.viewSession.GetStats();
+            stats = self.viewSession.GetStats()
             self.PrintStats(self.viewSession.GetRenderConfig(), stats)
 
             # Update the image buffer
@@ -1329,7 +1346,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         # Update the screen
         glBuffer = bgl.Buffer(bgl.GL_FLOAT, [self.viewFilmWidth * self.viewFilmHeight * 3], self.viewImageBufferFloat)
         bgl.glRasterPos2i(0, 0)
-        bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, bgl.GL_RGB, bgl.GL_FLOAT, glBuffer);
+        bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, bgl.GL_RGB, bgl.GL_FLOAT, glBuffer)
 
         if not context.scene.luxrender_engine.preview_stop:
             # Trigger another update
