@@ -545,9 +545,8 @@ class BlenderSceneConverter(object):
 			
 			texture = get_texture_from_scene(self.blScene, texName)
 			if texture != False:
-				texName = ToValidLuxCoreName(texture.name)
 				if hasattr(luxMaterial, '%s_multiplycolor' % materialChannel) and getattr(luxMaterial, '%s_multiplycolor' % materialChannel):
-					self.ConvertTexture(texture)
+					texName = self.ConvertTexture(texture)
 					sv = BlenderSceneConverter.next_scale_value()
 					self.scnProps.Set(pyluxcore.Property('scene.textures.%s_scaled_%i.type' % (texName, sv), ['scale']))
 					self.scnProps.Set(pyluxcore.Property('scene.textures.%s_scaled_%i.texture1' % (texName, sv), ' '.join(str(i) for i in (getattr(luxMaterial, materialChannel + '_color')))))
@@ -555,7 +554,7 @@ class BlenderSceneConverter(object):
 					return '%s_scaled_%i' % (texName, sv)
 				
 				elif hasattr(luxMaterial, '%s_multiplyfloat' % materialChannel) and getattr(luxMaterial, '%s_multiplyfloat' % materialChannel):
-					self.ConvertTexture(texture)
+					texName = self.ConvertTexture(texture)
 					sv = BlenderSceneConverter.next_scale_value()
 					self.scnProps.Set(pyluxcore.Property('scene.textures.%s_scaled_%i.type' % (texName, sv), ['scale']))
 					self.scnProps.Set(pyluxcore.Property('scene.textures.%s_scaled_%i.texture1' % (texName, sv), float(getattr(luxMaterial, '%s_floatvalue' % materialChannel))))
@@ -586,9 +585,9 @@ class BlenderSceneConverter(object):
 			
 			texture = get_texture_from_scene(self.blScene, texName)
 			if texture != False:
-				texName = ToValidLuxCoreName(texture.name)
+
 				if hasattr(material.luxrender_material, '%s_multiplyfloat' % type) and getattr(material.luxrender_material, '%s_multiplyfloat' % type):
-					self.ConvertTexture(texture)
+					texName = self.ConvertTexture(texture)
 					sv = BlenderSceneConverter.next_scale_value()
 					self.scnProps.Set(pyluxcore.Property('scene.textures.%s_scaled_%i.type' % (texName, sv), ['scale']))
 					self.scnProps.Set(pyluxcore.Property('scene.textures.%s_scaled_%i.texture1' % (texName, sv), float(getattr(material.luxrender_material, '%s_floatvalue' % type))))
@@ -783,12 +782,10 @@ class BlenderSceneConverter(object):
 			# Common material settings
 			if material.luxrender_material.bumpmap_usefloattexture:
 				luxMap = material.luxrender_material.bumpmap_floattexturename
-#				scale = material.luxrender_material.bumpmap_floatvalue
 				self.scnProps.Set(pyluxcore.Property(prefix + '.bumptex', self.ConvertCommonChannel(luxMap, material, 'bumpmap')))
 			
 			if material.luxrender_material.normalmap_usefloattexture:
 				luxMap = material.luxrender_material.normalmap_floattexturename
-#				scale = material.luxrender_material.normalmap_floatvalue
 				self.scnProps.Set(pyluxcore.Property(prefix + '.normaltex', self.ConvertCommonChannel(luxMap, material, 'normalmap')))
 
 
