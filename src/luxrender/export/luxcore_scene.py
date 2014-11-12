@@ -287,6 +287,8 @@ class BlenderSceneConverter(object):
 	def ConvertTexture(self, texture):
 		texType = texture.luxrender_texture.type
 		
+		props = pyluxcore.Properties()
+		
 		if texType == 'BLENDER':
 			texName = ToValidLuxCoreName(texture.name)
 			bl_texType = getattr(texture, 'type')
@@ -296,102 +298,102 @@ class BlenderSceneConverter(object):
 			# BLEND
 			####################################################################
 			if bl_texType == 'BLEND':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_blend']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.progressiontype', ''.join(str(i).lower() for i in getattr(texture, 'progression'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.direction', ''.join(str(i).lower() for i in getattr(texture, 'use_flip_axis'))))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_blend']))
+				props.Set(pyluxcore.Property(prefix + '.progressiontype', ''.join(str(i).lower() for i in getattr(texture, 'progression'))))
+				props.Set(pyluxcore.Property(prefix + '.direction', ''.join(str(i).lower() for i in getattr(texture, 'use_flip_axis'))))
 			####################################################################
 			# CLOUDS
 			####################################################################
 			elif bl_texType == 'CLOUDS':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_clouds']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_clouds']))
+				props.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
+				props.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
+				props.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
+				props.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
 			####################################################################
 			# Distorted Noise
 			####################################################################
 			elif bl_texType == 'DISTORTED_NOISE':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_distortednoise']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noise_distortion', ''.join(str(i).lower() for i in getattr(texture, 'noise_distortion'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.distortion', [float(texture.distortion)]))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_distortednoise']))
+				props.Set(pyluxcore.Property(prefix + '.noise_distortion', ''.join(str(i).lower() for i in getattr(texture, 'noise_distortion'))))
+				props.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
+				props.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
+				props.Set(pyluxcore.Property(prefix + '.distortion', [float(texture.distortion)]))
 			####################################################################
 			# MAGIC
 			####################################################################
 			elif bl_texType == 'MAGIC':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_magic']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.turbulence', [float(texture.turbulence)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_magic']))
+				props.Set(pyluxcore.Property(prefix + '.turbulence', [float(texture.turbulence)]))
+				props.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
 			####################################################################
 			# MARBLE
 			####################################################################
 			elif bl_texType == 'MARBLE':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_marble']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.marbletype', ''.join(str(i).lower() for i in getattr(texture, 'marble_type'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisebasis2', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis_2'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.turbulence', [float(texture.turbulence)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_marble']))
+				props.Set(pyluxcore.Property(prefix + '.marbletype', ''.join(str(i).lower() for i in getattr(texture, 'marble_type'))))
+				props.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
+				props.Set(pyluxcore.Property(prefix + '.noisebasis2', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis_2'))))
+				props.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
+				props.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
+				props.Set(pyluxcore.Property(prefix + '.turbulence', [float(texture.turbulence)]))
+				props.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
 			####################################################################
 			# MUSGRAVE
 			####################################################################
 			elif bl_texType == 'MUSGRAVE':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_musgrave']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.musgravetype', ''.join(str(i).lower() for i in getattr(texture, 'musgrave_type'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.dimension', [float(texture.dimension_max)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.intensity', [float(texture.noise_intensity)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.lacunarity', [float(texture.lacunarity)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.offset', [float(texture.offset)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.gain', [float(texture.gain)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.octaves', [float(texture.octaves)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.dimension', [float(texture.noise_scale)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
-#				self.scnProps.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type')))) # not in blender !
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_musgrave']))
+				props.Set(pyluxcore.Property(prefix + '.musgravetype', ''.join(str(i).lower() for i in getattr(texture, 'musgrave_type'))))
+				props.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
+				props.Set(pyluxcore.Property(prefix + '.dimension', [float(texture.dimension_max)]))
+				props.Set(pyluxcore.Property(prefix + '.intensity', [float(texture.noise_intensity)]))
+				props.Set(pyluxcore.Property(prefix + '.lacunarity', [float(texture.lacunarity)]))
+				props.Set(pyluxcore.Property(prefix + '.offset', [float(texture.offset)]))
+				props.Set(pyluxcore.Property(prefix + '.gain', [float(texture.gain)]))
+				props.Set(pyluxcore.Property(prefix + '.octaves', [float(texture.octaves)]))
+				props.Set(pyluxcore.Property(prefix + '.dimension', [float(texture.noise_scale)]))
+				props.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
+#				props.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type')))) # not in blender !
 			####################################################################
 			# NOISE
 			####################################################################
 			elif bl_texType == 'NOISE':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_noise']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_noise']))
+				props.Set(pyluxcore.Property(prefix + '.noisedepth', [float(texture.noise_depth)]))
 			####################################################################
 			# STUCCI
 			####################################################################
 			elif bl_texType == 'STUCCI':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_stucci']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.stuccitype', ''.join(str(i).lower() for i in getattr(texture, 'stucci_type'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.turbulence', [float(texture.turbulence)]))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_stucci']))
+				props.Set(pyluxcore.Property(prefix + '.stuccitype', ''.join(str(i).lower() for i in getattr(texture, 'stucci_type'))))
+				props.Set(pyluxcore.Property(prefix + '.noisebasis', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis'))))
+				props.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
+				props.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
+				props.Set(pyluxcore.Property(prefix + '.turbulence', [float(texture.turbulence)]))
 			####################################################################
 			# WOOD
 			####################################################################
 			elif bl_texType == 'WOOD':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_wood']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.woodtype', ''.join(str(i).lower() for i in getattr(texture, 'wood_type'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisebasis2', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis_2'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.turbulence', [float(texture.turbulence)]))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_wood']))
+				props.Set(pyluxcore.Property(prefix + '.woodtype', ''.join(str(i).lower() for i in getattr(texture, 'wood_type'))))
+				props.Set(pyluxcore.Property(prefix + '.noisebasis2', ''.join(str(i).lower() for i in getattr(texture, 'noise_basis_2'))))
+				props.Set(pyluxcore.Property(prefix + '.noisetype', ''.join(str(i).lower() for i in getattr(texture, 'noise_type'))))
+				props.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
+				props.Set(pyluxcore.Property(prefix + '.turbulence', [float(texture.turbulence)]))
 			####################################################################
 			# VORONOI
 			####################################################################
 			elif bl_texType == 'VORONOI':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['blender_voronoi']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.dismetric', ''.join(str(i).lower() for i in getattr(texture, 'distance_metric'))))
-#				self.scnProps.Set(pyluxcore.Property(prefix + '.colormode', ''.join(str(i).lower() for i in getattr(texture, 'color_mode')))) # not yet in luxcore
-				self.scnProps.Set(pyluxcore.Property(prefix + '.intensity', [float(texture.noise_intensity)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.exponent', [float(texture.minkovsky_exponent)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.w1', [float(texture.weight_1)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.w2', [float(texture.weight_2)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.w3', [float(texture.weight_3)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.w4', [float(texture.weight_4)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
+				props.Set(pyluxcore.Property(prefix + '.type', ['blender_voronoi']))
+				props.Set(pyluxcore.Property(prefix + '.dismetric', ''.join(str(i).lower() for i in getattr(texture, 'distance_metric'))))
+#				props.Set(pyluxcore.Property(prefix + '.colormode', ''.join(str(i).lower() for i in getattr(texture, 'color_mode')))) # not yet in luxcore
+				props.Set(pyluxcore.Property(prefix + '.intensity', [float(texture.noise_intensity)]))
+				props.Set(pyluxcore.Property(prefix + '.exponent', [float(texture.minkovsky_exponent)]))
+				props.Set(pyluxcore.Property(prefix + '.w1', [float(texture.weight_1)]))
+				props.Set(pyluxcore.Property(prefix + '.w2', [float(texture.weight_2)]))
+				props.Set(pyluxcore.Property(prefix + '.w3', [float(texture.weight_3)]))
+				props.Set(pyluxcore.Property(prefix + '.w4', [float(texture.weight_4)]))
+				props.Set(pyluxcore.Property(prefix + '.noisesize', [float(texture.noise_scale)]))
 			####################################################################
 			# IMAGE/MOVIE/SEQUENCE
 			####################################################################
@@ -473,13 +475,13 @@ class BlenderSceneConverter(object):
 							raise Exception('Image referenced in blender texture %s doesn\'t exist: %s' % (texture.name, f_path))
 						tex_image = efutil.filesystem_path(f_path)
 
-				self.scnProps.Set(pyluxcore.Property(prefix + '.file', [tex_image]))
+				props.Set(pyluxcore.Property(prefix + '.file', [tex_image]))
 				self.ConvertMapping(prefix, texture)
 			####################################################################
 			# Pararameters shared by all blender textures
 			####################################################################
-			self.scnProps.Set(pyluxcore.Property(prefix + '.bright', [float(texture.intensity)]))
-			self.scnProps.Set(pyluxcore.Property(prefix + '.contrast', [float(texture.contrast)]))
+			props.Set(pyluxcore.Property(prefix + '.bright', [float(texture.intensity)]))
+			props.Set(pyluxcore.Property(prefix + '.contrast', [float(texture.contrast)]))
 			if bl_texType != 'IMAGE':
 				self.ConvertTransform(prefix, texture)
 
@@ -495,74 +497,74 @@ class BlenderSceneConverter(object):
 			# Imagemap
 			####################################################################
 			if texType == 'imagemap':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.file', [luxTex.filename]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.gamma', [float(luxTex.gamma)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.gain', [float(luxTex.gain)]))
+				props.Set(pyluxcore.Property(prefix + '.file', [luxTex.filename]))
+				props.Set(pyluxcore.Property(prefix + '.gamma', [float(luxTex.gamma)]))
+				props.Set(pyluxcore.Property(prefix + '.gain', [float(luxTex.gain)]))
 				self.ConvertMapping(prefix, texture)
 			####################################################################
 			# Normalmap
 			####################################################################
 			elif texType == 'normalmap':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.file', [luxTex.filename]))
+				props.Set(pyluxcore.Property(prefix + '.file', [luxTex.filename]))
 				self.ConvertMapping(prefix, texture)
 			####################################################################
 			# Marble
 			####################################################################
 			elif texType == 'marble':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.octaves', [float(luxTex.octaves)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.roughness', [float(luxTex.roughness)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.scale', [float(luxTex.scale)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.variation', [float(luxTex.variation)]))
+				props.Set(pyluxcore.Property(prefix + '.octaves', [float(luxTex.octaves)]))
+				props.Set(pyluxcore.Property(prefix + '.roughness', [float(luxTex.roughness)]))
+				props.Set(pyluxcore.Property(prefix + '.scale', [float(luxTex.scale)]))
+				props.Set(pyluxcore.Property(prefix + '.variation', [float(luxTex.variation)]))
 				self.ConvertTransform(prefix, texture)
 			####################################################################
 			# Mix
 			####################################################################
 			elif texType == 'mix':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.amount', self.ConvertMaterialChannel(luxTex, 'amount', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.variant', [(luxTex.variant)]))
+				props.Set(pyluxcore.Property(prefix + '.amount', self.ConvertMaterialChannel(luxTex, 'amount', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.variant', [(luxTex.variant)]))
 				if luxTex.variant == 'color':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'color')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'color')))
 				elif luxTex.variant == 'float':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'float')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'float')))
 				elif luxTex.variant == 'fresnel':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'fresnel')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'fresnel')))
+					props.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'fresnel')))
+					props.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'fresnel')))
 			####################################################################
 			# Scale
 			####################################################################
 			elif texType == 'scale':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.variant', [(luxTex.variant)]))
+				props.Set(pyluxcore.Property(prefix + '.variant', [(luxTex.variant)]))
 				if luxTex.variant == 'color':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'color')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'color')))
 				elif luxTex.variant == 'float':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'float')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.texture1', self.ConvertMaterialChannel(luxTex, 'tex1', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.texture2', self.ConvertMaterialChannel(luxTex, 'tex2', 'float')))
 			####################################################################
 			# Brick
 			####################################################################
 			elif texType == 'brick':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.variant', [(luxTex.variant)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.brickbond', [(luxTex.brickbond)]))
+				props.Set(pyluxcore.Property(prefix + '.variant', [(luxTex.variant)]))
+				props.Set(pyluxcore.Property(prefix + '.brickbond', [(luxTex.brickbond)]))
 				
 				if texture.luxrender_texture.luxrender_tex_brick.brickbond in ('running', 'flemish'):
-					self.scnProps.Set(pyluxcore.Property(prefix + '.brickrun', [float(luxTex.brickrun)]))
+					props.Set(pyluxcore.Property(prefix + '.brickrun', [float(luxTex.brickrun)]))
 				
-				self.scnProps.Set(pyluxcore.Property(prefix + '.mortarsize', [float(luxTex.mortarsize)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.brickwidth', [float(luxTex.brickwidth)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.brickdepth', [float(luxTex.brickdepth)]))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.brickheight', [float(luxTex.brickheight)]))
+				props.Set(pyluxcore.Property(prefix + '.mortarsize', [float(luxTex.mortarsize)]))
+				props.Set(pyluxcore.Property(prefix + '.brickwidth', [float(luxTex.brickwidth)]))
+				props.Set(pyluxcore.Property(prefix + '.brickdepth', [float(luxTex.brickdepth)]))
+				props.Set(pyluxcore.Property(prefix + '.brickheight', [float(luxTex.brickheight)]))
 					
 				if luxTex.variant == 'color':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.bricktex', self.ConvertMaterialChannel(luxTex, 'bricktex', 'color')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.brickmodtex', self.ConvertMaterialChannel(luxTex, 'brickmodtex', 'color')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.mortartex', self.ConvertMaterialChannel(luxTex, 'mortartex', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.bricktex', self.ConvertMaterialChannel(luxTex, 'bricktex', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.brickmodtex', self.ConvertMaterialChannel(luxTex, 'brickmodtex', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.mortartex', self.ConvertMaterialChannel(luxTex, 'mortartex', 'color')))
 				else:
-					self.scnProps.Set(pyluxcore.Property(prefix + '.bricktex', self.ConvertMaterialChannel(luxTex, 'bricktex', 'float')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.brickmodtex', self.ConvertMaterialChannel(luxTex, 'brickmodtex', 'float')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.mortartex', self.ConvertMaterialChannel(luxTex, 'mortartex', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.bricktex', self.ConvertMaterialChannel(luxTex, 'bricktex', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.brickmodtex', self.ConvertMaterialChannel(luxTex, 'brickmodtex', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.mortartex', self.ConvertMaterialChannel(luxTex, 'mortartex', 'float')))
 				self.ConvertTransform(prefix, texture)
 			else:
 			####################################################################
@@ -571,8 +573,9 @@ class BlenderSceneConverter(object):
 				raise Exception('Unknown type ' + texType + 'for texture: ' + texture.name)
 
 			if texType != 'normalmap':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', self.ConvertTexType(luxTex, texType)))
+				props.Set(pyluxcore.Property(prefix + '.type', self.ConvertTexType(luxTex, texType)))
 
+			self.scnProps.Set(props)
 			self.texturesCache.add(texName)
 			return texName
 		
@@ -667,6 +670,8 @@ class BlenderSceneConverter(object):
 			matType = material.luxrender_material.type
 			luxMat = getattr(material.luxrender_material, 'luxrender_mat_' + matType)
 			
+			props = pyluxcore.Properties()
+			
 			prefix = 'scene.materials.' + matName
 			####################################################################
 			# Matte and Roughmatte
@@ -674,135 +679,135 @@ class BlenderSceneConverter(object):
 			if matType == 'matte':
 				sigma = self.ConvertMaterialChannel(luxMat, 'sigma', 'float')
 				if sigma == '0.0':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['matte']))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.type', ['matte']))
+					props.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
 				else:
-					self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['roughmatte']))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.sigma', self.ConvertMaterialChannel(luxMat, 'sigma', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.type', ['roughmatte']))
+					props.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.sigma', self.ConvertMaterialChannel(luxMat, 'sigma', 'float')))
 			####################################################################
 			# Mattetranslucent
 			####################################################################
 			elif matType == 'mattetranslucent':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['mattetranslucent']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kr', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kt', self.ConvertMaterialChannel(luxMat, 'Kt', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.sigma', self.ConvertMaterialChannel(luxMat, 'sigma', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.type', ['mattetranslucent']))
+				props.Set(pyluxcore.Property(prefix + '.kr', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.kt', self.ConvertMaterialChannel(luxMat, 'Kt', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.sigma', self.ConvertMaterialChannel(luxMat, 'sigma', 'float')))
 			####################################################################
 			# Metal2
 			####################################################################
 			elif matType == 'metal2':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['metal2']))
+				props.Set(pyluxcore.Property(prefix + '.type', ['metal2']))
 				m2_type = material.luxrender_material.luxrender_mat_metal2.metaltype
 				if m2_type == 'preset':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.preset', material.luxrender_material.luxrender_mat_metal2.preset))
+					props.Set(pyluxcore.Property(prefix + '.preset', material.luxrender_material.luxrender_mat_metal2.preset))
 				elif m2_type == 'fresnelcolor':
-					self.scnProps.Set(pyluxcore.Property(prefix + '.n', 'fn_dummy_tex'))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.k', 'fk_dummy_tex'))
-					self.scnProps.Set(pyluxcore.Property('scene.textures.fn_dummy_tex.type', 'fresnelapproxn'))
-					self.scnProps.Set(pyluxcore.Property('scene.textures.fn_dummy_tex.texture', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
-					self.scnProps.Set(pyluxcore.Property('scene.textures.fk_dummy_tex.type', 'fresnelapproxk'))
-					self.scnProps.Set(pyluxcore.Property('scene.textures.fk_dummy_tex.texture', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.n', 'fn_dummy_tex'))
+					props.Set(pyluxcore.Property(prefix + '.k', 'fk_dummy_tex'))
+					props.Set(pyluxcore.Property('scene.textures.fn_dummy_tex.type', 'fresnelapproxn'))
+					props.Set(pyluxcore.Property('scene.textures.fn_dummy_tex.texture', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
+					props.Set(pyluxcore.Property('scene.textures.fk_dummy_tex.type', 'fresnelapproxk'))
+					props.Set(pyluxcore.Property('scene.textures.fk_dummy_tex.texture', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
 				#TODO: nk_data and fresneltex
 				else:
 					LuxLog('WARNING: Not yet supported metal2 type: %s' % m2_type)
 
-				self.scnProps.Set(pyluxcore.Property(prefix + '.uroughness', self.ConvertMaterialChannel(luxMat, 'uroughness', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.vroughness', self.ConvertMaterialChannel(luxMat, 'vroughness', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.uroughness', self.ConvertMaterialChannel(luxMat, 'uroughness', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.vroughness', self.ConvertMaterialChannel(luxMat, 'vroughness', 'float')))
 			####################################################################
 			# Mirror
 			####################################################################
 			elif matType == 'mirror':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['mirror']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kr', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.type', ['mirror']))
+				props.Set(pyluxcore.Property(prefix + '.kr', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
 			####################################################################
 			# Glossy
 			####################################################################
 			elif matType == 'glossy':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['glossy2']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.type', ['glossy2']))
+				props.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
 				if material.luxrender_material.luxrender_mat_glossy.useior:
-					self.scnProps.Set(pyluxcore.Property(prefix + '.index', self.ConvertMaterialChannel(luxMat, 'index', 'float')))
+					props.Set(pyluxcore.Property(prefix + '.index', self.ConvertMaterialChannel(luxMat, 'index', 'float')))
 				else:
-					self.scnProps.Set(pyluxcore.Property(prefix + '.ks', self.ConvertMaterialChannel(luxMat, 'Ks', 'color')))
+					props.Set(pyluxcore.Property(prefix + '.ks', self.ConvertMaterialChannel(luxMat, 'Ks', 'color')))
 				
-				self.scnProps.Set(pyluxcore.Property(prefix + '.ka', self.ConvertMaterialChannel(luxMat, 'Ka', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.multibounce', material.luxrender_material.luxrender_mat_glossy.multibounce))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.sigma', self.ConvertMaterialChannel(luxMat, 'sigma', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.d', self.ConvertMaterialChannel(luxMat, 'd', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.uroughness', self.ConvertMaterialChannel(luxMat, 'uroughness', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.vroughness', self.ConvertMaterialChannel(luxMat, 'vroughness', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.ka', self.ConvertMaterialChannel(luxMat, 'Ka', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.multibounce', material.luxrender_material.luxrender_mat_glossy.multibounce))
+				props.Set(pyluxcore.Property(prefix + '.sigma', self.ConvertMaterialChannel(luxMat, 'sigma', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.d', self.ConvertMaterialChannel(luxMat, 'd', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.uroughness', self.ConvertMaterialChannel(luxMat, 'uroughness', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.vroughness', self.ConvertMaterialChannel(luxMat, 'vroughness', 'float')))
 			####################################################################
 			# Glass
 			####################################################################
 			elif matType == 'glass':
 				if material.luxrender_material.luxrender_mat_glass.architectural == False:
-					self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['glass']))
+					props.Set(pyluxcore.Property(prefix + '.type', ['glass']))
 				else:
-					self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['archglass']))
+					props.Set(pyluxcore.Property(prefix + '.type', ['archglass']))
 				
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kr', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kt', self.ConvertMaterialChannel(luxMat, 'Kt', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.cauchyb', self.ConvertMaterialChannel(luxMat, 'cauchyb', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.film', self.ConvertMaterialChannel(luxMat, 'film', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.interiorior', self.ConvertMaterialChannel(luxMat, 'index', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.filmindex', self.ConvertMaterialChannel(luxMat, 'filmindex', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.kr', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.kt', self.ConvertMaterialChannel(luxMat, 'Kt', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.cauchyb', self.ConvertMaterialChannel(luxMat, 'cauchyb', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.film', self.ConvertMaterialChannel(luxMat, 'film', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.interiorior', self.ConvertMaterialChannel(luxMat, 'index', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.filmindex', self.ConvertMaterialChannel(luxMat, 'filmindex', 'float')))
 			####################################################################
 			# Roughlass
 			####################################################################
 			elif matType == 'roughglass':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['roughglass']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kr', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kt', self.ConvertMaterialChannel(luxMat, 'Kt', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.cauchyb', self.ConvertMaterialChannel(luxMat, 'cauchyb', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.interiorior', self.ConvertMaterialChannel(luxMat, 'index', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.uroughness', self.ConvertMaterialChannel(luxMat, 'uroughness', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.vroughness', self.ConvertMaterialChannel(luxMat, 'vroughness', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.type', ['roughglass']))
+				props.Set(pyluxcore.Property(prefix + '.kr', self.ConvertMaterialChannel(luxMat, 'Kr', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.kt', self.ConvertMaterialChannel(luxMat, 'Kt', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.cauchyb', self.ConvertMaterialChannel(luxMat, 'cauchyb', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.interiorior', self.ConvertMaterialChannel(luxMat, 'index', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.uroughness', self.ConvertMaterialChannel(luxMat, 'uroughness', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.vroughness', self.ConvertMaterialChannel(luxMat, 'vroughness', 'float')))
 			####################################################################
 			# Cloth
 			####################################################################
 			elif matType == 'cloth':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['cloth']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.preset', material.luxrender_material.luxrender_mat_cloth.presetname))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.warp_kd', self.ConvertMaterialChannel(luxMat, 'warp_Kd', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.warp_ks', self.ConvertMaterialChannel(luxMat, 'warp_Ks', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.weft_kd', self.ConvertMaterialChannel(luxMat, 'weft_Kd', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.weft_ks', self.ConvertMaterialChannel(luxMat, 'weft_Ks', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.repeat_u', material.luxrender_material.luxrender_mat_cloth.repeat_u ))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.repeat_v', material.luxrender_material.luxrender_mat_cloth.repeat_v ))
+				props.Set(pyluxcore.Property(prefix + '.type', ['cloth']))
+				props.Set(pyluxcore.Property(prefix + '.preset', material.luxrender_material.luxrender_mat_cloth.presetname))
+				props.Set(pyluxcore.Property(prefix + '.warp_kd', self.ConvertMaterialChannel(luxMat, 'warp_Kd', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.warp_ks', self.ConvertMaterialChannel(luxMat, 'warp_Ks', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.weft_kd', self.ConvertMaterialChannel(luxMat, 'weft_Kd', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.weft_ks', self.ConvertMaterialChannel(luxMat, 'weft_Ks', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.repeat_u', material.luxrender_material.luxrender_mat_cloth.repeat_u ))
+				props.Set(pyluxcore.Property(prefix + '.repeat_v', material.luxrender_material.luxrender_mat_cloth.repeat_v ))
 			####################################################################
 			# Carpaint
 			####################################################################
 			elif matType == 'carpaint':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['carpaint']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.preset', material.luxrender_material.luxrender_mat_carpaint.name))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.ka', self.ConvertMaterialChannel(luxMat, 'Ka', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.ks1', self.ConvertMaterialChannel(luxMat, 'Ks1', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.ks2', self.ConvertMaterialChannel(luxMat, 'Ks2', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.ks3', self.ConvertMaterialChannel(luxMat, 'Ks3', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.d', self.ConvertMaterialChannel(luxMat, 'd', 'float')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.m1', material.luxrender_material.luxrender_mat_carpaint.M1_floatvalue))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.m2', material.luxrender_material.luxrender_mat_carpaint.M2_floatvalue))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.m3', material.luxrender_material.luxrender_mat_carpaint.M3_floatvalue))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.r1', material.luxrender_material.luxrender_mat_carpaint.R1_floatvalue))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.r2', material.luxrender_material.luxrender_mat_carpaint.R2_floatvalue))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.r3', material.luxrender_material.luxrender_mat_carpaint.R3_floatvalue))
+				props.Set(pyluxcore.Property(prefix + '.type', ['carpaint']))
+				props.Set(pyluxcore.Property(prefix + '.preset', material.luxrender_material.luxrender_mat_carpaint.name))
+				props.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.ka', self.ConvertMaterialChannel(luxMat, 'Ka', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.ks1', self.ConvertMaterialChannel(luxMat, 'Ks1', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.ks2', self.ConvertMaterialChannel(luxMat, 'Ks2', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.ks3', self.ConvertMaterialChannel(luxMat, 'Ks3', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.d', self.ConvertMaterialChannel(luxMat, 'd', 'float')))
+				props.Set(pyluxcore.Property(prefix + '.m1', material.luxrender_material.luxrender_mat_carpaint.M1_floatvalue))
+				props.Set(pyluxcore.Property(prefix + '.m2', material.luxrender_material.luxrender_mat_carpaint.M2_floatvalue))
+				props.Set(pyluxcore.Property(prefix + '.m3', material.luxrender_material.luxrender_mat_carpaint.M3_floatvalue))
+				props.Set(pyluxcore.Property(prefix + '.r1', material.luxrender_material.luxrender_mat_carpaint.R1_floatvalue))
+				props.Set(pyluxcore.Property(prefix + '.r2', material.luxrender_material.luxrender_mat_carpaint.R2_floatvalue))
+				props.Set(pyluxcore.Property(prefix + '.r3', material.luxrender_material.luxrender_mat_carpaint.R3_floatvalue))
 			####################################################################
 			# Velvet
 			####################################################################
 			elif matType == 'velvet':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['velvet']))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.thickness', material.luxrender_material.luxrender_mat_velvet.thickness))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.p1', material.luxrender_material.luxrender_mat_velvet.p1))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.p2', material.luxrender_material.luxrender_mat_velvet.p2))
-				self.scnProps.Set(pyluxcore.Property(prefix + '.p3', material.luxrender_material.luxrender_mat_velvet.p3))
+				props.Set(pyluxcore.Property(prefix + '.type', ['velvet']))
+				props.Set(pyluxcore.Property(prefix + '.kd', self.ConvertMaterialChannel(luxMat, 'Kd', 'color')))
+				props.Set(pyluxcore.Property(prefix + '.thickness', material.luxrender_material.luxrender_mat_velvet.thickness))
+				props.Set(pyluxcore.Property(prefix + '.p1', material.luxrender_material.luxrender_mat_velvet.p1))
+				props.Set(pyluxcore.Property(prefix + '.p2', material.luxrender_material.luxrender_mat_velvet.p2))
+				props.Set(pyluxcore.Property(prefix + '.p3', material.luxrender_material.luxrender_mat_velvet.p3))
 			####################################################################
 			# Null
 			####################################################################
 			elif matType == 'null':
-				self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['null']))
+				props.Set(pyluxcore.Property(prefix + '.type', ['null']))
 			####################################################################
 			# Mix
 			####################################################################
@@ -816,10 +821,10 @@ class BlenderSceneConverter(object):
 						mat2 = materials[material.luxrender_material.luxrender_mat_mix.namedmaterial2_material].material
 						mat2Name = self.ConvertMaterial(mat2, materials)
 
-						self.scnProps.Set(pyluxcore.Property(prefix + '.type', ['mix']))
-						self.scnProps.Set(pyluxcore.Property(prefix + '.material1', mat1Name))
-						self.scnProps.Set(pyluxcore.Property(prefix + '.material2', mat2Name))
-						self.scnProps.Set(pyluxcore.Property(prefix + '.amount', self.ConvertMaterialChannel(luxMat, 'amount', 'float')))
+						props.Set(pyluxcore.Property(prefix + '.type', ['mix']))
+						props.Set(pyluxcore.Property(prefix + '.material1', mat1Name))
+						props.Set(pyluxcore.Property(prefix + '.material2', mat2Name))
+						props.Set(pyluxcore.Property(prefix + '.amount', self.ConvertMaterialChannel(luxMat, 'amount', 'float')))
 					except:
 						LuxLog('WARNING: unable to convert mix material: %s' % material.name)
 						return 'LUXBLEND_LUXCORE_CLAY_MATERIAL'
@@ -832,44 +837,45 @@ class BlenderSceneConverter(object):
 			# Common material settings
 			if material.luxrender_material.bumpmap_usefloattexture:
 				luxMap = material.luxrender_material.bumpmap_floattexturename
-				self.scnProps.Set(pyluxcore.Property(prefix + '.bumptex', self.ConvertCommonChannel(luxMap, material, 'bumpmap')))
+				props.Set(pyluxcore.Property(prefix + '.bumptex', self.ConvertCommonChannel(luxMap, material, 'bumpmap')))
 			
 			if material.luxrender_material.normalmap_usefloattexture:
 				luxMap = material.luxrender_material.normalmap_floattexturename
-				self.scnProps.Set(pyluxcore.Property(prefix + '.normaltex', self.ConvertCommonChannel(luxMap, material, 'normalmap')))
+				props.Set(pyluxcore.Property(prefix + '.normaltex', self.ConvertCommonChannel(luxMap, material, 'normalmap')))
 
 
 			# LuxCore specific material settings
 			if material.luxcore_material.id != -1:
-				self.scnProps.Set(pyluxcore.Property(prefix + '.id', [material.luxcore_material.id]))
+				props.Set(pyluxcore.Property(prefix + '.id', [material.luxcore_material.id]))
 				if material.luxcore_material.create_MATERIAL_ID_MASK:
 					self.createChannelOutputString('MATERIAL_ID_MASK', material.luxcore_material.id)
 				if material.luxcore_material.create_BY_MATERIAL_ID:
 					self.createChannelOutputString('BY_MATERIAL_ID', material.luxcore_material.id)
 				
 			if material.luxcore_material.emission_id != -1:
-				self.scnProps.Set(pyluxcore.Property(prefix + '.emission.id', [material.luxcore_material.light_id]))
+				props.Set(pyluxcore.Property(prefix + '.emission.id', [material.luxcore_material.light_id]))
 			
-			self.scnProps.Set(pyluxcore.Property(prefix + '.samples', [material.luxcore_material.samples]))
-			self.scnProps.Set(pyluxcore.Property(prefix + '.emission.samples', [material.luxcore_material.emission_samples]))
-			self.scnProps.Set(pyluxcore.Property(prefix + '.bumpsamplingdistance', [material.luxcore_material.bumpsamplingdistance]))
+			props.Set(pyluxcore.Property(prefix + '.samples', [material.luxcore_material.samples]))
+			props.Set(pyluxcore.Property(prefix + '.emission.samples', [material.luxcore_material.emission_samples]))
+			props.Set(pyluxcore.Property(prefix + '.bumpsamplingdistance', [material.luxcore_material.bumpsamplingdistance]))
 			
-			self.scnProps.Set(pyluxcore.Property(prefix + '.visibility.indirect.diffuse.enable', material.luxcore_material.visibility_indirect_diffuse_enable))
-			self.scnProps.Set(pyluxcore.Property(prefix + '.visibility.indirect.glossy.enable', material.luxcore_material.visibility_indirect_glossy_enable))
-			self.scnProps.Set(pyluxcore.Property(prefix + '.visibility.indirect.specular.enable', material.luxcore_material.visibility_indirect_specular_enable))
+			props.Set(pyluxcore.Property(prefix + '.visibility.indirect.diffuse.enable', material.luxcore_material.visibility_indirect_diffuse_enable))
+			props.Set(pyluxcore.Property(prefix + '.visibility.indirect.glossy.enable', material.luxcore_material.visibility_indirect_glossy_enable))
+			props.Set(pyluxcore.Property(prefix + '.visibility.indirect.specular.enable', material.luxcore_material.visibility_indirect_specular_enable))
 			
 			# LuxRender emission
 			if material.luxrender_emission.use_emission:
 				emit_enabled = self.blScene.luxrender_lightgroups.is_enabled(material.luxrender_emission.lightgroup)
 				emit_enabled &= (material.luxrender_emission.L_color.v * material.luxrender_emission.gain) > 0.0
 				if emit_enabled:
-					self.scnProps.Set(pyluxcore.Property(prefix + '.emission',
+					props.Set(pyluxcore.Property(prefix + '.emission',
 						self.ConvertMaterialChannel(material.luxrender_emission, 'L', 'color')))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.emission.gain', [
+					props.Set(pyluxcore.Property(prefix + '.emission.gain', [
 						material.luxrender_emission.gain, material.luxrender_emission.gain, material.luxrender_emission.gain]))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.emission.power', material.luxrender_emission.power))
-					self.scnProps.Set(pyluxcore.Property(prefix + '.emission.efficency', material.luxrender_emission.efficacy))
+					props.Set(pyluxcore.Property(prefix + '.emission.power', material.luxrender_emission.power))
+					props.Set(pyluxcore.Property(prefix + '.emission.efficency', material.luxrender_emission.efficacy))
 					
+			self.scnProps.Set(props)
 			self.materialsCache.add(matName)
 			return matName
 		except Exception as err:
