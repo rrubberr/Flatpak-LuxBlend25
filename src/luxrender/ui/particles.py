@@ -1,4 +1,3 @@
-
 # ***** BEGIN GPL LICENSE BLOCK *****
 #
 # --------------------------------------------------------------------------
@@ -30,16 +29,18 @@ from ..extensions_framework.ui import property_group_renderer
 
 from .. import LuxRenderAddon
 
+
 class hair_panel(bl_ui.properties_particle.ParticleButtonsPanel, property_group_renderer):
-	COMPAT_ENGINES = 'LUXRENDER_RENDER'
+    COMPAT_ENGINES = 'LUXRENDER_RENDER'
+
 
 @LuxRenderAddon.addon_register_class
 class luxrender_ui_controls(hair_panel):
-	'''
-	Hair settings
-	'''
-	bl_label = "LuxRender Hair Rendering"
-	display_property_groups = [
-		( ('particle_system', 'settings',), 'luxrender_hair' )
-	]
-    
+    """
+    Hair settings
+    """
+    bl_label = "LuxRender Hair Rendering"
+    display_property_groups = [
+        ( ('particle_system', 'settings',), 'luxrender_hair' )
+    ]
+

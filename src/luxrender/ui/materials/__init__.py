@@ -30,17 +30,20 @@ from ...extensions_framework.ui import property_group_renderer
 
 from ... import LuxRenderAddon
 
+
 class luxrender_material_base(bl_ui.properties_material.MaterialButtonsPanel, property_group_renderer):
-	COMPAT_ENGINES	= 'LUXRENDER_RENDER'
+    COMPAT_ENGINES = 'LUXRENDER_RENDER'
+
 
 class luxrender_material_sub(luxrender_material_base):
-	LUX_COMPAT		= set()
-	
-	@classmethod
-	def poll(cls, context):
-		'''
-		Only show LuxRender panel if luxrender_material.material in LUX_COMPAT
-		'''
-		return super().poll(context) and (context.material.luxrender_material.type in cls.LUX_COMPAT) and (context.material.luxrender_material.nodetree == '')
-		
+    LUX_COMPAT = set()
+
+    @classmethod
+    def poll(cls, context):
+        """
+        Only show LuxRender panel if luxrender_material.material in LUX_COMPAT
+        """
+        return super().poll(context) and (context.material.luxrender_material.type in cls.LUX_COMPAT) and (
+            context.material.luxrender_material.nodetree == '')
+
 

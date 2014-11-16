@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.materials import luxrender_material_sub
 
+
 @LuxRenderAddon.addon_register_class
 class ui_material_cloth(luxrender_material_sub):
-	bl_label = 'LuxRender Cloth Material'
-	
-	LUX_COMPAT = {'cloth'}
-	
-	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_cloth' )
-	]
+    bl_label = 'LuxRender Cloth Material'
+
+    LUX_COMPAT = {'cloth'}
+
+    display_property_groups = [
+        ( ('material', 'luxrender_material'), 'luxrender_mat_cloth' )
+    ]

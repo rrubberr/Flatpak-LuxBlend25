@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_normalmap(luxrender_texture_base):
-	bl_label = 'LuxRender Normal Map Texture'
-	
-	LUX_COMPAT = {'normalmap'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_normalmap' )
-	]
+    bl_label = 'LuxRender Normal Map Texture'
+
+    LUX_COMPAT = {'normalmap'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_normalmap' )
+    ]

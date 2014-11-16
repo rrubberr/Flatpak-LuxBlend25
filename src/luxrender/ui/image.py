@@ -30,53 +30,54 @@ from .. import LuxRenderAddon
 from ..outputs import LuxManager as LM
 from ..outputs.pure_api import PYLUX_AVAILABLE
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_ui_rendering_controls(property_group_renderer):
-	bl_space_type = 'IMAGE_EDITOR'
-	bl_region_type = 'UI'
-	bl_label = "LuxRender Rendering Controls"
-	COMPAT_ENGINES = 'LUXRENDER_RENDER'
-	
-	ctx = None
-	
-	@classmethod
-	def poll(cls, context):
-		eng = context.scene.render.engine in cls.COMPAT_ENGINES
-		if eng:
-			lma = LM.GetActive() != None and LM.GetActive().started
-			if lma:
-				cls.ctx = LM.GetActive().lux_context
-				ctxc = cls.ctx != None and cls.ctx.API_TYPE == 'PURE'
-				csd = context.space_data
-				return PYLUX_AVAILABLE and ctxc and csd
-		
-		return False
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'UI'
+    bl_label = "LuxRender Rendering Controls"
+    COMPAT_ENGINES = 'LUXRENDER_RENDER'
 
-	display_property_groups = [
-		( ('scene', 'camera', 'data', 'luxrender_camera', 'luxrender_film'), 'luxrender_tonemapping' )
-	]
-	
-	def draw(self, context):
-		# Draw as normal ...
-		property_group_renderer.draw(self, context)
-		
-		# ... and live-update the parameters !
-		
-		# TODO: Strategy:
-		# 1. Detect which parameters have changed
-		# 2. Add those to an update queue in tuple form (component, parameter, value)
-		# 3. Give queue to FrameBuffer thread, replacing values as needed
-		# 4. FB will empty its own queue into the Context upon the next image update call
-		
-		if self.ctx != None and self.ctx.API_TYPE == 'PURE':
-			pylux = self.ctx.PYLUX
-			tm_data = context.scene.camera.data.luxrender_camera.luxrender_film.luxrender_tonemapping
-			tm_map = {
-				'reinhard':		pylux.FlexImageFilm.TonemapKernels.Reinhard,
-				'linear':		pylux.FlexImageFilm.TonemapKernels.Linear,
-				'autolinear':	pylux.FlexImageFilm.TonemapKernels.AutoLinear,
-				'contrast':		pylux.FlexImageFilm.TonemapKernels.Contrast,
-				'maxwhite':		pylux.FlexImageFilm.TonemapKernels.MaxWhite,
-			}
-			
-			self.ctx.setAttribute('film', 'TonemapKernel', tm_map[tm_data.type])
+    ctx = None
+
+    @classmethod
+    def poll(cls, context):
+        eng = context.scene.render.engine in cls.COMPAT_ENGINES
+        if eng:
+            lma = LM.GetActive() != None and LM.GetActive().started
+            if lma:
+                cls.ctx = LM.GetActive().lux_context
+                ctxc = cls.ctx != None and cls.ctx.API_TYPE == 'PURE'
+                csd = context.space_data
+                return PYLUX_AVAILABLE and ctxc and csd
+
+        return False
+
+    display_property_groups = [
+        ( ('scene', 'camera', 'data', 'luxrender_camera', 'luxrender_film'), 'luxrender_tonemapping' )
+    ]
+
+    def draw(self, context):
+        # Draw as normal ...
+        property_group_renderer.draw(self, context)
+
+        # ... and live-update the parameters !
+
+        # TODO: Strategy:
+        # 1. Detect which parameters have changed
+        # 2. Add those to an update queue in tuple form (component, parameter, value)
+        # 3. Give queue to FrameBuffer thread, replacing values as needed
+        # 4. FB will empty its own queue into the Context upon the next image update call
+
+        if self.ctx != None and self.ctx.API_TYPE == 'PURE':
+            pylux = self.ctx.PYLUX
+            tm_data = context.scene.camera.data.luxrender_camera.luxrender_film.luxrender_tonemapping
+            tm_map = {
+                'reinhard': pylux.FlexImageFilm.TonemapKernels.Reinhard,
+                'linear': pylux.FlexImageFilm.TonemapKernels.Linear,
+                'autolinear': pylux.FlexImageFilm.TonemapKernels.AutoLinear,
+                'contrast': pylux.FlexImageFilm.TonemapKernels.Contrast,
+                'maxwhite': pylux.FlexImageFilm.TonemapKernels.MaxWhite,
+            }
+
+            self.ctx.setAttribute('film', 'TonemapKernel', tm_map[tm_data.type])

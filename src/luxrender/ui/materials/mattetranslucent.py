@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.materials import luxrender_material_sub
 
+
 @LuxRenderAddon.addon_register_class
 class ui_material_mattetranslucent(luxrender_material_sub):
-	bl_label = 'LuxRender Matte Translucent Material'
-	
-	LUX_COMPAT = {'mattetranslucent'}
-	
-	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_mattetranslucent' )
-	]
+    bl_label = 'LuxRender Matte Translucent Material'
+
+    LUX_COMPAT = {'mattetranslucent'}
+
+    display_property_groups = [
+        ( ('material', 'luxrender_material'), 'luxrender_mat_mattetranslucent' )
+    ]

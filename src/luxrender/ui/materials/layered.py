@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.materials import luxrender_material_sub
 
+
 @LuxRenderAddon.addon_register_class
 class ui_material_layered(luxrender_material_sub):
-	bl_label = 'LuxRender Layered Material'
-	
-	LUX_COMPAT = {'layered'}
-	
-	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_layered' )
-	]
+    bl_label = 'LuxRender Layered Material'
+
+    LUX_COMPAT = {'layered'}
+
+    display_property_groups = [
+        ( ('material', 'luxrender_material'), 'luxrender_mat_layered' )
+    ]

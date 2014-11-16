@@ -84,12 +84,18 @@ L.execute(TESTA)
 from types import *
 import importlib
 
+
 class Logic_AND(list):
     pass
+
+
 class Logic_OR(list):
     pass
+
+
 class Logic_Operator(dict):
     pass
+
 
 class Logician(object):
     """Given a subject and a dict that describes tests to perform on
@@ -99,6 +105,7 @@ class Logician(object):
     """
 
     subject = None
+
     def __init__(self, subject):
         self.subject = subject
 
@@ -137,7 +144,7 @@ class Logician(object):
             # allows completeness in test_operator(), but I can't put
             # my finger on why for the minute
             return self.test_operator(member,
-                Logic_Operator({operator: logic}))
+                                      Logic_Operator({operator: logic}))
 
     def test_operator(self, member, value):
         """Execute the operators contained within value and expect that
@@ -153,24 +160,24 @@ class Logician(object):
         for operator, operand in value.items():
             operator = operator.lower().strip()
             if operator in ['eq', '==']:
-                result &= member==operand
+                result &= member == operand
             if operator in ['not', '!=']:
-                result &= member!=operand
+                result &= member != operand
             if operator in ['lt', '<']:
-                result &= member<operand
+                result &= member < operand
             if operator in ['lte', '<=']:
-                result &= member<=operand
+                result &= member <= operand
             if operator in ['gt', '>']:
-                result &= member>operand
+                result &= member > operand
             if operator in ['gte', '>=']:
-                result &= member>=operand
+                result &= member >= operand
             if operator in ['and', '&']:
-                result &= member&operand
+                result &= member & operand
             if operator in ['or', '|']:
-                result &= member|operand
+                result &= member | operand
             if operator in ['len']:
-                result &= len(member)==operand
-            # I can think of some more, but they're probably not useful.
+                result &= len(member) == operand
+                # I can think of some more, but they're probably not useful.
 
         return result
 
@@ -218,8 +225,11 @@ class Logician(object):
             result = self.test_logic(self.get_member(member_name), logic)
             print('member %s is %s' % (member_name, result))
 
+
 # A couple of name aliases
 class Validation(Logician):
     pass
+
+
 class Visibility(Logician):
     pass

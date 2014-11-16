@@ -29,8 +29,10 @@ import time
 import bpy
 
 from ..extensions_framework.ui import EF_OT_msg
+
 bpy.utils.register_class(EF_OT_msg)
 del EF_OT_msg
+
 
 def log(str, popup=False, module_name='EF'):
     """Print a message to the console, prefixed with the module_name
@@ -39,7 +41,7 @@ def log(str, popup=False, module_name='EF'):
 
     """
     print("[%s %s] %s" %
-        (module_name, time.strftime('%Y-%b-%d %H:%M:%S'), str))
+          (module_name, time.strftime('%Y-%b-%d %H:%M:%S'), str))
     if popup:
         bpy.ops.ef.msg(
             msg_type='WARNING',
@@ -48,6 +50,7 @@ def log(str, popup=False, module_name='EF'):
 
 
 added_property_cache = {}
+
 
 def init_properties(obj, props, cache=True):
     """Initialise custom properties in the given object or type.
@@ -68,54 +71,60 @@ def init_properties(obj, props, cache=True):
 
             if prop['type'] == 'bool':
                 t = bpy.props.BoolProperty
-                a = {k: v for k,v in prop.items() if k in ["name",
-                    "description","default","options","subtype","update"]}
+                a = {k: v for k, v in prop.items() if k in ["name",
+                                                            "description", "default", "options", "subtype", "update"]}
             elif prop['type'] == 'bool_vector':
                 t = bpy.props.BoolVectorProperty
-                a = {k: v for k,v in prop.items() if k in ["name",
-                    "description","default","options","subtype","size",
-                    "update"]}
+                a = {k: v for k, v in prop.items() if k in ["name",
+                                                            "description", "default", "options", "subtype", "size",
+                                                            "update"]}
             elif prop['type'] == 'collection':
                 t = bpy.props.CollectionProperty
-                a = {k: v for k,v in prop.items() if k in ["ptype","name",
-                    "description","default","options"]}
+                a = {k: v for k, v in prop.items() if k in ["ptype", "name",
+                                                            "description", "default", "options"]}
                 a['type'] = a['ptype']
                 del a['ptype']
             elif prop['type'] == 'enum':
                 t = bpy.props.EnumProperty
-                a = {k: v for k,v in prop.items() if k in ["items","name",
-                    "description","default","options","update"]}
+                a = {k: v for k, v in prop.items() if k in ["items", "name",
+                                                            "description", "default", "options", "update"]}
             elif prop['type'] == 'float':
                 t = bpy.props.FloatProperty
-                a = {k: v for k,v in prop.items() if k in ["name",
-                    "description","default","min","max","soft_min","soft_max",
-                    "step","precision","options","subtype","unit","update"]}
+                a = {k: v for k, v in prop.items() if k in ["name",
+                                                            "description", "default", "min", "max", "soft_min",
+                                                            "soft_max",
+                                                            "step", "precision", "options", "subtype", "unit",
+                                                            "update"]}
             elif prop['type'] == 'float_vector':
                 t = bpy.props.FloatVectorProperty
-                a = {k: v for k,v in prop.items() if k in ["name",
-                    "description","default","min","max","soft_min","soft_max",
-                    "step","precision","options","subtype","size","update"]}
+                a = {k: v for k, v in prop.items() if k in ["name",
+                                                            "description", "default", "min", "max", "soft_min",
+                                                            "soft_max",
+                                                            "step", "precision", "options", "subtype", "size",
+                                                            "update"]}
             elif prop['type'] == 'int':
                 t = bpy.props.IntProperty
-                a = {k: v for k,v in prop.items() if k in ["name",
-                    "description","default","min","max","soft_min","soft_max",
-                    "step","options","subtype","update"]}
+                a = {k: v for k, v in prop.items() if k in ["name",
+                                                            "description", "default", "min", "max", "soft_min",
+                                                            "soft_max",
+                                                            "step", "options", "subtype", "update"]}
             elif prop['type'] == 'int_vector':
                 t = bpy.props.IntVectorProperty
-                a = {k: v for k,v in prop.items() if k in ["name",
-                    "description","default","min","max","soft_min","soft_max",
-                    "options","subtype","size","update"]}
+                a = {k: v for k, v in prop.items() if k in ["name",
+                                                            "description", "default", "min", "max", "soft_min",
+                                                            "soft_max",
+                                                            "options", "subtype", "size", "update"]}
             elif prop['type'] == 'pointer':
                 t = bpy.props.PointerProperty
-                a = {k: v for k,v in prop.items() if k in ["ptype", "name",
-                    "description","options","update"]}
+                a = {k: v for k, v in prop.items() if k in ["ptype", "name",
+                                                            "description", "options", "update"]}
                 a['type'] = a['ptype']
                 del a['ptype']
             elif prop['type'] == 'string':
                 t = bpy.props.StringProperty
-                a = {k: v for k,v in prop.items() if k in ["name",
-                    "description","default","maxlen","options","subtype",
-                    "update"]}
+                a = {k: v for k, v in prop.items() if k in ["name",
+                                                            "description", "default", "maxlen", "options", "subtype",
+                                                            "update"]}
             else:
                 continue
 
@@ -125,6 +134,7 @@ def init_properties(obj, props, cache=True):
         except KeyError:
             # Silently skip invalid entries in props
             continue
+
 
 class declarative_property_group(bpy.types.PropertyGroup):
     """A declarative_property_group describes a set of logically
@@ -175,12 +185,12 @@ class declarative_property_group(bpy.types.PropertyGroup):
                     prototype = getattr(bpy.types, property_group_parent)
                     if not hasattr(prototype, cls.__name__):
                         init_properties(prototype, [{
-                            'type': 'pointer',
-                            'attr': cls.__name__,
-                            'ptype': cls,
-                            'name': cls.__name__,
-                            'description': cls.__name__
-                        }], cache=False)
+                                                        'type': 'pointer',
+                                                        'attr': cls.__name__,
+                                                        'ptype': cls,
+                                                        'name': cls.__name__,
+                                                        'description': cls.__name__
+                                                    }], cache=False)
 
             init_properties(cls, cls.properties, cache=False)
             cls.ef_initialised = True
@@ -304,6 +314,7 @@ class declarative_property_group(bpy.types.PropertyGroup):
             if 'attr' in pk and 'default' in pk and hasattr(self, prop['attr']):
                 setattr(self, prop['attr'], prop['default'])
 
+
 class Addon(object):
     """A list of classes registered by this addon"""
     static_addon_count = 0
@@ -324,12 +335,12 @@ class Addon(object):
         Addon.static_addon_count += 1
 
         if self.bl_info:
-            self.BL_VERSION = '.'.join(['%s'%v for v in self.bl_info['version']]).lower()
+            self.BL_VERSION = '.'.join(['%s' % v for v in self.bl_info['version']]).lower()
             self.BL_IDNAME = self.bl_info['name'].lower() + '-' + self.BL_VERSION
         else:
             # construct anonymous name
             self.BL_VERSION = '0'
-            self.BL_IDNAME = 'Addon-%03d'%self.addon_serial
+            self.BL_IDNAME = 'Addon-%03d' % self.addon_serial
 
     def addon_register_class(self, cls):
         """This method is designed to be used as a decorator on RNA-registerable
@@ -348,15 +359,17 @@ class Addon(object):
         """
         for cls in self.addon_classes:
             bpy.utils.register_class(cls)
-            if hasattr(cls, 'ef_attach_to'): cls.initialise_properties()
+            if hasattr(cls, 'ef_attach_to'):
+                cls.initialise_properties()
 
     def unregister(self):
         """This is the unregister function that should be exposed in the addon's
         __init__.
 
         """
-        for cls in self.addon_classes[::-1]:    # unregister in reverse order
-            if hasattr(cls, 'ef_attach_to'): cls.remove_properties()
+        for cls in self.addon_classes[::-1]:  # unregister in reverse order
+            if hasattr(cls, 'ef_attach_to'):
+                cls.remove_properties()
             bpy.utils.unregister_class(cls)
 
     def init_functions(self):

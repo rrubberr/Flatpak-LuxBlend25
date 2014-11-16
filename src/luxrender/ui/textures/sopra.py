@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_sopra(luxrender_texture_base):
-	bl_label = 'LuxRender Sopra Texture'
-	
-	LUX_COMPAT = {'sopra'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_sopra' )
-	]
+    bl_label = 'LuxRender Sopra Texture'
+
+    LUX_COMPAT = {'sopra'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_sopra' )
+    ]

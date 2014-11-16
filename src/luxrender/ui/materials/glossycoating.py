@@ -27,28 +27,29 @@
 from ... import LuxRenderAddon
 from ...ui.materials import luxrender_material_sub
 
+
 @LuxRenderAddon.addon_register_class
 class ui_material_glossycoating(luxrender_material_sub):
-	bl_label = 'LuxRender Glossy Coating Material'
-	
-	LUX_COMPAT = {'glossycoating'}
-	
-	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_glossycoating' )
-	]
+    bl_label = 'LuxRender Glossy Coating Material'
 
-	def draw_ior_menu(self, context):
-		"""
-		This is a draw callback from property_group_renderer, due
-		to ef_callback item in luxrender_mat_<mat>.properties
-		"""
-		
-		lmg = context.material.luxrender_material.luxrender_mat_glossycoating
-		
-		if lmg.index_floatvalue == lmg.index_presetvalue:
-			menu_text = lmg.index_presetstring
-		else:
-			menu_text = '-- Choose preset --'
-		
-		cl=self.layout.column(align=True)
-		cl.menu('LUXRENDER_MT_ior_presets', text=menu_text)
+    LUX_COMPAT = {'glossycoating'}
+
+    display_property_groups = [
+        ( ('material', 'luxrender_material'), 'luxrender_mat_glossycoating' )
+    ]
+
+    def draw_ior_menu(self, context):
+        """
+        This is a draw callback from property_group_renderer, due
+        to ef_callback item in luxrender_mat_<mat>.properties
+        """
+
+        lmg = context.material.luxrender_material.luxrender_mat_glossycoating
+
+        if lmg.index_floatvalue == lmg.index_presetvalue:
+            menu_text = lmg.index_presetstring
+        else:
+            menu_text = '-- Choose preset --'
+
+        cl = self.layout.column(align=True)
+        cl.menu('LUXRENDER_MT_ior_presets', text=menu_text)

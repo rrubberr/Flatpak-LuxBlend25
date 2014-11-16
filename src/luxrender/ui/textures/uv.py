@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_uv(luxrender_texture_base):
-	bl_label = 'LuxRender UV Texture'
-	
-	LUX_COMPAT = {'uv'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_uv' )
-	]
+    bl_label = 'LuxRender UV Texture'
+
+    LUX_COMPAT = {'uv'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_uv' )
+    ]

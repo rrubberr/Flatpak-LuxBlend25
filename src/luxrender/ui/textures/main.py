@@ -27,32 +27,33 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_main(luxrender_texture_base):
-	'''
-	Texture Editor UI Panel
-	'''
-	
-	bl_label = 'LuxRender Textures'
-	bl_options = {'HIDE_HEADER'}
-	
-	display_property_groups = [
-		( ('texture',), 'luxrender_texture' )
-	]
-	
-	@classmethod
-	def poll(cls, context):
-		'''
-		Only show LuxRender panel with 'Plugin' texture type
-		'''
-		
-		tex = context.texture
-		return	tex and \
-				(context.scene.render.engine in cls.COMPAT_ENGINES) \
-				and context.texture.luxrender_texture.type is not 'BLENDER'
-	
-	def draw(self, context):
-		row = self.layout.row(align=True)
-		row.label("LuxRender type")
-		row.menu('TEXTURE_MT_luxrender_type', text=context.texture.luxrender_texture.type_label)
-		super().draw(context)
+    """
+    Texture Editor UI Panel
+    """
+
+    bl_label = 'LuxRender Textures'
+    bl_options = {'HIDE_HEADER'}
+
+    display_property_groups = [
+        ( ('texture',), 'luxrender_texture' )
+    ]
+
+    @classmethod
+    def poll(cls, context):
+        """
+        Only show LuxRender panel with 'Plugin' texture type
+        """
+
+        tex = context.texture
+        return tex and \
+               (context.scene.render.engine in cls.COMPAT_ENGINES) \
+               and context.texture.luxrender_texture.type is not 'BLENDER'
+
+    def draw(self, context):
+        row = self.layout.row(align=True)
+        row.label("LuxRender type")
+        row.menu('TEXTURE_MT_luxrender_type', text=context.texture.luxrender_texture.type_label)
+        super().draw(context)

@@ -30,21 +30,23 @@ from ..extensions_framework.ui import property_group_renderer
 
 from .. import LuxRenderAddon
 
+
 @LuxRenderAddon.addon_register_class
 class ui_object(bl_ui.properties_object.ObjectButtonsPanel, property_group_renderer):
-	'''
-	Object settings
-	'''
-	
-	bl_label = 'LuxRender Object Settings'
-	COMPAT_ENGINES = 'LUXRENDER_RENDER'
-	
-	@classmethod
-	def poll(cls, context):
-		engine = context.scene.render.engine
-		return context.object and context.object.type in ['MESH','SURFACE','FONT','META'] and (engine in cls.COMPAT_ENGINES)
-	
-	display_property_groups = [
-		( ('object',), 'luxrender_object' )
-	]
+    """
+    Object settings
+    """
+
+    bl_label = 'LuxRender Object Settings'
+    COMPAT_ENGINES = 'LUXRENDER_RENDER'
+
+    @classmethod
+    def poll(cls, context):
+        engine = context.scene.render.engine
+        return context.object and context.object.type in ['MESH', 'SURFACE', 'FONT', 'META'] and (
+            engine in cls.COMPAT_ENGINES)
+
+    display_property_groups = [
+        ( ('object',), 'luxrender_object' )
+    ]
 

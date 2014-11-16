@@ -34,41 +34,47 @@ from .. import LuxRenderAddon
 from ..outputs.pure_api import PYLUX_AVAILABLE
 from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCore
 
+
 def check_renderer_settings(context):
     lre = context.scene.luxrender_rendermode
     lri = context.scene.luxrender_integrator
 
     def clear_renderer_alert():
-        if 'surfaceintegrator' in lri.alert.keys(): del lri.alert['surfaceintegrator']
-        if 'lightstrategy' in lri.alert.keys(): del lri.alert['lightstrategy']
-        if 'advanced' in lri.alert.keys(): del lri.alert['advanced']
+        if 'surfaceintegrator' in lri.alert.keys():
+            del lri.alert['surfaceintegrator']
+        if 'lightstrategy' in lri.alert.keys():
+            del lri.alert['lightstrategy']
+        if 'advanced' in lri.alert.keys():
+            del lri.alert['advanced']
 
     # Check hybrid renderer and surfaceintegrator compatibility
     hybrid_valid = (lri.surfaceintegrator == 'path' and lri.lightstrategy in ['one', 'all', 'auto'])
-    if ((lre.renderer == 'hybrid' and hybrid_valid) or lre.renderer!='hybrid'):
+    if ((lre.renderer == 'hybrid' and hybrid_valid) or lre.renderer != 'hybrid'):
         clear_renderer_alert()
     elif lre.renderer == 'hybrid' and not hybrid_valid:
         # These logical tests should evaluate to True if the setting is incompatible
-        lri.alert['surfaceintegrator'] = { 'surfaceintegrator': LO({'!=':['path', 'bidirectional']}) }
-        lri.alert['lightstrategy'] = { 'lightstrategy': LO({'!=':['one', 'all', 'auto']}) }
+        lri.alert['surfaceintegrator'] = {'surfaceintegrator': LO({'!=': ['path', 'bidirectional']})}
+        lri.alert['lightstrategy'] = {'lightstrategy': LO({'!=': ['one', 'all', 'auto']})}
         return
 
     # check compatible SPPM mode
     sppm_valid = lri.surfaceintegrator == 'sppm'
-    if ((lre.renderer == 'sppm' and sppm_valid) or lre.renderer!='sppm'):
+    if ((lre.renderer == 'sppm' and sppm_valid) or lre.renderer != 'sppm'):
         clear_renderer_alert()
     elif lre.renderer == 'sppm' and not sppm_valid:
-        lri.alert['surfaceintegrator'] = { 'surfaceintegrator': LO({'!=':'sppm'}) }
+        lri.alert['surfaceintegrator'] = {'surfaceintegrator': LO({'!=': 'sppm'})}
         return
+
 
 def find_apis():
     apis = [
         ('EXT', 'External', 'EXT'),
     ]
     if PYLUX_AVAILABLE:
-        apis.append( ('INT', 'Internal', 'INT') )
+        apis.append(('INT', 'Internal', 'INT'))
 
     return apis
+
 
 @LuxRenderAddon.addon_register_class
 class luxrender_testing(declarative_property_group):
@@ -110,6 +116,7 @@ class luxrender_testing(declarative_property_group):
         },
     ]
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_engine(declarative_property_group):
     '''
@@ -119,9 +126,9 @@ class luxrender_engine(declarative_property_group):
     ef_attach_to = ['Scene']
 
     controls = [
-#       'export_type', #Drawn in core/init
-#       'binary_name',
-#       'write_files',
+        # 'export_type', #Drawn in core/init
+        #       'binary_name',
+        #       'write_files',
         ['export_particles', 'export_hair'],
         'embed_filedata',
         'mesh_type',
@@ -131,22 +138,35 @@ class luxrender_engine(declarative_property_group):
         'threads',
         'log_verbosity',
         ['min_epsilon', 'max_epsilon'],
-        ]
+    ]
 
     visibility = {
-        'write_files':              { 'export_type': 'INT' },
-        'embed_filedata':           O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
-        'mesh_type':                O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
-        'binary_name':              { 'export_type': 'EXT' },
-        'render':                   O([{'write_files': True}, { 'export_type': 'EXT' }]), #We need run renderer unless we are set for internal-pipe mode, which is the only time both of these are false
-        'monitor_external':         {'export_type': 'EXT', 'binary_name': 'luxrender', 'render': True },
-        'partial_ply':              O([ {'export_type':'EXT'}, A([ {'export_type':'INT'}, {'write_files': True} ]) ]),
-        'threads_auto':             O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]), #The flag options must be present for any condition where run renderer is present and checked, as well as internal-pipe mode
-        'threads':                  O([A([{'write_files': False}, { 'export_type': 'INT' }, {'threads_auto': False}]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }, {'threads_auto': False}])]), #Longest logic test in the whole plugin! threads-auto is in both sides, since we must check that it is false for either internal-pipe mode, or when using run-renderer.
-        'fixed_seed':               O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]),
-        'log_verbosity':            O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }])]),
-        'min_epsilon':              O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }, O([{'binary_name': 'luxrender'}, {'binary_name': 'luxconsole'}])])]),
-        'max_epsilon':              O([A([{'write_files': False}, { 'export_type': 'INT' }]), A([O([{'write_files': True}, { 'export_type': 'EXT' }]), { 'render': True }, O([{'binary_name': 'luxrender'}, {'binary_name': 'luxconsole'}])])]),
+        'write_files': {'export_type': 'INT'},
+        'embed_filedata': O([{'export_type': 'EXT'}, A([{'export_type': 'INT'}, {'write_files': True}])]),
+        'mesh_type': O([{'export_type': 'EXT'}, A([{'export_type': 'INT'}, {'write_files': True}])]),
+        'binary_name': {'export_type': 'EXT'},
+        'render': O([{'write_files': True}, {'export_type': 'EXT'}]),
+        # We need run renderer unless we are set for internal-pipe mode, which is the only time both of these are false
+        'monitor_external': {'export_type': 'EXT', 'binary_name': 'luxrender', 'render': True},
+        'partial_ply': O([{'export_type': 'EXT'}, A([{'export_type': 'INT'}, {'write_files': True}])]),
+        'threads_auto': O([A([{'write_files': False}, {'export_type': 'INT'}]),
+                           A([O([{'write_files': True}, {'export_type': 'EXT'}]), {'render': True}])]),
+        # The flag options must be present for any condition where run renderer is present and checked,
+        # as well as internal-pipe mode
+        'threads': O([A([{'write_files': False}, {'export_type': 'INT'}, {'threads_auto': False}]), A(
+            [O([{'write_files': True}, {'export_type': 'EXT'}]), {'render': True}, {'threads_auto': False}])]),
+        # Longest logic test in the whole plugin! threads-auto is in both sides,
+        # since we must check that it is false for either internal-pipe mode, or when using run-renderer.
+        'fixed_seed': O([A([{'write_files': False}, {'export_type': 'INT'}]),
+                         A([O([{'write_files': True}, {'export_type': 'EXT'}]), {'render': True}])]),
+        'log_verbosity': O([A([{'write_files': False}, {'export_type': 'INT'}]),
+                            A([O([{'write_files': True}, {'export_type': 'EXT'}]), {'render': True}])]),
+        'min_epsilon': O([A([{'write_files': False}, {'export_type': 'INT'}]), A(
+            [O([{'write_files': True}, {'export_type': 'EXT'}]), {'render': True},
+             O([{'binary_name': 'luxrender'}, {'binary_name': 'luxconsole'}])])]),
+        'max_epsilon': O([A([{'write_files': False}, {'export_type': 'INT'}]), A(
+            [O([{'write_files': True}, {'export_type': 'EXT'}]), {'render': True},
+             O([{'binary_name': 'luxrender'}, {'binary_name': 'luxconsole'}])])]),
     }
 
     alert = {}
@@ -175,7 +195,7 @@ class luxrender_engine(declarative_property_group):
             'attr': 'export_type',
             'name': 'Export Type',
             'description': 'Run LuxRender inside or outside of Blender',
-            'default': 'EXT', # if not PYLUX_AVAILABLE else 'INT',
+            'default': 'EXT',  # if not PYLUX_AVAILABLE else 'INT',
             'items': find_apis(),
             'save_in_preset': True
         },
@@ -183,7 +203,8 @@ class luxrender_engine(declarative_property_group):
             'type': 'bool',
             'attr': 'integratedimaging',
             'name': 'Integrated imaging workflow',
-            'description': 'Transfer rendered image directly to Blender without saving to disk (adds Z-buffer support and is more stable, but may take longer to refresh)',
+            'description': 'Transfer rendered image directly to Blender without saving to disk (adds Z-buffer support \
+             and is more stable, but may take longer to refresh)',
             'default': True
         },
         {
@@ -197,7 +218,8 @@ class luxrender_engine(declarative_property_group):
             'type': 'bool',
             'attr': 'monitor_external',
             'name': 'Monitor External',
-            'description': 'Monitor external GUI rendering; when selected, LuxBlend will copy the render image from the external GUI',
+            'description': 'Monitor external GUI rendering; when selected, LuxBlend will copy the render image from \
+            the external GUI',
             'default': True,
             'save_in_preset': True
         },
@@ -208,10 +230,10 @@ class luxrender_engine(declarative_property_group):
             'description': 'Choose between LuxRender v1.x and v2.x API',
             'default': 'classic',
             'items': [
-                ('classic', '1.x', 'Use LuxRender v1.x API'),
-            ] + [
-                ('luxcore', '2.x (LuxCore)', 'Use LuxRender v2.x API')
-                ] if PYLUXCORE_AVAILABLE else [],
+                         ('classic', '1.x', 'Use LuxRender v1.x API'),
+                     ] + [
+                         ('luxcore', '2.x (LuxCore)', 'Use LuxRender v2.x API')
+                     ] if PYLUXCORE_AVAILABLE else [],
             'save_in_preset': True
         },
         {
@@ -276,7 +298,8 @@ class luxrender_engine(declarative_property_group):
             'type': 'enum',
             'attr': 'mesh_type',
             'name': 'Mesh Format',
-            'description': 'Sets whether to export scene geometry as PLY files or directly in the LXO file, PLY is faster and recommended. This can be overridden per mesh from the mesh properties panel',
+            'description': 'Sets whether to export scene geometry as PLY files or directly in the LXO file, PLY is \
+            faster and recommended. This can be overridden per mesh from the mesh properties panel',
             'items': [
                 ('native', 'LuxRender mesh', 'native'),
                 ('binary_ply', 'Binary PLY', 'binary_ply')
@@ -344,9 +367,9 @@ class luxrender_engine(declarative_property_group):
 
         return self.is_saving_lbm2 or (saving_files and self.embed_filedata)
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_networking(declarative_property_group):
-
     ef_attach_to = ['Scene']
 
     controls = [
@@ -355,17 +378,17 @@ class luxrender_networking(declarative_property_group):
     ]
 
     visibility = {
-        'servers':          { 'use_network_servers': True },
-        'serverinterval':   { 'use_network_servers': True },
+        'servers': {'use_network_servers': True},
+        'serverinterval': {'use_network_servers': True},
     }
 
     properties = [
-        {   # drawn in panel header
-            'type': 'bool',
-            'attr': 'use_network_servers',
-            'name': 'Use Networking',
-            'default': efutil.find_config_value('luxrender', 'defaults', 'use_network_servers', False),
-            'save_in_preset': True
+        {  # drawn in panel header
+           'type': 'bool',
+           'attr': 'use_network_servers',
+           'name': 'Use Networking',
+           'default': efutil.find_config_value('luxrender', 'defaults', 'use_network_servers', False),
+           'save_in_preset': True
         },
         {
             'type': 'string',
