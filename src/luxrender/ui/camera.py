@@ -31,26 +31,30 @@ from ..extensions_framework.ui import property_group_renderer
 
 from .. import LuxRenderAddon
 
+
 class camera_panel(bl_ui.properties_data_camera.CameraButtonsPanel, property_group_renderer):
-	COMPAT_ENGINES = 'LUXRENDER_RENDER'
+    COMPAT_ENGINES = 'LUXRENDER_RENDER'
+
 
 @LuxRenderAddon.addon_register_class
 class camera(camera_panel):
-	bl_label = 'LuxRender Camera'
-	
-	display_property_groups = [
-		( ('camera',), 'luxrender_camera' )
-	]
+    bl_label = 'LuxRender Camera'
+
+    display_property_groups = [
+        ( ('camera',), 'luxrender_camera' )
+    ]
+
 
 @LuxRenderAddon.addon_register_class
 class film(camera_panel):
-	bl_label = 'LuxRender Film'
-	
-	display_property_groups = [
-		( ('camera','luxrender_camera'), 'luxrender_film' ),
-		( ('camera','luxrender_camera','luxrender_film'), 'luxrender_colorspace' ),
-		( ('camera','luxrender_camera','luxrender_film'), 'luxrender_tonemapping' ),
-	]
-	
-	def draw_crf_preset_menu(self, context):
-		self.layout.menu('CAMERA_MT_luxrender_crf', text=context.camera.luxrender_camera.luxrender_film.luxrender_colorspace.crf_preset)
+    bl_label = 'LuxRender Film'
+
+    display_property_groups = [
+        ( ('camera', 'luxrender_camera'), 'luxrender_film' ),
+        ( ('camera', 'luxrender_camera', 'luxrender_film'), 'luxrender_colorspace' ),
+        ( ('camera', 'luxrender_camera', 'luxrender_film'), 'luxrender_tonemapping' ),
+    ]
+
+    def draw_crf_preset_menu(self, context):
+        self.layout.menu('CAMERA_MT_luxrender_crf',
+                         text=context.camera.luxrender_camera.luxrender_film.luxrender_colorspace.crf_preset)

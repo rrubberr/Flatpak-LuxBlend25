@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_bilerp(luxrender_texture_base):
-	bl_label = 'LuxRender BiLerp Texture'
-	
-	LUX_COMPAT = {'bilerp'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_bilerp' )
-	]
+    bl_label = 'LuxRender BiLerp Texture'
+
+    LUX_COMPAT = {'bilerp'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_bilerp' )
+    ]

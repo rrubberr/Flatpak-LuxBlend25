@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_exponential(luxrender_texture_base):
-	bl_label = 'LuxRender Exponential Texture'
-	
-	LUX_COMPAT = {'exponential'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_exponential' )
-	]
+    bl_label = 'LuxRender Exponential Texture'
+
+    LUX_COMPAT = {'exponential'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_exponential' )
+    ]

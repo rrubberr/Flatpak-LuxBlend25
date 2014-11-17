@@ -84,33 +84,37 @@ L.execute(TESTA)
 from types import *
 import importlib
 
+
 class Logic_AND(list):
     pass
+
+
 class Logic_OR(list):
     pass
+
+
 class Logic_Operator(dict):
     pass
+
 
 class Logician(object):
     """Given a subject and a dict that describes tests to perform on
     its members, this class will evaluate True or False results for
     each member/test pair. See the examples below for test syntax.
-
     """
-
     subject = None
+
     def __init__(self, subject):
         self.subject = subject
 
     def get_member(self, member_name):
         """Get a member value from the subject object. Raise exception
         if subject is None or member not found.
-
         """
         if self.subject is None:
             raise Exception('Cannot run tests on a subject which is None')
 
-        if (member_name.count('.') > 0):
+        if member_name.count('.') > 0:
             # It is an absolute reference
             return eval(member_name)
         else:
@@ -119,7 +123,6 @@ class Logician(object):
 
     def test_logic(self, member, logic, operator='eq'):
         """Find the type of test to run on member, and perform that test"""
-
         if type(logic) is dict:
             return self.test_dict(member, logic)
         elif type(logic) is Logic_AND:
@@ -136,90 +139,95 @@ class Logician(object):
             # compare the value, I think using Logic_Operator() here
             # allows completeness in test_operator(), but I can't put
             # my finger on why for the minute
-            return self.test_operator(member,
-                Logic_Operator({operator: logic}))
+            return self.test_operator(member, Logic_Operator({operator: logic}))
 
     def test_operator(self, member, value):
-        """Execute the operators contained within value and expect that
+        """
+        Execute the operators contained within value and expect that
         ALL operators are True
 
+        something in this method is incomplete, what if operand is
+        a dict, Logic_AND, Logic_OR or another Logic_Operator ?
+        Do those constructs even make any sense ?
         """
-
-        # something in this method is incomplete, what if operand is
-        # a dict, Logic_AND, Logic_OR or another Logic_Operator ?
-        # Do those constructs even make any sense ?
 
         result = True
         for operator, operand in value.items():
             operator = operator.lower().strip()
             if operator in ['eq', '==']:
-                result &= member==operand
+                result &= member == operand
             if operator in ['not', '!=']:
-                result &= member!=operand
+                result &= member != operand
             if operator in ['lt', '<']:
-                result &= member<operand
+                result &= member < operand
             if operator in ['lte', '<=']:
-                result &= member<=operand
+                result &= member <= operand
             if operator in ['gt', '>']:
-                result &= member>operand
+                result &= member > operand
             if operator in ['gte', '>=']:
-                result &= member>=operand
+                result &= member >= operand
             if operator in ['and', '&']:
-                result &= member&operand
+                result &= member & operand
             if operator in ['or', '|']:
-                result &= member|operand
+                result &= member | operand
             if operator in ['len']:
-                result &= len(member)==operand
-            # I can think of some more, but they're probably not useful.
+                result &= len(member) == operand
+                # I can think of some more, but they're probably not useful.
 
         return result
 
     def test_or(self, member, logic):
-        """Member is a value, logic is a set of values, ANY of which
+        """
+        Member is a value, logic is a set of values, ANY of which
         can be True
-
         """
         result = False
+
         for test in logic:
             result |= self.test_logic(member, test)
 
         return result
 
     def test_and(self, member, logic):
-        """Member is a value, logic is a list of values, ALL of which
+        """
+        Member is a value, logic is a list of values, ALL of which
         must be True
-
         """
         result = True
+
         for test in logic:
             result &= self.test_logic(member, test)
 
         return result
 
     def test_dict(self, member, logic):
-        """Member is a value, logic is a dict of other members to
+        """
+        Member is a value, logic is a dict of other members to
         compare to. All other member tests must be True
-
         """
         result = True
+
         for other_member, test in logic.items():
             result &= self.test_logic(self.get_member(other_member), test)
 
         return result
 
     def execute(self, test):
-        """Subject is an object, test is a dict of {member: test} pairs
+        """
+        Subject is an object, test is a dict of {member: test} pairs
         to perform on subject's members. Wach key in test is a member
         of subject.
-
         """
 
         for member_name, logic in test.items():
             result = self.test_logic(self.get_member(member_name), logic)
             print('member %s is %s' % (member_name, result))
 
+
 # A couple of name aliases
 class Validation(Logician):
     pass
+
+
 class Visibility(Logician):
     pass

@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_dots(luxrender_texture_base):
-	bl_label = 'LuxRender Dots Texture'
-	
-	LUX_COMPAT = {'dots'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_dots' )
-	]
+    bl_label = 'LuxRender Dots Texture'
+
+    LUX_COMPAT = {'dots'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_dots' )
+    ]

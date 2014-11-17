@@ -27,14 +27,15 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_blender(luxrender_texture_base):
-	bl_label = 'Blender Texture Settings'
-	
-	LUX_COMPAT = {'BLENDER'}
-	BL_COMPAT	= {'BLEND','CLOUDS','DISTORTED_NOISE','MAGIC','MARBLE','MUSGRAVE','STUCCI','VORONOI','WOOD'}
-	
-	def draw(self, context):
-		sr = self.layout.row()
-		sr.prop(context.texture, 'intensity')
-		sr.prop(context.texture, 'contrast')
+    bl_label = 'Blender Texture Settings'
+
+    LUX_COMPAT = {'BLENDER'}
+    BL_COMPAT = {'BLEND', 'CLOUDS', 'DISTORTED_NOISE', 'MAGIC', 'MARBLE', 'MUSGRAVE', 'STUCCI', 'VORONOI', 'WOOD'}
+
+    def draw(self, context):
+        sr = self.layout.row()
+        sr.prop(context.texture, 'intensity')
+        sr.prop(context.texture, 'contrast')

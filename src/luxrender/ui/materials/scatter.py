@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.materials import luxrender_material_sub
 
+
 @LuxRenderAddon.addon_register_class
 class ui_material_scatter(luxrender_material_sub):
-	bl_label = 'LuxRender Scatter Material'
-	
-	LUX_COMPAT = {'scatter'}
-	
-	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_scatter' )
-	]
+    bl_label = 'LuxRender Scatter Material'
+
+    LUX_COMPAT = {'scatter'}
+
+    display_property_groups = [
+        ( ('material', 'luxrender_material'), 'luxrender_mat_scatter' )
+    ]

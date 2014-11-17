@@ -35,8 +35,9 @@ from ..properties import (
     luxrender_texture_node, get_linked_node, check_node_export_texture, check_node_get_paramset
 )
 from ..properties.texture import (
-  import_paramset_to_blender_texture, shorten_name, refresh_preview, luxrender_tex_transform, luxrender_tex_mapping, luxrender_tex_imagemap
- )
+    import_paramset_to_blender_texture, shorten_name, refresh_preview, luxrender_tex_transform, luxrender_tex_mapping,
+    luxrender_tex_imagemap
+)
 from ..export import (
     ParamSet, process_filepath_data, get_worldscale
 )
@@ -54,9 +55,10 @@ from ..properties.node_sockets import (
     luxrender_TC_Kt_socket, luxrender_transform_socket, luxrender_coordinate_socket
 )
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_3d_coordinates_node(luxrender_texture_node):
-    '''3D texture coordinates node'''
+    """3D texture coordinates node"""
     bl_idname = 'luxrender_3d_coordinates_node'
     bl_label = '3D Texture Coordinate'
     bl_icon = 'TEXTURE'
@@ -68,9 +70,9 @@ class luxrender_3d_coordinates_node(luxrender_texture_node):
 
     coordinates = bpy.props.EnumProperty(name='Coordinates', items=coordinate_items)
     translate = bpy.props.FloatVectorProperty(name='Translate')
-    rotate = bpy.props.FloatVectorProperty(name='Rotate', subtype='DIRECTION', unit='ROTATION', min=-radians(359.99), max=radians(359.99))
+    rotate = bpy.props.FloatVectorProperty(name='Rotate', subtype='DIRECTION', unit='ROTATION', min=-radians(359.99),
+                                           max=radians(359.99))
     scale = bpy.props.FloatVectorProperty(name='Scale', default=(1.0, 1.0, 1.0))
-
 
     def init(self, context):
         self.outputs.new('luxrender_coordinate_socket', '3D Coordinate')
@@ -98,7 +100,7 @@ class luxrender_3d_coordinates_node(luxrender_texture_node):
                         domain = bpy.data.node_groups[group.name].nodes[node.name].domain
 
             obj = bpy.context.scene.objects[domain]
-            vloc = mathutils.Vector((obj.bound_box[0][0],obj.bound_box[0][1],obj.bound_box[0][2]))
+            vloc = mathutils.Vector((obj.bound_box[0][0], obj.bound_box[0][1], obj.bound_box[0][2]))
             vloc_global = obj.matrix_world * vloc
             d_dim = bpy.data.objects[domain].dimensions
             coord_params.add_string('coordinates', 'global')
@@ -106,14 +108,15 @@ class luxrender_3d_coordinates_node(luxrender_texture_node):
             coord_params.add_vector('scale', d_dim)
         else:
             coord_params.add_string('coordinates', self.coordinates)
-            coord_params.add_vector('translate', [i*ws for i in self.translate])
-            coord_params.add_vector('scale', [i*ws for i in self.scale])
+            coord_params.add_vector('translate', [i * ws for i in self.translate])
+            coord_params.add_vector('scale', [i * ws for i in self.scale])
 
         return coord_params
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_2d_coordinates_node(luxrender_texture_node):
-    '''2D texture coordinates node'''
+    """2D texture coordinates node"""
     bl_idname = 'luxrender_2d_coordinates_node'
     bl_label = '2D Texture Coordinate'
     bl_icon = 'TEXTURE'
@@ -132,12 +135,12 @@ class luxrender_2d_coordinates_node(luxrender_texture_node):
     v1 = bpy.props.FloatVectorProperty(name='V1', default=(1.0, 0.0, 0.0))
     v2 = bpy.props.FloatVectorProperty(name='V2', default=(0.0, 1.0, 0.0))
 
-
     def init(self, context):
         self.outputs.new('luxrender_transform_socket', '2D Coordinate')
 
     def draw_buttons(self, context, layout):
         layout.prop(self, 'coordinates')
+
         if self.coordinates == 'planar':
             layout.prop(self, 'v1')
             layout.prop(self, 'v2')
@@ -147,6 +150,7 @@ class luxrender_2d_coordinates_node(luxrender_texture_node):
             layout.prop(self, 'vscale')
             layout.prop(self, 'udelta')
             layout.prop(self, 'vdelta')
+
         if self.coordinates == 'uv':
             layout.prop(self, 'center_map')
 
@@ -160,7 +164,7 @@ class luxrender_2d_coordinates_node(luxrender_texture_node):
             coord_params.add_float('udelta', self.udelta)
             coord_params.add_float('vdelta', self.vdelta)
 
-        if self.coordinates =='cylindrical':
+        if self.coordinates == 'cylindrical':
             coord_params.add_float('uscale', self.uscale)
             coord_params.add_float('udelta', self.udelta)
 
@@ -172,21 +176,23 @@ class luxrender_2d_coordinates_node(luxrender_texture_node):
 
         if self.coordinates == 'uv':
             coord_params.add_float('uscale', self.uscale)
-            coord_params.add_float('vscale', self.vscale * -1) # flip to match blender
+            coord_params.add_float('vscale', self.vscale * -1)  # flip to match blender
 
-            if self.center_map ==  False:
+            if not self.center_map:
                 coord_params.add_float('udelta', self.udelta)
-                coord_params.add_float('vdelta', self.vdelta + 1) # correction for clamped types, does not harm repeat type
+                coord_params.add_float('vdelta',
+                                       self.vdelta + 1)  # correction for clamped types, does not harm repeat type
             else:
-                coord_params.add_float('udelta', self.udelta +0.5*(1.0-self.uscale)) # auto-center the mapping
-                coord_params.add_float('vdelta', self.vdelta * -1 + 1-(0.5*(1.0-self.vscale))) # auto-center the mapping
+                coord_params.add_float('udelta', self.udelta + 0.5 * (1.0 - self.uscale))  # auto-center the mapping
+                coord_params.add_float('vdelta',
+                                       self.vdelta * -1 + 1 - (0.5 * (1.0 - self.vscale)))  # auto-center the mapping
 
         return coord_params
 
 
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_blackbody(luxrender_texture_node):
-    '''Blackbody spectrum node'''
+    """Blackbody spectrum node"""
     bl_idname = 'luxrender_texture_blackbody_node'
     bl_label = 'Blackbody Spectrum'
     bl_icon = 'TEXTURE'
@@ -206,9 +212,10 @@ class luxrender_texture_type_node_blackbody(luxrender_texture_node):
 
         return make_texture('color', 'blackbody', self.name, blackbody_params)
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_colordepth(luxrender_texture_node):
-    '''Color at Depth node'''
+    """Color at Depth node"""
     bl_idname = 'luxrender_texture_colordepth_node'
     bl_label = 'Color at Depth'
     bl_icon = 'TEXTURE'
@@ -217,7 +224,6 @@ class luxrender_texture_type_node_colordepth(luxrender_texture_node):
 
     def init(self, context):
         self.inputs.new('luxrender_TC_Kt_socket', 'Transmission Color')
-
         self.outputs.new('NodeSocketColor', 'Color')
 
     def draw_buttons(self, context, layout):
@@ -225,21 +231,23 @@ class luxrender_texture_type_node_colordepth(luxrender_texture_node):
 
     def export_texture(self, make_texture):
         colordepth_params = ParamSet()
-        colordepth_params.update( get_socket_paramsets(self.inputs, make_texture) )
+        colordepth_params.update(get_socket_paramsets(self.inputs, make_texture))
         colordepth_params.add_float('depth', self.depth)
 
         return make_texture('color', 'colordepth', self.name, colordepth_params)
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_gaussian(luxrender_texture_node):
-    '''Gaussian spectrum node'''
+    """Gaussian spectrum node"""
     bl_idname = 'luxrender_texture_gaussian_node'
     bl_label = 'Gaussian Spectrum'
     bl_icon = 'TEXTURE'
     bl_width_min = 180
 
     energy = bpy.props.FloatProperty(name='Energy', default=1.0, description='Relative energy level')
-    wavelength = bpy.props.FloatProperty(name='Wavelength (nm)', default=550.0, description='Center-point of the spectrum curve')
+    wavelength = bpy.props.FloatProperty(name='Wavelength (nm)', default=550.0,
+                                         description='Center-point of the spectrum curve')
     width = bpy.props.FloatProperty(name='Width', default=50.0, description='Width of the spectrum curve')
 
     def init(self, context):
@@ -258,9 +266,10 @@ class luxrender_texture_type_node_gaussian(luxrender_texture_node):
 
         return make_texture('color', 'gaussian', self.name, gaussian_params)
 
-@LuxRenderAddon.addon_register_class #Drawn in "input" menu, since it does not have any input sockets
+
+@LuxRenderAddon.addon_register_class  # Drawn in "input" menu, since it does not have any input sockets
 class luxrender_texture_type_node_glossyexponent(luxrender_texture_node):
-    '''Glossy exponent node'''
+    """Glossy exponent node"""
     bl_idname = 'luxrender_texture_glossyexponent_node'
     bl_label = 'Glossy Exponent'
     bl_icon = 'TEXTURE'
@@ -276,19 +285,19 @@ class luxrender_texture_type_node_glossyexponent(luxrender_texture_node):
 
     def export_texture(self, make_texture):
         glossyexponent_params = ParamSet()
-        glossyexponent_params.add_float('value', (2.0/(self.exponent+2.0))**0.5)
+        glossyexponent_params.add_float('value', (2.0 / (self.exponent + 2.0)) ** 0.5)
 
         return make_texture('float', 'constant', self.name, glossyexponent_params)
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_tabulateddata(luxrender_texture_node):
-    '''Tabulated Data spectrum node'''
+    """Tabulated Data spectrum node"""
     bl_idname = 'luxrender_texture_tabulateddata_node'
     bl_label = 'Tabulated Data Spectrum'
     bl_icon = 'TEXTURE'
 
     data_file = bpy.props.StringProperty(name='Data File', description='Data file path', subtype='FILE_PATH')
-
 
     def init(self, context):
         self.outputs.new('NodeSocketColor', 'Color')
@@ -303,11 +312,12 @@ class luxrender_texture_type_node_tabulateddata(luxrender_texture_node):
 
         return make_texture('color', 'tabulateddata', self.name, tabulateddata_params)
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_constant(luxrender_texture_node):
-    '''Constant texture node'''
+    """Constant texture node"""
     bl_idname = 'luxrender_texture_constant_node'
-    bl_label = 'Value' #Mimics Cycles/Compositor "input > value" node
+    bl_label = 'Value'  # Mimics Cycles/Compositor "input > value" node
     bl_icon = 'TEXTURE'
 
     variant = bpy.props.EnumProperty(name='Variant', items=triple_variant_items, default='color')
@@ -318,38 +328,48 @@ class luxrender_texture_type_node_constant(luxrender_texture_node):
 
     def draw_buttons(self, context, layout):
         layout.prop(self, 'variant')
+
         if self.variant == 'color':
             col = layout.column()
             col.prop(self, 'color')
             col.prop(self, 'col_mult')
+
         if self.variant == 'float':
             layout.prop(self, 'float')
+
         if self.variant == 'fresnel':
             layout.prop(self, 'fresnel')
 
         si = self.inputs.keys()
         so = self.outputs.keys()
+
         if self.variant == 'color':
             if not 'Color' in so:
                 self.outputs.new('NodeSocketColor', 'Color')
+
             if 'Float' in so:
                 self.outputs.remove(self.outputs['Float'])
+
             if 'Fresnel' in so:
                 self.outputs.remove(self.outputs['Fresnel'])
 
         if self.variant == 'float':
             if not 'Float' in so:
                 self.outputs.new('NodeSocketFloat', 'Float')
+
             if 'Color' in so:
                 self.outputs.remove(self.outputs['Color'])
+
             if 'Fresnel' in so:
                 self.outputs.remove(self.outputs['Fresnel'])
 
         if self.variant == 'fresnel':
             if not 'Fresnel' in so:
                 self.outputs.new('luxrender_fresnel_socket', 'Fresnel')
+
             if 'Color' in so:
                 self.outputs.remove(self.outputs['Color'])
+
             if 'Float' in so:
                 self.outputs.remove(self.outputs['Float'])
 
@@ -358,15 +378,19 @@ class luxrender_texture_type_node_constant(luxrender_texture_node):
 
         if self.variant == 'float':
             constant_params.add_float('value', self.float)
+
         if self.variant == 'color':
             constant_params.add_color('value', self.color * self.col_mult)
+
         if self.variant == 'fresnel':
             constant_params.add_float('value', self.fresnel)
+
         return make_texture(self.variant, 'constant', self.name, constant_params)
+
 
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_hitpointcolor(luxrender_texture_node):
-    '''Vertex Colors texture node'''
+    """Vertex Colors texture node"""
     bl_idname = 'luxrender_texture_hitpointcolor_node'
     bl_label = 'Vertex Colors'
     bl_icon = 'TEXTURE'
@@ -379,9 +403,10 @@ class luxrender_texture_type_node_hitpointcolor(luxrender_texture_node):
 
         return make_texture('color', 'hitpointcolor', self.name, hitpointcolor_params)
 
+
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_hitpointgrey(luxrender_texture_node):
-    '''Vertex Grey texture node'''
+    """Vertex Grey texture node"""
     bl_idname = 'luxrender_texture_hitpointgrey_node'
     bl_label = 'Vertex Mask'
     bl_icon = 'TEXTURE'
@@ -403,18 +428,18 @@ class luxrender_texture_type_node_hitpointgrey(luxrender_texture_node):
 
         return make_texture('float', 'hitpointgrey', self.name, hitpointgrey_params)
 
-#Hitpointalpha is kind of useless with Blender's vertex color system, so we don't use it
-#@LuxRenderAddon.addon_register_class
-#class luxrender_texture_type_node_hitpointalpha(luxrender_texture_node):
-#   '''Vertex Alpha texture node'''
-#   bl_idname = 'luxrender_texture_hitpointalpha_node'
-#   bl_label = 'Vertex Alpha'
-#   bl_icon = 'TEXTURE'
+# Hitpointalpha is kind of useless with Blender's vertex color system, so we don't use it
+# @LuxRenderAddon.addon_register_class
+# class luxrender_texture_type_node_hitpointalpha(luxrender_texture_node):
+# '''Vertex Alpha texture node'''
+# bl_idname = 'luxrender_texture_hitpointalpha_node'
+# bl_label = 'Vertex Alpha'
+# bl_icon = 'TEXTURE'
 #
-#   def init(self, context):
-#       self.outputs.new('NodeSocketFloat', 'Float')
+# def init(self, context):
+# self.outputs.new('NodeSocketFloat', 'Float')
 #
-#   def export_texture(self, make_texture):
-#       hitpointalpha_params = ParamSet()
+# def export_texture(self, make_texture):
+# hitpointalpha_params = ParamSet()
 #
 #       return make_texture('float', 'hitpointalpha', self.name, hitpointalpha_params)

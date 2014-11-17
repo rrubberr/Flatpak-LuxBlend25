@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.materials import luxrender_material_sub
 
+
 @LuxRenderAddon.addon_register_class
 class ui_material_metal(luxrender_material_sub):
-	bl_label = 'LuxRender Metal Material'
-	
-	LUX_COMPAT = {'metal'}
-	
-	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_metal' )
-	]
+    bl_label = 'LuxRender Metal Material'
+
+    LUX_COMPAT = {'metal'}
+
+    display_property_groups = [
+        ( ('material', 'luxrender_material'), 'luxrender_mat_metal' )
+    ]

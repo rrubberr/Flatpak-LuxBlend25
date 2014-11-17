@@ -27,13 +27,14 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_imagesampling(luxrender_texture_base):
-	bl_label = 'Image Sampling'
-	
-	LUX_COMPAT = {'BLENDER'}
-	BL_COMPAT	= {'IMAGE'}
-		
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_imagesampling' )
-	]
+    bl_label = 'Image Sampling'
+
+    LUX_COMPAT = {'BLENDER'}
+    BL_COMPAT = {'IMAGE'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_imagesampling' )
+    ]

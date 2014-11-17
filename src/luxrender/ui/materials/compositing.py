@@ -27,17 +27,17 @@
 from ... import LuxRenderAddon
 from ...ui.materials import luxrender_material_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_luxrender_mat_compositing(luxrender_material_base):
-	
-	bl_label	= 'LuxRender Material Compositing'
-	
-	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_compositing' )
-	]
-	
-	@classmethod
-	def poll(cls, context):
-		if not hasattr(context.scene, 'luxrender_integrator'):
-			return False
-		return context.scene.luxrender_integrator.surfaceintegrator == 'distributedpath' and super().poll(context)
+    bl_label = 'LuxRender Material Compositing'
+
+    display_property_groups = [
+        ( ('material', 'luxrender_material'), 'luxrender_mat_compositing' )
+    ]
+
+    @classmethod
+    def poll(cls, context):
+        if not hasattr(context.scene, 'luxrender_integrator'):
+            return False
+        return context.scene.luxrender_integrator.surfaceintegrator == 'distributedpath' and super().poll(context)

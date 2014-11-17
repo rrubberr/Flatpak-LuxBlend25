@@ -30,22 +30,23 @@ from ..extensions_framework.ui import property_group_renderer
 
 from .. import LuxRenderAddon
 
+
 @LuxRenderAddon.addon_register_class
 class meshes(bl_ui.properties_data_mesh.MeshButtonsPanel, property_group_renderer):
-	bl_label = 'LuxRender Mesh Options'
-	COMPAT_ENGINES = 'LUXRENDER_RENDER'
-	
-	display_property_groups = [
-		( ('mesh',), 'luxrender_mesh' )
-	]
-	
-	def draw(self, context):
-		if context.object.luxrender_object.append_proxy and context.object.luxrender_object.hide_proxy_mesh:
-			msg = ['Mesh options not available when',
-				   'object is used as a render proxy',
-				   'and \"Don\'t Render Original\" is set.'
-				  ]
-			for t in msg:
-				self.layout.label(t)
-		else:
-			super().draw(context)
+    bl_label = 'LuxRender Mesh Options'
+    COMPAT_ENGINES = 'LUXRENDER_RENDER'
+
+    display_property_groups = [
+        ( ('mesh',), 'luxrender_mesh' )
+    ]
+
+    def draw(self, context):
+        if context.object.luxrender_object.append_proxy and context.object.luxrender_object.hide_proxy_mesh:
+            msg = ['Mesh options not available when',
+                   'object is used as a render proxy',
+                   'and \"Don\'t Render Original\" is set.'
+            ]
+            for t in msg:
+                self.layout.label(t)
+        else:
+            super().draw(context)

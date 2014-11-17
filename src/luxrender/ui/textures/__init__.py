@@ -30,36 +30,38 @@ from ...extensions_framework.ui import property_group_renderer
 
 from ... import LuxRenderAddon
 
+
 class luxrender_texture_base(bl_ui.properties_texture.TextureButtonsPanel, property_group_renderer):
-	'''
-	This is the base class for all LuxRender texture sub-panels.
-	All subpanels should have their own property_groups, and define
-	a string attribute in their property_group called 'variant'.
-	It should be set to either 'float' or 'color' depending on the
-	texture type, and may display the choice to the user as a switch,
-	or keep it as a hidden attribute if the texture is mono-typed.
-	'''
-	
-	#bl_options		= {'HIDE_HEADER'}
-	COMPAT_ENGINES	= 'LUXRENDER_RENDER'
-	LUX_COMPAT		= set()
-	BL_COMPAT		= set()
-	
-	@classmethod
-	def poll(cls, context):
-		'''
-		Only show LuxRender panel if luxrender_texture.type in LUX_COMPAT
-		'''
-		
-		tex = context.texture
-		if not tex: return False
-		
-		if context.texture.luxrender_texture.type == 'BLENDER':
-			return tex and \
-					(context.scene.render.engine in cls.COMPAT_ENGINES) and \
-					context.texture.type in cls.BL_COMPAT
-		else:
-			return tex and \
-					(context.scene.render.engine in cls.COMPAT_ENGINES) and \
-					context.texture.luxrender_texture.type in cls.LUX_COMPAT
+    """
+    This is the base class for all LuxRender texture sub-panels.
+    All subpanels should have their own property_groups, and define
+    a string attribute in their property_group called 'variant'.
+    It should be set to either 'float' or 'color' depending on the
+    texture type, and may display the choice to the user as a switch,
+    or keep it as a hidden attribute if the texture is mono-typed.
+    """
+
+    # bl_options		= {'HIDE_HEADER'}
+    COMPAT_ENGINES = 'LUXRENDER_RENDER'
+    LUX_COMPAT = set()
+    BL_COMPAT = set()
+
+    @classmethod
+    def poll(cls, context):
+        """
+        Only show LuxRender panel if luxrender_texture.type in LUX_COMPAT
+        """
+
+        tex = context.texture
+        if not tex:
+            return False
+
+        if context.texture.luxrender_texture.type == 'BLENDER':
+            return tex and \
+                   (context.scene.render.engine in cls.COMPAT_ENGINES) and \
+                   context.texture.type in cls.BL_COMPAT
+        else:
+            return tex and \
+                   (context.scene.render.engine in cls.COMPAT_ENGINES) and \
+                   context.texture.luxrender_texture.type in cls.LUX_COMPAT
 

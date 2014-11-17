@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_gaussian(luxrender_texture_base):
-	bl_label = 'LuxRender Gaussian Texture'
-	
-	LUX_COMPAT = {'gaussian'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_gaussian' )
-	]
+    bl_label = 'LuxRender Gaussian Texture'
+
+    LUX_COMPAT = {'gaussian'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_gaussian' )
+    ]

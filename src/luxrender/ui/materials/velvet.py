@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.materials import luxrender_material_sub
 
+
 @LuxRenderAddon.addon_register_class
 class ui_material_velvet(luxrender_material_sub):
-	bl_label = 'LuxRender Velvet Material'
-	
-	LUX_COMPAT = {'velvet'}
-	
-	display_property_groups = [
-		( ('material', 'luxrender_material'), 'luxrender_mat_velvet' )
-	]
+    bl_label = 'LuxRender Velvet Material'
+
+    LUX_COMPAT = {'velvet'}
+
+    display_property_groups = [
+        ( ('material', 'luxrender_material'), 'luxrender_mat_velvet' )
+    ]

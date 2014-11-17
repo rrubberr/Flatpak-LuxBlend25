@@ -33,20 +33,25 @@ import threading
 
 import bpy
 
-"""List of possibly appropriate paths to load/save addon config from/to"""
+# List of possibly appropriate paths to load/save addon config from/to
 config_paths = []
-if bpy.utils.user_resource('CONFIG', '') != "": config_paths.append(bpy.utils.user_resource('CONFIG', '', create=True))
-if bpy.utils.user_resource('SCRIPTS', '') != "": config_paths.append(bpy.utils.user_resource('SCRIPTS', '', create=True))
-# want to scan other script paths in reverse order, since the user path comes last
-sp = [p for p in bpy.utils.script_paths() if p != '']
+
+if bpy.utils.user_resource('CONFIG', ''):
+    config_paths.append(bpy.utils.user_resource('CONFIG', '', create=True))
+
+if bpy.utils.user_resource('SCRIPTS', ''):
+    config_paths.append(bpy.utils.user_resource('SCRIPTS', '', create=True))
+
+# Want to scan other script paths in reverse order, since the user path comes last
+sp = [p for p in bpy.utils.script_paths() if p]
 sp.reverse()
 config_paths.extend(sp)
 
-"""This path is set at the start of export, so that calls to
-path_relative_to_export() can make all exported paths relative to
-this one.
-"""
+# This path is set at the start of export, so that calls to
+# path_relative_to_export() can make all exported paths relative to
+# this one.
 export_path = ''
+
 
 def path_relative_to_export(p):
     """Return a path that is relative to the export path"""
@@ -56,15 +61,19 @@ def path_relative_to_export(p):
 
     if os.sys.platform[:3] == "win":
         # Prevent an error whereby python thinks C: and c: are different drives
-        if p[1] == ':': p = p[0].lower() + p[1:]
-        if ep[1] == ':': ep = ep[0].lower() + ep[1:]
+        if p[1] == ':':
+            p = p[0].lower() + p[1:]
+
+        if ep[1] == ':':
+            ep = ep[0].lower() + ep[1:]
 
     try:
         relp = os.path.relpath(p, ep)
-    except ValueError: # path on different drive on windows
+    except ValueError:  # path on different drive on windows
         relp = p
 
     return relp.replace('\\', '/')
+
 
 def filesystem_path(p):
     """Resolve a relative Blender path to a real filesystem path"""
@@ -75,19 +84,19 @@ def filesystem_path(p):
 
     return pout.replace('\\', '/')
 
-# TODO: - somehow specify TYPES to get/set from config
 
+# TODO: - somehow specify TYPES to get/set from config
 def find_config_value(module, section, key, default):
     """Attempt to find the configuration value specified by string key
     in the specified section of module's configuration file. If it is
     not found, return default.
-
     """
     global config_paths
     fc = []
+
     for p in config_paths:
         if os.path.exists(p) and os.path.isdir(p) and os.access(p, os.W_OK):
-            fc.append( '/'.join([p, '%s.cfg' % module]))
+            fc.append('/'.join([p, '%s.cfg' % module]))
 
     if len(fc) < 1:
         print('Cannot find %s config file path' % module)
@@ -99,6 +108,7 @@ def find_config_value(module, section, key, default):
     if len(cfg_files) > 0:
         try:
             val = cp.get(section, key)
+
             if val == 'true':
                 return True
             elif val == 'false':
@@ -110,28 +120,29 @@ def find_config_value(module, section, key, default):
     else:
         return default
 
+
 def write_config_value(module, section, key, value):
     """Attempt to write the configuration value specified by string key
     in the specified section of module's configuration file.
-
     """
     global config_paths
     fc = []
+
     for p in config_paths:
         if os.path.exists(p) and os.path.isdir(p) and os.access(p, os.W_OK):
-            fc.append( '/'.join([p, '%s.cfg' % module]))
+            fc.append('/'.join([p, '%s.cfg' % module]))
 
     if len(fc) < 1:
         raise Exception('Cannot find a writable path to store %s config file' %
-            module)
+                        module)
 
-    cp = configparser.SafeConfigParser()
-
+    cp = configparser.ConfigParser()
     cfg_files = cp.read(fc)
 
     if not cp.has_section(section):
         cp.add_section(section)
 
+    # XXX: tomb: is there a type() or isinstance() missing here?
     if value == True:
         cp.set(section, key, 'true')
     elif value == False:
@@ -142,29 +153,33 @@ def write_config_value(module, section, key, value):
     if len(cfg_files) < 1:
         cfg_files = fc
 
-    fh=open(cfg_files[0],'w')
+    fh = open(cfg_files[0], 'w')
     cp.write(fh)
     fh.close()
 
     return True
 
+
 def scene_filename():
     """Construct a safe scene filename, using 'untitled' instead of ''"""
     filename = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
-    if filename == '':
+    if not filename:
         filename = 'untitled'
     return bpy.path.clean_name(filename)
+
 
 def temp_directory():
     """Return the system temp directory"""
     return tempfile.gettempdir()
 
+
 def temp_file(ext='tmp'):
     """Get a temporary filename with the given extension. This function
     will actually attempt to create the file."""
-    tf, fn = tempfile.mkstemp(suffix='.%s'%ext)
+    tf, fn = tempfile.mkstemp(suffix='.%s' % ext)
     os.close(tf)
     return fn
+
 
 class TimerThread(threading.Thread):
     """Periodically call self.kick(). The period of time in seconds
@@ -205,7 +220,9 @@ class TimerThread(threading.Thread):
         while self.active:
             self.timer = threading.Timer(self.KICK_PERIOD, self.kick_caller)
             self.timer.start()
-            if self.timer.isAlive(): self.timer.join()
+
+            if self.timer.isAlive():
+                self.timer.join()
 
     def kick_caller(self):
         """Intermediary between the kick-wait-loop and kick to allow
@@ -222,19 +239,21 @@ class TimerThread(threading.Thread):
         """Sub-classes do their work here"""
         pass
 
+
 def format_elapsed_time(t):
     """Format a duration in seconds as an HH:MM:SS format time"""
-
     td = datetime.timedelta(seconds=t)
-    min = td.days*1440  + td.seconds/60.0
-    hrs = td.days*24    + td.seconds/3600.0
+    min = td.days * 1440 + td.seconds / 60.0
+    hrs = td.days * 24 + td.seconds / 3600.0
 
-    return '%i:%02i:%02i' % (hrs, min%60, td.seconds%60)
+    return '%i:%02i:%02i' % (hrs, min % 60, td.seconds % 60)
+
 
 def getSequenceTexturePath(it, f):
     import bpy.path
     import os.path
     import string
+
     fd = it.image_user.frame_duration
     fs = it.image_user.frame_start
     fo = it.image_user.frame_offset
@@ -244,18 +263,22 @@ def getSequenceTexturePath(it, f):
     dn = os.path.dirname(it.image.filepath)
     rf = fb[::-1]
     nl = 0
-    for i in range (len(fb)):
+
+    for i in range(len(fb)):
         if rf[i] in string.digits:
             nl += 1
         else:
             break
-    head = fb[:len(fb)-nl]
+
+    head = fb[:len(fb) - nl]
     fnum = f
+
     if fs != 1:
         if f != fs:
-            fnum -= (fs-1)
+            fnum -= (fs - 1)
         elif f == fs:
             fnum = 1
+
     if fnum <= 0:
         if cyclic:
             fnum = fd - abs(fnum) % fd
@@ -266,5 +289,7 @@ def getSequenceTexturePath(it, f):
             fnum = fnum % fd
         else:
             fnum = fd
+
     fnum += fo
+
     return dn + "/" + head + str(fnum).rjust(nl, "0") + ext

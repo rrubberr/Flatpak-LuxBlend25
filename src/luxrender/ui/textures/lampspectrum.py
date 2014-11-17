@@ -27,18 +27,20 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_lampspectrum(luxrender_texture_base):
-	bl_label = 'LuxRender Lamp spectrum Texture'
-	
-	LUX_COMPAT = {'lampspectrum'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_lampspectrum' )
-	]
-	
-	def draw(self, context):
-		cl = self.layout.column(align=True)
-		cl.menu('TEXTURE_MT_lampspectrum_presets', text=context.texture.luxrender_texture.luxrender_tex_lampspectrum.label)
-		super().draw(context)
+    bl_label = 'LuxRender Lamp spectrum Texture'
+
+    LUX_COMPAT = {'lampspectrum'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_lampspectrum' )
+    ]
+
+    def draw(self, context):
+        cl = self.layout.column(align=True)
+        cl.menu('TEXTURE_MT_lampspectrum_presets',
+                text=context.texture.luxrender_texture.luxrender_tex_lampspectrum.label)
+        super().draw(context)
 

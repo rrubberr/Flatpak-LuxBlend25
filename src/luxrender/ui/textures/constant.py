@@ -27,12 +27,13 @@
 from ... import LuxRenderAddon
 from ...ui.textures import luxrender_texture_base
 
+
 @LuxRenderAddon.addon_register_class
 class ui_texture_constant(luxrender_texture_base):
-	bl_label = 'LuxRender Constant Texture'
-	
-	LUX_COMPAT = {'constant'}
-	
-	display_property_groups = [
-		( ('texture', 'luxrender_texture'), 'luxrender_tex_constant' )
-	]
+    bl_label = 'LuxRender Constant Texture'
+
+    LUX_COMPAT = {'constant'}
+
+    display_property_groups = [
+        ( ('texture', 'luxrender_texture'), 'luxrender_tex_constant' )
+    ]
