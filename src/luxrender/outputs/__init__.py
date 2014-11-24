@@ -212,20 +212,25 @@ class LuxManager(object):
         Returns LuxManager object
         """
 
-        context = {
-            'FILE': file_api.Custom_Context,
-            'API': pure_api.Custom_Context,
-            'LBM2': lbm2_api.Custom_Context,
-            'LXM': lxm_api.Custom_Context
-        }.get(api_type)
-
-        if context is None:
+        # NB: Should not be refactored into a dict switch as it will
+        # lead to undefined context in case of pylux module import fail.
+        if api_type == 'FILE':
+            Context = file_api.Custom_Context
+        elif api_type == 'API':
+            Context = pure_api.Custom_Context
+        elif api_type == 'LBM2':
+            Context = lbm2_api.Custom_Context
+        elif api_type == 'LXM':
+            Context = lxm_api.Custom_Context
+        else:
             raise Exception('Unknown exporter API type "%s"' % api_type)
 
         if manager_name is not '':
             manager_name = ' (%s)' % manager_name
 
-        self.lux_context = context('LuxContext %04i%s' % (LuxManager.get_context_number(), manager_name))
+        self.lux_context = Context('LuxContext %04i%s' %
+                                   (LuxManager.get_context_number(),
+                                    manager_name))
         self.reset()
 
     def start(self):
