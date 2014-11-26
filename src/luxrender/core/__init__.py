@@ -995,7 +995,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         buffer_id is used only for obtaining the right MATERIAL_ID_MASK and BY_MATERIAL_ID buffer
         """
-        from .. import pyluxcore
+        from ..outputs.luxcore_api import pyluxcore
         # raw channel buffer
         channel_buffer = array.array(arrayType, [arrayInitValue] * (filmWidth * filmHeight * arrayDepth))
         # buffer for converted array (to RGBA)
@@ -1116,7 +1116,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             LuxLog('ERROR: LuxCore rendering requires pyluxcore')
             self.report({'ERROR'}, 'LuxCore rendering requires pyluxcore')
             return
-        from .. import pyluxcore
+        from ..outputs.luxcore_api import pyluxcore
         from ..export.luxcore_scene import BlenderSceneConverter
 
         try:
@@ -1286,7 +1286,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if not PYLUXCORE_AVAILABLE:
             LuxLog('ERROR: LuxCore preview rendering requires pyluxcore')
             return
-        from .. import pyluxcore
+        from ..outputs.luxcore_api import pyluxcore
         from ..export.luxcore_scene import BlenderSceneConverter
 
         try:
@@ -1371,7 +1371,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if context.scene.luxrender_engine.preview_stop:
             return
 
-        from .. import pyluxcore
+        from ..outputs.luxcore_api import pyluxcore
         from ..export.luxcore_scene import BlenderSceneConverter
 
         if (self.viewFilmWidth != context.region.width) or (self.viewFilmHeight != context.region.height):
@@ -1478,7 +1478,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if not PYLUXCORE_AVAILABLE:
             LuxLog('ERROR: LuxCore real-time rendering requires pyluxcore')
             return
-        from .. import pyluxcore
+        from ..outputs.luxcore_api import pyluxcore
 
         # Check if the size of the window is changed
         if (self.viewFilmWidth != context.region.width) or (self.viewFilmHeight != context.region.height) or (
