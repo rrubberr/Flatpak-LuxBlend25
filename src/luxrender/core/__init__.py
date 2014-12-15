@@ -1132,7 +1132,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 filmHeight = int(filmHeight * y_max - filmHeight * y_min)
         
             # convert the Blender scene
-            lcConfig = BlenderSceneConverter(scene).Convert(filmWidth, filmHeight)
+            lcConfig = BlenderSceneConverter(scene, renderengine = self).Convert(filmWidth, filmHeight)
 
             lcSession = pyluxcore.RenderSession(lcConfig)
             
@@ -1451,7 +1451,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             LuxLog('ERROR: LuxCore real-time rendering requires pyluxcore')
             return
             
-        if context.scene.luxrender_engine.preview_stop:
+        if self.test_break() or context.scene.luxrender_engine.preview_stop:
             return
             
         # get update starttime in milliseconds

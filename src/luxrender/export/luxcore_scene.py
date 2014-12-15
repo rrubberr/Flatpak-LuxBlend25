@@ -54,10 +54,11 @@ class BlenderSceneConverter(object):
     def clear():
         BlenderSceneConverter.scalers_count = 0
 
-    def __init__(self, blScene, lcSession = None):
+    def __init__(self, blScene, lcSession = None, renderengine = None):
         LuxManager.SetCurrentScene(blScene)
 
         self.blScene = blScene
+        self.renderengine = renderengine
         if lcSession:
            self.lcScene = lcSession.GetRenderConfig().GetScene()
         else:
@@ -123,10 +124,6 @@ class BlenderSceneConverter(object):
             if mesh is None:
                 LuxLog('Cannot create render/export object: %s' % obj.name)
                 return mesh_definitions
-
-            # for realtime updates, transformations are applied with LuxCore SceneEdits
-            #if not preview:
-            #    mesh.transform(obj.matrix_world)
                 
             mesh.update(calc_tessface=True)
 
@@ -1492,6 +1489,8 @@ class BlenderSceneConverter(object):
         self.ConvertImagepipelineSettings()
         
     def Convert(self, imageWidth=None, imageHeight=None):
+        self.renderengine.update_stats('Exporting...', '')
+    
         # #######################################################################
         # Convert camera definition
         ########################################################################
@@ -1507,7 +1506,12 @@ class BlenderSceneConverter(object):
         # Convert all objects
         ########################################################################
         for obj in self.blScene.objects:
-            LuxLog('Object: %s' % obj.name)
+            # cancel export when user hits 'Esc'
+            if self.renderengine is not None and self.renderengine.test_break():
+                break
+                
+            LuxLog('Converting object: %s' % obj.name)
+            self.renderengine.update_stats('Exporting...', 'Object: ' + obj.name)
             self.ConvertObject(obj)
 
         # Debug information
@@ -1519,6 +1523,7 @@ class BlenderSceneConverter(object):
         ########################################################################
         # Create the configuration
         ########################################################################
+        self.renderengine.update_stats('Exporting...', 'Setting up renderengine configuration')
         self.ConvertConfig()
 
         # Film
@@ -1582,4 +1587,6 @@ class BlenderSceneConverter(object):
         self.lcConfig = pyluxcore.RenderConfig(self.cfgProps, self.lcScene)
         BlenderSceneConverter.clear()  # for scalers_count etc.
 
+        self.renderengine.update_stats('Exporting...', 'Starting LuxRender')
+		
         return self.lcConfig
