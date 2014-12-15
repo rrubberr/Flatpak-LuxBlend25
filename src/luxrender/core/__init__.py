@@ -978,16 +978,16 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             for i in range(0, len(channel_buffer)):
                 channel_buffer[i] = channel_buffer[i] / maxValue
 
-    def convertChannelToImage(self, lcSession, filmWidth, filmHeight, channelName, useHDR, outputType, arrayType,
-                              arrayInitValue, arrayDepth, normalize, saveToDisk, buffer_id=-1):
+    def convertChannelToImage(self, lcSession, scene, filmWidth, filmHeight, channelName, useHDR, outputType, arrayType,
+                              arrayInitValue, arrayDepth, normalize, saveToDisk, buffer_id = -1):
         """
         Convert AOVs to Blender images
 
         Example arguments:
-        channelName:        RGB
+        channelName:        'RGB'
         useHDR:             False
         outputType:         pyluxcore.FilmOutputType.RGB
-        arrayType:         'f'
+        arrayType:          'f'
         arrayInitValue:     0.0
         arrayDepth:         3
         normalize:          False
@@ -1092,10 +1092,29 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             if bl_image.name == imageName and not bl_image.users:
                 bpy.data.images.remove(bl_image)
 
-        # write converted buffer with RGBA values to Blender image
-        blenderImage = bpy.data.images.new(imageName, alpha=False, width=filmWidth, height=filmHeight,
-                                           float_buffer=useHDR)
-        blenderImage.pixels = channel_buffer_converted
+        if scene.render.use_border and not scene.render.use_crop_to_border:
+            # border rendering without cropping: fit the rendered area into a blank image
+            imageWidth, imageHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
+            
+            # construct an empty Blender image
+            blenderImage = bpy.data.images.new(imageName, alpha = True, 
+                                                width = imageWidth, height = imageHeight, float_buffer = useHDR)
+            
+            # copy the buffer content to the right position in the Blender image
+            offsetFromLeft = int(imageWidth * scene.render.border_min_x) * 4
+            offsetFromTop = int(imageHeight * scene.render.border_min_y)
+            
+            position_buffer = 0
+            for y in range(offsetFromTop, offsetFromTop + filmHeight):
+                for x in range(offsetFromLeft, offsetFromLeft + filmWidth * 4):
+                    position_image = (y * imageWidth * 4) + x
+                    blenderImage.pixels[position_image] = channel_buffer_converted[position_buffer]
+                    position_buffer += 1
+        else:
+            # no border rendering or border rendering with cropping: just copy the buffer to a Blender image
+            blenderImage = bpy.data.images.new(imageName, alpha = False, 
+                                                width = filmWidth, height = filmHeight, float_buffer = useHDR)
+            blenderImage.pixels = channel_buffer_converted
 
         # write image to file
         suffix = '.png'
@@ -1179,6 +1198,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
                     lastRefreshTime = now
 
+            lcSession.Stop()
+
             if not scene.luxrender_channels.disable_aovs:
 	            channelCalcStartTime = time.time()
 	            LuxLog('Importing AOV channels into Blender...')
@@ -1186,76 +1207,76 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 	            channels = scene.luxrender_channels
 	
 	            if channels.RGB:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RGB', True, pyluxcore.FilmOutputType.RGB,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'RGB', True, pyluxcore.FilmOutputType.RGB,
 	                                           'f', 0.0, 3, False, channels.saveToDisk)
 	            if channels.RGBA:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RGBA', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'RGBA', True,
 	                                           pyluxcore.FilmOutputType.RGBA, 'f', 0.0, 4, False, channels.saveToDisk)
 	            if channels.RGB_TONEMAPPED:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RGB_TONEMAPPED', False,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'RGB_TONEMAPPED', False,
 	                                           pyluxcore.FilmOutputType.RGB_TONEMAPPED, 'f', 0.0, 3, False,
 	                                           channels.saveToDisk)
 	            if channels.RGBA_TONEMAPPED:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RGBA_TONEMAPPED', False,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'RGBA_TONEMAPPED', False,
 	                                           pyluxcore.FilmOutputType.RGBA_TONEMAPPED, 'f', 0.0, 4, False,
 	                                           channels.saveToDisk)
 	            if channels.ALPHA:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'ALPHA', False,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'ALPHA', False,
 	                                           pyluxcore.FilmOutputType.ALPHA, 'f', 0.0, 1, False, channels.saveToDisk)
 	            if channels.DEPTH:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'DEPTH', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'DEPTH', True,
 	                                           pyluxcore.FilmOutputType.DEPTH, 'f', 0.0, 1, channels.normalize_DEPTH,
 	                                           channels.saveToDisk)
 	            if channels.POSITION:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'POSITION', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'POSITION', True,
 	                                           pyluxcore.FilmOutputType.POSITION, 'f', 0.0, 3, False, channels.saveToDisk)
 	            if channels.GEOMETRY_NORMAL:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'GEOMETRY_NORMAL', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'GEOMETRY_NORMAL', True,
 	                                           pyluxcore.FilmOutputType.GEOMETRY_NORMAL, 'f', 0.0, 3, False,
 	                                           channels.saveToDisk)
 	            if channels.SHADING_NORMAL:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'SHADING_NORMAL', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'SHADING_NORMAL', True,
 	                                           pyluxcore.FilmOutputType.SHADING_NORMAL, 'f', 0.0, 3, False,
 	                                           channels.saveToDisk)
 	            if channels.MATERIAL_ID:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'MATERIAL_ID', False,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'MATERIAL_ID', False,
 	                                           pyluxcore.FilmOutputType.MATERIAL_ID, 'I', 0, 1, False, channels.saveToDisk)
 	            if channels.DIRECT_DIFFUSE:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'DIRECT_DIFFUSE', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'DIRECT_DIFFUSE', True,
 	                                           pyluxcore.FilmOutputType.DIRECT_DIFFUSE, 'f', 0.0, 3,
 	                                           channels.normalize_DIRECT_DIFFUSE, channels.saveToDisk)
 	            if channels.DIRECT_GLOSSY:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'DIRECT_GLOSSY', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'DIRECT_GLOSSY', True,
 	                                           pyluxcore.FilmOutputType.DIRECT_GLOSSY, 'f', 0.0, 3,
 	                                           channels.normalize_DIRECT_GLOSSY, channels.saveToDisk)
 	            if channels.EMISSION:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'EMISSION', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'EMISSION', True,
 	                                           pyluxcore.FilmOutputType.EMISSION, 'f', 0.0, 3, False, channels.saveToDisk)
 	            if channels.INDIRECT_DIFFUSE:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'INDIRECT_DIFFUSE', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'INDIRECT_DIFFUSE', True,
 	                                           pyluxcore.FilmOutputType.INDIRECT_DIFFUSE, 'f', 0.0, 3,
 	                                           channels.normalize_INDIRECT_DIFFUSE, channels.saveToDisk)
 	            if channels.INDIRECT_GLOSSY:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'INDIRECT_GLOSSY', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'INDIRECT_GLOSSY', True,
 	                                           pyluxcore.FilmOutputType.INDIRECT_GLOSSY, 'f', 0.0, 3,
 	                                           channels.normalize_INDIRECT_GLOSSY, channels.saveToDisk)
 	            if channels.INDIRECT_SPECULAR:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'INDIRECT_SPECULAR', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'INDIRECT_SPECULAR', True,
 	                                           pyluxcore.FilmOutputType.INDIRECT_SPECULAR, 'f', 0.0, 3,
 	                                           channels.normalize_INDIRECT_SPECULAR, channels.saveToDisk)
 	            if channels.DIRECT_SHADOW_MASK:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'DIRECT_SHADOW_MASK', False,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'DIRECT_SHADOW_MASK', False,
 	                                           pyluxcore.FilmOutputType.DIRECT_SHADOW_MASK, 'f', 0.0, 1, False,
 	                                           channels.saveToDisk)
 	            if channels.INDIRECT_SHADOW_MASK:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'INDIRECT_SHADOW_MASK', False,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'INDIRECT_SHADOW_MASK', False,
 	                                           pyluxcore.FilmOutputType.INDIRECT_SHADOW_MASK, 'f', 0.0, 1, False,
 	                                           channels.saveToDisk)
 	            if channels.UV:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'UV', True, pyluxcore.FilmOutputType.UV,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'UV', True, pyluxcore.FilmOutputType.UV,
 	                                           'f', 0.0, 2, False, channels.saveToDisk)
 	            if channels.RAYCOUNT:
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RAYCOUNT', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'RAYCOUNT', True,
 	                                           pyluxcore.FilmOutputType.RAYCOUNT, 'f', 0.0, 1, channels.normalize_RAYCOUNT,
 	                                           channels.saveToDisk)
 	
@@ -1267,7 +1288,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 	                    mask_ids.add(props.Get(i + ".id").GetInt())
 	
 	            for i in range(len(mask_ids)):
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'MATERIAL_ID_MASK', False,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'MATERIAL_ID_MASK', False,
 	                                           pyluxcore.FilmOutputType.MATERIAL_ID_MASK, 'f', 0.0, 1, False,
 	                                           channels.saveToDisk, i)
 	
@@ -1278,15 +1299,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 	                    ids.add(props.Get(i + ".id").GetInt())
 	
 	            for i in range(len(ids)):
-	                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'BY_MATERIAL_ID', True,
+	                self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'BY_MATERIAL_ID', True,
 	                                           pyluxcore.FilmOutputType.BY_MATERIAL_ID, 'f', 0.0, 3, False,
 	                                           channels.saveToDisk, i)
 	
 	            channelCalcTime = time.time() - channelCalcStartTime
 	            LuxLog('AOV conversion took %i seconds' % channelCalcTime)
 	            # End of AOV import
-
-            lcSession.Stop()
 
             LuxLog('Done.')
         except Exception as exc:
