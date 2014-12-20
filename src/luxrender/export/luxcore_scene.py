@@ -35,6 +35,7 @@ from ..outputs.luxcore_api import pyluxcore
 from ..outputs.luxcore_api import ToValidLuxCoreName
 from ..export import get_worldscale, matrix_to_list
 from ..export import is_obj_visible
+from ..export import get_expanded_file_name
 from ..export import ParamSet
 from ..export.materials import get_texture_from_scene
 
@@ -71,6 +72,8 @@ class BlenderSceneConverter(object):
 
         self.materialsCache = set()
         self.texturesCache = set()
+
+
 
     def createChannelOutputString(self, channelName, id=-1):
         """
@@ -656,11 +659,9 @@ class BlenderSceneConverter(object):
             # Imagemap
             ####################################################################
             elif texType == 'imagemap':
-                filename = luxTex.filename
-                if filename.startswith("//"):
-                    filename = os.path.abspath(filename[2:])
+                full_name, base_name = get_expanded_file_name(luxTex, luxTex.filename)
 
-                props.Set(pyluxcore.Property(prefix + '.file', [filename]))
+                props.Set(pyluxcore.Property(prefix + '.file', [full_name]))
                 props.Set(pyluxcore.Property(prefix + '.gamma', [float(luxTex.gamma)]))
                 props.Set(pyluxcore.Property(prefix + '.gain', [float(luxTex.gain)]))
                 if luxTex.variant == 'float':
@@ -860,9 +861,6 @@ class BlenderSceneConverter(object):
             # Matte and Roughmatte
             ####################################################################
             if matType == 'matte':
-                # import pydevd
-                # pydevd.settrace('localhost', port=9999, stdoutToServer=True, stderrToServer=True)
-
                 sigma = self.ConvertMaterialChannel(luxMat, 'sigma', 'float')
 
                 if sigma == '0.0':

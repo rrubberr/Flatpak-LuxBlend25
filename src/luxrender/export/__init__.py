@@ -360,6 +360,21 @@ def matrix_to_list(matrix, apply_worldscale=False):
     return [float(i) for i in l]
 
 
+def get_expanded_file_name(obj, file_path):
+    """
+    :param obj: object where file_path comes from
+    :param file_path: file name relative to object
+    :return: full file name (on disk), basename of file
+    """
+    file_basename = os.path.basename(file_path)
+    library_filepath = obj.library.filepath if (hasattr(obj, 'library') and obj.library) else ''
+    file_library_path = efutil.filesystem_path(bpy.path.abspath(file_path, library_filepath))
+    file_relative = efutil.filesystem_path(file_library_path) if (
+        hasattr(obj, 'library') and obj.library) else efutil.filesystem_path(file_path)
+
+    return file_relative, file_basename
+
+
 def process_filepath_data(scene, obj, file_path, paramset, parameter_name):
     file_basename = os.path.basename(file_path)
     library_filepath = obj.library.filepath if (hasattr(obj, 'library') and obj.library) else ''
