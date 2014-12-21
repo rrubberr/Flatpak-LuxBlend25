@@ -546,7 +546,6 @@ class BlenderSceneConverter(object):
         if texType != 'BLENDER':
             texName = ToValidLuxCoreName(texture.name)
             luxTex = getattr(texture.luxrender_texture, 'luxrender_tex_' + texType)
-
             prefix = 'scene.textures.' + texName
 
             # ###################################################################
@@ -659,8 +658,7 @@ class BlenderSceneConverter(object):
             # Imagemap
             ####################################################################
             elif texType == 'imagemap':
-                full_name, base_name = get_expanded_file_name(luxTex, luxTex.filename)
-
+                full_name, base_name = get_expanded_file_name(texture, luxTex.filename)
                 props.Set(pyluxcore.Property(prefix + '.file', [full_name]))
                 props.Set(pyluxcore.Property(prefix + '.gamma', [float(luxTex.gamma)]))
                 props.Set(pyluxcore.Property(prefix + '.gain', [float(luxTex.gain)]))
@@ -671,7 +669,8 @@ class BlenderSceneConverter(object):
             # Normalmap
             ####################################################################
             elif texType == 'normalmap':
-                props.Set(pyluxcore.Property(prefix + '.file', [luxTex.filename]))
+                full_name, base_name = get_expanded_file_name(texture, luxTex.filename)
+                props.Set(pyluxcore.Property(prefix + '.file', [full_name]))
                 self.ConvertMapping(prefix, texture)
             ####################################################################
             # Marble
@@ -1260,6 +1259,7 @@ class BlenderSceneConverter(object):
         if getattr(lux_lamp, 'L_color') and not (
                     hasattr(lux_lamp, 'sunsky_type') and getattr(lux_lamp, 'sunsky_type') != 'distant'):
             iesfile = getattr(light.luxrender_lamp, 'iesname')
+            iesfile, basename = get_expanded_file_name(light, iesfile)
             if iesfile != '':
                 self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.iesfile', iesfile))
             spectrum = getattr(lux_lamp, 'L_color') * energy
@@ -1317,8 +1317,7 @@ class BlenderSceneConverter(object):
 
         elif light.type == 'HEMI':
             infinite_map_path = getattr(lux_lamp, 'infinite_map')
-            infinite_map_path_abs = bpy.path.abspath(infinite_map_path)
-
+            infinite_map_path_abs, basename = get_expanded_file_name(light, infinite_map_path)
             self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.type', ['infinite']))
             self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.file', infinite_map_path_abs))
             self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.gamma', getattr(lux_lamp, 'gamma')))
@@ -1350,7 +1349,7 @@ class BlenderSceneConverter(object):
             conedeltaangle = math.degrees(light.spot_size * 0.5 * light.spot_blend)
             if getattr(lux_lamp, 'projector'):
                 projector_map_path = getattr(lux_lamp, 'mapname')
-                projector_map_path_abs = bpy.path.abspath(projector_map_path)
+                projector_map_path_abs, basename = get_expanded_file_name(light, projector_map_path)
                 self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.type', ['projection']))
                 self.scnProps.Set(
                     pyluxcore.Property('scene.lights.' + luxcore_name + '.mapfile', projector_map_path_abs))

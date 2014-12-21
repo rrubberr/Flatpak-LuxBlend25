@@ -366,13 +366,13 @@ def get_expanded_file_name(obj, file_path):
     :param file_path: file name relative to object
     :return: full file name (on disk), basename of file
     """
+    file_path = file_path.replace("\\", os.path.sep)
     file_basename = os.path.basename(file_path)
-    library_filepath = obj.library.filepath if (hasattr(obj, 'library') and obj.library) else ''
-    file_library_path = efutil.filesystem_path(bpy.path.abspath(file_path, library_filepath))
-    file_relative = efutil.filesystem_path(file_library_path) if (
-        hasattr(obj, 'library') and obj.library) else efutil.filesystem_path(file_path)
 
-    return os.path.abspath(file_relative), file_basename
+    if hasattr(obj, 'library') and obj.library:
+        return bpy.path.abspath(file_path, library=obj.library), file_basename
+
+    return bpy.path.abspath(file_path), file_basename
 
 
 def process_filepath_data(scene, obj, file_path, paramset, parameter_name):
