@@ -1106,12 +1106,18 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             offsetFromLeft = int(imageWidth * scene.render.border_min_x) * 4
             offsetFromTop = int(imageHeight * scene.render.border_min_y)
             
-            position_buffer = 0
+            # we use an intermediate temp image because blenderImage.pixels doesn't support list slicing
+            tempImage = [0.0] * (imageWidth * imageHeight * 4)
+            
             for y in range(offsetFromTop, offsetFromTop + filmHeight):
-                for x in range(offsetFromLeft, offsetFromLeft + filmWidth * 4):
-                    position_image = (y * imageWidth * 4) + x
-                    blenderImage.pixels[position_image] = channel_buffer_converted[position_buffer]
-                    position_buffer += 1
+                imageSliceStart = y * imageWidth * 4 + offsetFromLeft
+                imageSliceEnd = imageSliceStart + filmWidth * 4
+                bufferSliceStart = (y - offsetFromTop) * filmWidth * 4
+                bufferSliceEnd = bufferSliceStart + filmWidth * 4
+                
+                tempImage[imageSliceStart:imageSliceEnd] = channel_buffer_converted[bufferSliceStart:bufferSliceEnd]
+                
+            blenderImage.pixels = tempImage
         else:
             # no border rendering or border rendering with cropping: just copy the buffer to a Blender image
             blenderImage = bpy.data.images.new(imageName, alpha = False, 
