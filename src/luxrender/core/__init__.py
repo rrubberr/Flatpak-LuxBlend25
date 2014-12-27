@@ -1136,6 +1136,64 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if saveToDisk:
             blenderImage.save()
 
+    def draw_tiles(self, scene, stats, imageBuffer, filmWidth, filmHeight):
+        """
+        draws outlines for notconverged and pending tiles directly into 
+        the imageBuffer
+        
+        scene: Blender scene object
+        stats: LuxCore stats
+        imageBuffer: list of tuples of floats, e.g. [(r, g, b, a), ...]
+        """
+        
+        def draw_tile_type(count, coords, color):
+            for i in range(count):
+                offset_x = coords[i * 2]
+                offset_y = coords[i * 2 + 1]
+                width = min(tile_size, filmWidth - offset_x - 1)
+                height = min(tile_size, filmHeight - offset_y - 1)
+                
+                draw_tile_outline(offset_x, offset_y, width, height, color)
+        
+        def draw_tile_outline(offset_x, offset_y, width, height, color):
+            for y in range(offset_y, offset_y + height):
+                sliceStart = y * filmWidth + offset_x
+                sliceEnd = sliceStart + width
+                
+                if y == offset_y or y == offset_y + height - 1:
+                    # top and bottom lines
+                    imageBuffer[sliceStart:sliceEnd] = [color] * width
+                else:
+                    # left and right sides
+                    imageBuffer[sliceStart] = color
+                    imageBuffer[sliceEnd - 1] = color
+        
+        # measure time (debug)
+        #tile_draw_starttime = int(round(time.time() * 1000))
+        
+        # collect stats
+        tile_size = scene.luxcore_enginesettings.tile_size
+        
+        #count_converged = stats.Get('stats.biaspath.tiles.converged.count').GetInt()
+        count_notconverged = stats.Get('stats.biaspath.tiles.notconverged.count').GetInt()
+        count_pending = stats.Get('stats.biaspath.tiles.pending.count').GetInt()
+        
+        #if count_converged > 0:
+        #    coords_converged = stats.Get('stats.biaspath.tiles.converged.coords').GetInts()
+        if count_notconverged > 0:
+            coords_notconverged = stats.Get('stats.biaspath.tiles.notconverged.coords').GetInts()
+            color_red = (1.0, 0.0, 0.0, 1.0)
+            draw_tile_type(count_notconverged, coords_notconverged, color_red)
+            
+        if count_pending > 0:
+            coords_pending = stats.Get('stats.biaspath.tiles.pending.coords').GetInts()
+            color_yellow = (1.0, 1.0, 0.0, 1.0)
+            draw_tile_type(count_pending, coords_pending, color_yellow)
+            
+        # measure time (debug)
+        #print("tile outline drawing took %dms" % (
+        #            int(round(time.time() * 1000)) - tile_draw_starttime))
+
     def luxcore_render(self, scene):
         if scene.name == 'preview':
             self.luxcore_render_preview(scene)
@@ -1181,10 +1239,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 elapsedTimeSinceLastRefresh = now - lastRefreshTime
                 elapsedTimeSinceStart = now - startTime
 
-                if elapsedTimeSinceStart < 5.0 or elapsedTimeSinceLastRefresh > \
-                        scene.camera.data.luxrender_camera.luxrender_film.displayinterval:
-                    # Print some information about the rendering progress
+                displayInterval = scene.camera.data.luxrender_camera.luxrender_film.displayinterval
+                # use higher displayInterval for the first 10 seconds
+                if elapsedTimeSinceStart < 10.0:
+                    displayInterval = 1.0
 
+                if elapsedTimeSinceLastRefresh > displayInterval:
+                    # Print some information about the rendering progress
                     # Update statistics
                     lcSession.UpdateStats()
 
@@ -1200,11 +1261,24 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     # Here we write the pixel values to the RenderResult
                     result = self.begin_result(0, 0, filmWidth, filmHeight)
                     layer = result.layers[0]
-                    layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight,
+                    tempImage = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight,
                                                                                            imageBufferFloat)
-                    self.end_result(result)
+                    
+                    if scene.luxcore_enginesettings.renderengine_type in ['BIASPATHCPU', 'BIASPATHOCL']:
+                        # mark tiles (notconverged and pending)
+                        self.draw_tiles(scene, stats, tempImage, filmWidth, filmHeight)
+                    
+                    layer.rect = tempImage
+                    self.update_result(result)
 
                     lastRefreshTime = now
+
+            # write final render result
+            result = self.begin_result(0, 0, filmWidth, filmHeight)
+            layer = result.layers[0]
+            layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight,
+                                                                                   imageBufferFloat)
+            self.end_result(result)
 
             lcSession.Stop()
 
