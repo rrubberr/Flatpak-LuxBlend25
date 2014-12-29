@@ -1040,7 +1040,7 @@ class BlenderSceneConverter(object):
             # Glass2
             ####################################################################
             elif matType == 'glass2':
-                if not material.luxrender_material.luxrender_mat_glass.architectural:
+                if not material.luxrender_material.luxrender_mat_glass2.architectural:
                     props.Set(pyluxcore.Property(prefix + '.type', ['glass']))
                 else:
                     props.Set(pyluxcore.Property(prefix + '.type', ['archglass']))
