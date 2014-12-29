@@ -1,6 +1,7 @@
 syntax: regexp
 ^\.project$
 ^\.pydevproject$
+^\.idea$
 ^.settings
 ^nbproject$
 syntax: glob
