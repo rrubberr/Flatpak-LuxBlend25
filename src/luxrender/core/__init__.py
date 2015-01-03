@@ -1111,7 +1111,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         """
         from ..outputs.luxcore_api import pyluxcore
         
-        self.update_stats('Importing AOV channels into Blender...', 'Channel: ' + channelName)
+        self.update_stats('Importing AOV passes into Blender...', 'Pass: ' + channelName)
         
         # raw channel buffer
         channel_buffer = array.array(arrayType, [arrayInitValue] * (filmWidth * filmHeight * arrayDepth))
@@ -1205,10 +1205,12 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if normalize:
             imageName += '_normalized'
 
-        # remove channel from Blender if it already exists and has no users (to prevent duplicates)
+        # remove pass image from Blender if it already exists (to prevent duplicates)
         for bl_image in bpy.data.images:
-            if bl_image.name == imageName and not bl_image.users:
-                bpy.data.images.remove(bl_image)
+            if bl_image.name == imageName:
+                bl_image.user_clear()
+                if not bl_image.users:
+                    bpy.data.images.remove(bl_image)
 
         if scene.render.use_border and not scene.render.use_crop_to_border:
             # border rendering without cropping: fit the rendered area into a blank image
