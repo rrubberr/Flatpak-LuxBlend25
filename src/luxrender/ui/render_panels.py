@@ -88,10 +88,8 @@ class device_settings(render_panel):
         engine_settings = context.scene.luxcore_enginesettings
         render_mode = context.scene.luxrender_rendermode.rendermode
     
-        if (render_mode in ['hybridpath', 'luxcorepathocl', 'luxcorebiaspathocl']
-                and bpy.context.scene.luxrender_rendermode.opencl_prefs)\
-                or (UseLuxCore() and (
-                context.scene.luxcore_enginesettings.renderengine_type in ['PATHOCL', 'BIASPATHOCL']
+        if (render_mode in ['hybridpath', 'luxcorepathocl', 'luxcorebiaspathocl'] and not UseLuxCore())\
+                or (UseLuxCore() and (engine_settings.renderengine_type in ['PATHOCL', 'BIASPATHOCL']\
                 or context.scene.luxcore_realtimesettings.device_type == 'OCL')):
             self.layout.operator('luxrender.opencl_device_list_update')
             # This is a "special" panel section for the list of OpenCL devices
@@ -102,12 +100,20 @@ class device_settings(render_panel):
                 subrow = row.row()
                 subrow.enabled = dev.opencl_device_enabled
                 subrow.label(dev.name)
-        else:
-            if ('luxcore' in render_mode and not 'ocl' in render_mode) or UseLuxCore():
-                self.layout.prop(engine_settings, 'native_threads_count')
-            else:
-                self.layout.label("Inactive")
-                
+
+        if UseLuxCore() and (not 'OCL' in engine_settings.renderengine_type\
+                or context.scene.luxcore_realtimesettings.device_type == 'CPU'):
+            # self.layout.label("LuxCore Threads")
+            self.layout.prop(engine_settings, 'native_threads_count')
+
+        if not UseLuxCore() and not 'ocl' in render_mode:
+            # self.layout.label("Classic Threads")
+            threads = context.scene.luxrender_engine
+            row = self.layout.row()
+            row.prop(threads, 'threads_auto')
+            if not threads.threads_auto:
+                row.prop(threads, 'threads')
+
         # Tile settings
         if context.scene.luxcore_enginesettings.renderengine_type in ['BIASPATHCPU', 'BIASPATHOCL']:
             tile_highlighting_settings = context.scene.luxcore_tile_highlighting
