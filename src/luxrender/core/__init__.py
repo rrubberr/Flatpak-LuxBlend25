@@ -2056,6 +2056,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                                             update_mesh = False, 
                                             update_transform = True)
             
+            # Debug output
+            print("\nUpdated scene properties:\n", converter.scnProps, "\n")
+            
             # parse scene changes and end sceneEdit
             lcScene.Parse(converter.scnProps)
             self.viewSession.EndSceneEdit()

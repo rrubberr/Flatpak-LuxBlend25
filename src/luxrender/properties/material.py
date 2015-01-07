@@ -3433,7 +3433,9 @@ class luxrender_emission(declarative_property_group):
     alert = {}
 
     def set_viewport_emission(self, context):
-        # This litte function monkeys with the blender mat's emit value to sort-of show the meshlight in the viewport
+        """
+        This litte function monkeys with the blender mat's emit value to sort-of show the meshlight in the viewport
+        """
         if self.use_emission:
             context.material.emit = self.gain
         else:

@@ -1310,7 +1310,8 @@ class BlenderSceneConverter(object):
         gain_spectrum = [energy, energy, energy] # luxcore gain is spectrum !
 
         if getattr(lux_lamp, 'L_color') and not (
-                    light.type == 'SUN' and getattr(lux_lamp, 'sunsky_type') != 'distant'):
+                    light.type == 'SUN' and getattr(lux_lamp, 'sunsky_type') != 'distant') and not (
+                    light.type == 'AREA' and not light.luxrender_lamp.luxrender_lamp_laser.is_laser):
             iesfile = getattr(light.luxrender_lamp, 'iesname')
             iesfile, basename = get_expanded_file_name(light, iesfile)
             if iesfile != '':
@@ -1434,19 +1435,49 @@ class BlenderSceneConverter(object):
                 pyluxcore.Property('scene.lights.' + luxcore_name + '.efficency', getattr(lux_lamp, 'efficacy')))
         
         elif light.type == 'AREA':
-            transform = matrix_to_list(obj.matrix_world)
-            self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.transformation', transform))
-            self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.position', [0.0, 0.0, 0.0]))
-            
             if light.luxrender_lamp.luxrender_lamp_laser.is_laser:
+                transform = matrix_to_list(obj.matrix_world)
+                self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.transformation', transform))
+                self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.position', [0.0, 0.0, 0.0]))
                 # Laser lamp
                 self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.type', ['laser']))
                 self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.target', [0.0, 0.0, -1.0]))
                 self.scnProps.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.radius', [light.size]))
             else:
-                # Area lamp
-                # TODO: create plane and add emitting material (null or matte)
-                pass
+                # Area lamp workaround: create plane and add emitting material
+                
+                # add material
+                mat_name = luxcore_name + '_helper_mat'
+                raw_color = light.luxrender_lamp.luxrender_lamp_area.L_color * energy
+                emission_color = [raw_color[0], raw_color[1], raw_color[2]]
+                
+                self.scnProps.Set(pyluxcore.Property('scene.materials.' + mat_name + '.type', ['matte']))
+                self.scnProps.Set(pyluxcore.Property('scene.materials.' + mat_name + '.kd', [0.0, 0.0, 0.0]))
+                self.scnProps.Set(pyluxcore.Property('scene.materials.' + mat_name + '.emission', emission_color))
+                self.scnProps.Set(pyluxcore.Property('scene.materials.' + mat_name + '.power', [light.luxrender_lamp.luxrender_lamp_area.power]))
+                self.scnProps.Set(pyluxcore.Property('scene.materials.' + mat_name + '.efficiency', [light.luxrender_lamp.luxrender_lamp_area.efficacy]))
+                
+                # add object and mesh
+                self.scnProps.Set(pyluxcore.Property('scene.objects.' + luxcore_name + '.material', [mat_name]))
+                self.scnProps.Set(pyluxcore.Property('scene.objects.' + luxcore_name + '.vertices', [1, 1, 0, 
+                                                                                                     1, -1, 0, 
+                                                                                                     -1, -1, 0, 
+                                                                                                     -1, 1, 0]))
+                self.scnProps.Set(pyluxcore.Property('scene.objects.' + luxcore_name + '.faces', [0, 1, 2,
+                                                                                                  2, 3, 0]))
+                # copy transformation of area lamp object
+                scale_matrix = mathutils.Matrix()
+                #scale_matrix[0][0] = light.size / 2.0
+                #scale_matrix[1][1] = light.size_y / 2.0 if light.shape == 'RECTANGLE' else light.size / 2.0
+                rotation_matrix = obj.rotation_euler.to_matrix()
+                rotation_matrix.resize_4x4()
+                transform_matrix = scale_matrix * rotation_matrix
+                transform_matrix[0][3] = obj.location.x
+                transform_matrix[1][3] = obj.location.y
+                transform_matrix[2][3] = obj.location.z
+                
+                transform = matrix_to_list(transform_matrix)
+                self.scnProps.Set(pyluxcore.Property('scene.objects.' + luxcore_name + '.transformation', transform))
                 
         else:
             raise Exception('Unknown lighttype ' + light.type + ' for light: ' + luxcore_name)
@@ -1808,7 +1839,7 @@ class BlenderSceneConverter(object):
                     obj.name, 
                     objects_counter, 
                     objects_amount))
-            		
+                    
             
             if self.renderengine is not None:
                 self.renderengine.update_stats('Exporting...', 'Object: %s (%d of %d)' % (
