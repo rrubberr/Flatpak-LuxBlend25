@@ -972,15 +972,14 @@ class LUXRENDER_OT_export_luxrender_proxy(bpy.types.Operator):
     filter_glob = bpy.props.StringProperty(default='*.ply', options={'HIDDEN'})
     use_filter = bpy.props.BoolProperty(default=True, options={'HIDDEN'})
 
-    decimate_ratio = bpy.props.FloatProperty(default = 0.98,
-                                               min = 0.1,
-                                               soft_min = 0.9,
-                                               max = 1.0,
-                                               name = 'Simplify Factor')
-    
-    #preview_faces_amount = bpy.props.IntProperty(default=0, name='Proxy Faces')
-    #object_faces_amount = bpy.props.IntProperty(default=0, name='PLY Mesh Faces', options={'SKIP_SAVE'})
-    overwrite = bpy.props.BoolProperty(default=True, name="Overwrite Existing Files")
+    proxy_quality = bpy.props.FloatProperty(default = 0.05,
+                                            min = 0.001,
+                                            max = 1.0,
+                                            soft_max = 0.5,
+                                            name = 'Preview Mesh Quality')
+
+    overwrite = bpy.props.BoolProperty(default = True,
+                                       name = "Overwrite Existing Files")
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -989,282 +988,325 @@ class LUXRENDER_OT_export_luxrender_proxy(bpy.types.Operator):
     def execute(self, context):
         for obj in context.selected_objects:
             if obj.type in ['MESH', 'CURVE', 'SURFACE', 'META', 'FONT']:
-                
-                try:
-                    mesh = obj.to_mesh(context.scene, True, 'RENDER')
-                    if mesh is None:
-                        raise UnexportableObjectException('Cannot create export mesh from Blender object')
-                    mesh.name = obj.data.name + '_proxy'
-                    print('Exporting object ' + obj.name + ' as proxy')
+                #################################################################
+                # Prepare object for PLY export
+                #################################################################
+                # rename object
+                obj.name = obj.name + '_lux_proxy'
 
-                    # Collate faces by mat index
-                    ffaces_mats = {}
-                    mesh_faces = mesh.tessfaces
+                # apply all modifiers
+                bpy.ops.object.mode_set(mode = 'OBJECT')
+                context.scene.objects.active = obj
+                for modifier in obj.modifiers:
+                    bpy.ops.object.modifier_apply(modifier = modifier.name)
 
-                    for f in mesh_faces:
-                        mi = f.material_index
+                # find out how many materials are actually used
+                used_material_indices = []
+                for face in obj.data.polygons:
+                    mi = face.material_index
+                    if mi not in used_material_indices:
+                        used_material_indices.append(mi)
+                used_materials_amount = len(used_material_indices)
 
-                        if mi not in ffaces_mats.keys():
-                            ffaces_mats[mi] = []
-                        ffaces_mats[mi].append(f)
+                # save bounding box for later use
+                dimensions = obj.dimensions.copy()
 
-                    material_indices = ffaces_mats.keys()
-                    number_of_mats = len(mesh.materials)
+                # split object by materials
+                bpy.ops.mesh.separate(type = 'MATERIAL')
 
-                    if number_of_mats > 0:
-                        iterator_range = range(number_of_mats)
-                    else:
-                        iterator_range = [0]
+                # create list of references to the created objects
+                names = [obj.name]
+                for i in range(0, used_materials_amount - 1):
+                    names.append('%s.%03d' % (obj.name, i + 1))
 
-                    for i in iterator_range:
-                        try:
-                            if i not in material_indices:
-                                continue
+                created_objects = []
+                for name in names:
+                    created_objects.append(bpy.data.objects[name])
+                print("Split object by materials:", created_objects)
 
-                            def make_plyfilename():
-                                _mesh_name = '%s_m%03d' % (obj.data.name, i)
-                                _ply_filename = '%s.ply' % bpy.path.clean_name(_mesh_name)
-                                _ply_path = self.directory + _ply_filename
+                # create bounding box cube and parent objects to it
+                if used_materials_amount > 1:
+                    bpy.ops.mesh.primitive_cube_add(rotation = obj.rotation_euler,
+                                                    location = obj.location,
+                                                    layers = obj.layers)
 
-                                return _mesh_name, _ply_path
+                    bounding_cube = context.active_object
+                    bounding_cube.name = obj.name + '_boundingBox'
+                    bounding_cube.dimensions = dimensions
+                    bpy.ops.object.transform_apply(location = False,
+                                                   rotation = True,
+                                                   scale = True)
+                    bounding_cube.draw_type = 'WIRE'
+                    bounding_cube.hide_render = True
 
-                            mesh_name, ply_path = make_plyfilename()
+                    for object in created_objects:
+                        object.parent = bounding_cube
 
-                            # display a popup to ask for confirmation before overwriting files
-                            #if os.path.exists(ply_path):
-                            #    test = bpy.ops.luxrender.confirm_dialog_operator('INVOKE_DEFAULT')
-                            #    print("operator returned:", test)
+                #################################################################
+                # Export split objects to PLY files
+                #################################################################
+                for object in created_objects:
+                    proxy_mesh, ply_path = self.export_ply(context, object)
 
-                            if (not os.path.exists(ply_path) or self.overwrite) and not obj.luxrender_object.append_proxy:
-                                uv_textures = mesh.tessface_uv_textures
-                                vertex_color = mesh.tessface_vertex_colors.active
+                    #################################################################
+                    # Create lowpoly preview mesh with decimate modifier
+                    #################################################################
+                    decimate = object.modifiers.new('proxy_decimate', 'DECIMATE')
+                    decimate.ratio = self.proxy_quality
+                    bpy.ops.object.modifier_apply(apply_as = 'DATA', modifier = decimate.name)
 
-                                uv_layer = None
-                                vertex_color_layer = None
+                    #################################################################
+                    # Set exported PLY as proxy file
+                    #################################################################
+                    object.luxrender_object.append_proxy = True
 
-                                if len(uv_textures) > 0:
-                                    if mesh.uv_textures.active and uv_textures.active.data:
-                                        uv_layer = uv_textures.active.data
+                    # check if the object had smooth faces
 
-                                if vertex_color:
-                                    vertex_color_layer = vertex_color.data
+                    was_smooth = False
+                    for poly in proxy_mesh.polygons:
+                        if poly.use_smooth:
+                            was_smooth = True
+                            break
 
-                                # Here we work out exactly which vert+normal combinations
-                                # we need to export. This is done first, and the export
-                                # combinations cached before writing to file because the
-                                # number of verts needed needs to be written in the header
-                                # and that number is not known before this is done.
+                    if was_smooth:
+                        object.luxrender_object.use_smoothing = True
 
-                                # Export data
-                                co_no_uv_vc_cache = []
-                                face_vert_indices = {}  # mapping of face index to list of exported vert indices for that face
+                    # set path to PLY
+                    object.luxrender_object.external_mesh = ply_path
 
-                                # Caches
-                                # mapping of vert index to exported vert index for verts with vert normals
-
-                                vert_vno_indices = {}
-                                vert_use_vno = set()  # Set of vert indices that use vert normals
-                                vert_index = 0  # exported vert index
-
-                                c1 = c2 = c3 = c4 = None
-
-                                for fidx, face in enumerate(ffaces_mats[i]):
-                                    fvi = []
-                                    if vertex_color_layer:
-                                        c1 = vertex_color_layer[fidx].color1
-                                        c2 = vertex_color_layer[fidx].color2
-                                        c3 = vertex_color_layer[fidx].color3
-                                        c4 = vertex_color_layer[fidx].color4
-
-                                    for j, vertex in enumerate(face.vertices):
-                                        v = mesh.vertices[vertex]
-
-                                        if vertex_color_layer:
-                                            if j == 0:
-                                                vert_col = c1
-                                            elif j == 1:
-                                                vert_col = c2
-                                            elif j == 2:
-                                                vert_col = c3
-                                            elif j == 3:
-                                                vert_col = c4
-
-                                        if face.use_smooth:
-                                            if uv_layer:
-                                                if vertex_color_layer:
-                                                    vert_data = (v.co[:], v.normal[:], uv_layer[face.index].uv[j][:],
-                                                                 (int(255 * vert_col[0]),
-                                                                  int(255 * vert_col[1]),
-                                                                  int(255 * vert_col[2]))[:])
-                                                else:
-                                                    vert_data = (v.co[:], v.normal[:], uv_layer[face.index].uv[j][:])
-                                            else:
-                                                if vertex_color_layer:
-                                                    vert_data = (v.co[:], v.normal[:],
-                                                                 (int(255 * vert_col[0]),
-                                                                  int(255 * vert_col[1]),
-                                                                  int(255 * vert_col[2]))[:])
-                                                else:
-                                                    vert_data = (v.co[:], v.normal[:])
-
-                                            if vert_data not in vert_use_vno:
-                                                vert_use_vno.add(vert_data)
-
-                                                co_no_uv_vc_cache.append(vert_data)
-
-                                                vert_vno_indices[vert_data] = vert_index
-                                                fvi.append(vert_index)
-
-                                                vert_index += 1
-                                            else:
-                                                fvi.append(vert_vno_indices[vert_data])
-                                        else:
-                                            if uv_layer:
-                                                if vertex_color_layer:
-                                                    vert_data = (v.co[:], face.normal[:], uv_layer[face.index].uv[j][:],
-                                                                 (int(255 * vert_col[0]),
-                                                                  int(255 * vert_col[1]),
-                                                                  int(255 * vert_col[2]))[:])
-                                                else:
-                                                    vert_data = (v.co[:], face.normal[:], uv_layer[face.index].uv[j][:])
-                                            else:
-                                                if vertex_color_layer:
-                                                    vert_data = (v.co[:], face.normal[:],
-                                                                 (int(255 * vert_col[0]),
-                                                                  int(255 * vert_col[1]),
-                                                                  int(255 * vert_col[2]))[:])
-                                                else:
-                                                    vert_data = (v.co[:], face.normal[:])
-
-                                            # All face-vert-co-no are unique, we cannot
-                                            # cache them
-                                            co_no_uv_vc_cache.append(vert_data)
-                                            fvi.append(vert_index)
-                                            vert_index += 1
-
-                                    face_vert_indices[face.index] = fvi
-
-                                del vert_vno_indices
-                                del vert_use_vno
-
-                                with open(ply_path, 'wb') as ply:
-                                    ply.write(b'ply\n')
-                                    ply.write(b'format binary_little_endian 1.0\n')
-                                    ply.write(b'comment Created by LuxBlend 2.6 exporter for LuxRender - www.luxrender.net\n')
-
-                                    # vert_index == the number of actual verts needed
-                                    ply.write(('element vertex %d\n' % vert_index).encode())
-                                    ply.write(b'property float x\n')
-                                    ply.write(b'property float y\n')
-                                    ply.write(b'property float z\n')
-
-                                    ply.write(b'property float nx\n')
-                                    ply.write(b'property float ny\n')
-                                    ply.write(b'property float nz\n')
-
-                                    if uv_layer:
-                                        ply.write(b'property float s\n')
-                                        ply.write(b'property float t\n')
-
-                                    if vertex_color_layer:
-                                        ply.write(b'property uchar red\n')
-                                        ply.write(b'property uchar green\n')
-                                        ply.write(b'property uchar blue\n')
-
-                                    ply.write(('element face %d\n' % len(ffaces_mats[i])).encode())
-                                    ply.write(b'property list uchar uint vertex_indices\n')
-
-                                    ply.write(b'end_header\n')
-
-                                    # dump cached co/no/uv/vc
-                                    if uv_layer:
-                                        if vertex_color_layer:
-                                            for co, no, uv, vc in co_no_uv_vc_cache:
-                                                ply.write(struct.pack('<3f', *co))
-                                                ply.write(struct.pack('<3f', *no))
-                                                ply.write(struct.pack('<2f', *uv))
-                                                ply.write(struct.pack('<3B', *vc))
-                                        else:
-                                            for co, no, uv in co_no_uv_vc_cache:
-                                                ply.write(struct.pack('<3f', *co))
-                                                ply.write(struct.pack('<3f', *no))
-                                                ply.write(struct.pack('<2f', *uv))
-                                    else:
-                                        if vertex_color_layer:
-                                            for co, no, vc in co_no_uv_vc_cache:
-                                                ply.write(struct.pack('<3f', *co))
-                                                ply.write(struct.pack('<3f', *no))
-                                                ply.write(struct.pack('<3B', *vc))
-                                        else:
-                                            for co, no in co_no_uv_vc_cache:
-                                                ply.write(struct.pack('<3f', *co))
-                                                ply.write(struct.pack('<3f', *no))
-
-                                    # dump face vert indices
-                                    for face in ffaces_mats[i]:
-                                        lfvi = len(face_vert_indices[face.index])
-                                        ply.write(struct.pack('<B', lfvi))
-                                        ply.write(struct.pack('<%dI' % lfvi, *face_vert_indices[face.index]))
-
-                                    del co_no_uv_vc_cache
-                                    del face_vert_indices
-
-                                LuxLog('Binary PLY file written: %s' % ply_path)
-                                
-                                #################################################################
-                                # Replace original mesh with exported mesh
-                                #################################################################
-                                old_mesh = obj.data
-                                # remove modifiers
-                                obj.modifiers.clear()
-                                # link new mesh
-                                obj.data = mesh
-                                # delete old mesh
-                                if not old_mesh.users:
-                                    bpy.data.meshes.remove(old_mesh)
-                                
-                                #################################################################
-                                # Create lowpoly preview mesh with decimate modifier
-                                #################################################################
-                                decimate = obj.modifiers.new('proxy_decimate', 'DECIMATE')
-                                decimate.ratio = 1.0 - self.decimate_ratio
-                                bpy.ops.object.modifier_apply(apply_as = 'DATA', modifier = decimate.name)
-                                
-                                #################################################################
-                                # Set exported PLY as proxy file
-                                #################################################################
-                                obj.luxrender_object.append_proxy = True
-
-                                # check if the object had smooth faces
-
-                                was_smooth = False
-                                for poly in mesh.polygons:
-                                    if poly.use_smooth:
-                                        was_smooth = True
-                                        break
-
-                                if was_smooth:
-                                    obj.luxrender_object.use_smoothing = True
-
-                                # set path to PLY
-                                obj.luxrender_object.external_mesh = ply_path
-
-                                print("Created proxy object")
-                            else:
-                                LuxLog('PLY file %s already exists or object %s is already a proxy, skipping it' % (
-                                    ply_path, obj.name))
-
-                        except InvalidGeometryException as err:
-                            LuxLog('Mesh export failed, skipping this mesh: %s' % err)
-
-                    del ffaces_mats
-                    #bpy.data.meshes.remove(mesh)
-
-                except UnexportableObjectException as err:
-                    LuxLog('Object export failed, skipping this object: %s' % err)
+                    print("Created proxy object %s" % object.name)
             
         return {'FINISHED'}
-            
+
+    def export_ply(self, context, obj):
+        try:
+            mesh = obj.to_mesh(context.scene, True, 'RENDER')
+            if mesh is None:
+                raise UnexportableObjectException('Failed to create export mesh from Blender object')
+            mesh.name = obj.data.name + '_proxy'
+            print('Exporting object ' + obj.name + ' as proxy')
+
+            # Collate faces by mat index
+            ffaces_mats = {}
+            mesh_faces = mesh.tessfaces
+
+            for f in mesh_faces:
+                mi = f.material_index
+
+                if mi not in ffaces_mats.keys():
+                    ffaces_mats[mi] = []
+                ffaces_mats[mi].append(f)
+
+            material_indices = ffaces_mats.keys()
+            number_of_mats = len(mesh.materials)
+
+            if number_of_mats > 0:
+                iterator_range = range(number_of_mats)
+            else:
+                iterator_range = [0]
+
+            for i in iterator_range:
+                try:
+                    if i not in material_indices:
+                        continue
+
+                    def make_plyfilename():
+                        _mesh_name = '%s_m%03d' % (obj.data.name, i)
+                        _ply_filename = '%s.ply' % bpy.path.clean_name(_mesh_name)
+                        _ply_path = self.directory + _ply_filename
+
+                        return _mesh_name, _ply_path
+
+                    mesh_name, ply_path = make_plyfilename()
+
+                    if (not os.path.exists(ply_path) or self.overwrite) and not obj.luxrender_object.append_proxy:
+                        uv_textures = mesh.tessface_uv_textures
+                        vertex_color = mesh.tessface_vertex_colors.active
+
+                        uv_layer = None
+                        vertex_color_layer = None
+
+                        if len(uv_textures) > 0:
+                            if mesh.uv_textures.active and uv_textures.active.data:
+                                uv_layer = uv_textures.active.data
+
+                        if vertex_color:
+                            vertex_color_layer = vertex_color.data
+
+                        # Here we work out exactly which vert+normal combinations
+                        # we need to export. This is done first, and the export
+                        # combinations cached before writing to file because the
+                        # number of verts needed needs to be written in the header
+                        # and that number is not known before this is done.
+
+                        # Export data
+                        co_no_uv_vc_cache = []
+                        face_vert_indices = {}  # mapping of face index to list of exported vert indices for that face
+
+                        # Caches
+                        # mapping of vert index to exported vert index for verts with vert normals
+
+                        vert_vno_indices = {}
+                        vert_use_vno = set()  # Set of vert indices that use vert normals
+                        vert_index = 0  # exported vert index
+
+                        c1 = c2 = c3 = c4 = None
+
+                        for fidx, face in enumerate(ffaces_mats[i]):
+                            fvi = []
+                            if vertex_color_layer:
+                                c1 = vertex_color_layer[fidx].color1
+                                c2 = vertex_color_layer[fidx].color2
+                                c3 = vertex_color_layer[fidx].color3
+                                c4 = vertex_color_layer[fidx].color4
+
+                            for j, vertex in enumerate(face.vertices):
+                                v = mesh.vertices[vertex]
+
+                                if vertex_color_layer:
+                                    if j == 0:
+                                        vert_col = c1
+                                    elif j == 1:
+                                        vert_col = c2
+                                    elif j == 2:
+                                        vert_col = c3
+                                    elif j == 3:
+                                        vert_col = c4
+
+                                if face.use_smooth:
+                                    if uv_layer:
+                                        if vertex_color_layer:
+                                            vert_data = (v.co[:], v.normal[:], uv_layer[face.index].uv[j][:],
+                                                         (int(255 * vert_col[0]),
+                                                          int(255 * vert_col[1]),
+                                                          int(255 * vert_col[2]))[:])
+                                        else:
+                                            vert_data = (v.co[:], v.normal[:], uv_layer[face.index].uv[j][:])
+                                    else:
+                                        if vertex_color_layer:
+                                            vert_data = (v.co[:], v.normal[:],
+                                                         (int(255 * vert_col[0]),
+                                                          int(255 * vert_col[1]),
+                                                          int(255 * vert_col[2]))[:])
+                                        else:
+                                            vert_data = (v.co[:], v.normal[:])
+
+                                    if vert_data not in vert_use_vno:
+                                        vert_use_vno.add(vert_data)
+
+                                        co_no_uv_vc_cache.append(vert_data)
+
+                                        vert_vno_indices[vert_data] = vert_index
+                                        fvi.append(vert_index)
+
+                                        vert_index += 1
+                                    else:
+                                        fvi.append(vert_vno_indices[vert_data])
+                                else:
+                                    if uv_layer:
+                                        if vertex_color_layer:
+                                            vert_data = (v.co[:], face.normal[:], uv_layer[face.index].uv[j][:],
+                                                         (int(255 * vert_col[0]),
+                                                          int(255 * vert_col[1]),
+                                                          int(255 * vert_col[2]))[:])
+                                        else:
+                                            vert_data = (v.co[:], face.normal[:], uv_layer[face.index].uv[j][:])
+                                    else:
+                                        if vertex_color_layer:
+                                            vert_data = (v.co[:], face.normal[:],
+                                                         (int(255 * vert_col[0]),
+                                                          int(255 * vert_col[1]),
+                                                          int(255 * vert_col[2]))[:])
+                                        else:
+                                            vert_data = (v.co[:], face.normal[:])
+
+                                    # All face-vert-co-no are unique, we cannot
+                                    # cache them
+                                    co_no_uv_vc_cache.append(vert_data)
+                                    fvi.append(vert_index)
+                                    vert_index += 1
+
+                            face_vert_indices[face.index] = fvi
+
+                        del vert_vno_indices
+                        del vert_use_vno
+
+                        with open(ply_path, 'wb') as ply:
+                            ply.write(b'ply\n')
+                            ply.write(b'format binary_little_endian 1.0\n')
+                            ply.write(b'comment Created by LuxBlend 2.6 exporter for LuxRender - www.luxrender.net\n')
+
+                            # vert_index == the number of actual verts needed
+                            ply.write(('element vertex %d\n' % vert_index).encode())
+                            ply.write(b'property float x\n')
+                            ply.write(b'property float y\n')
+                            ply.write(b'property float z\n')
+
+                            ply.write(b'property float nx\n')
+                            ply.write(b'property float ny\n')
+                            ply.write(b'property float nz\n')
+
+                            if uv_layer:
+                                ply.write(b'property float s\n')
+                                ply.write(b'property float t\n')
+
+                            if vertex_color_layer:
+                                ply.write(b'property uchar red\n')
+                                ply.write(b'property uchar green\n')
+                                ply.write(b'property uchar blue\n')
+
+                            ply.write(('element face %d\n' % len(ffaces_mats[i])).encode())
+                            ply.write(b'property list uchar uint vertex_indices\n')
+
+                            ply.write(b'end_header\n')
+
+                            # dump cached co/no/uv/vc
+                            if uv_layer:
+                                if vertex_color_layer:
+                                    for co, no, uv, vc in co_no_uv_vc_cache:
+                                        ply.write(struct.pack('<3f', *co))
+                                        ply.write(struct.pack('<3f', *no))
+                                        ply.write(struct.pack('<2f', *uv))
+                                        ply.write(struct.pack('<3B', *vc))
+                                else:
+                                    for co, no, uv in co_no_uv_vc_cache:
+                                        ply.write(struct.pack('<3f', *co))
+                                        ply.write(struct.pack('<3f', *no))
+                                        ply.write(struct.pack('<2f', *uv))
+                            else:
+                                if vertex_color_layer:
+                                    for co, no, vc in co_no_uv_vc_cache:
+                                        ply.write(struct.pack('<3f', *co))
+                                        ply.write(struct.pack('<3f', *no))
+                                        ply.write(struct.pack('<3B', *vc))
+                                else:
+                                    for co, no in co_no_uv_vc_cache:
+                                        ply.write(struct.pack('<3f', *co))
+                                        ply.write(struct.pack('<3f', *no))
+
+                            # dump face vert indices
+                            for face in ffaces_mats[i]:
+                                lfvi = len(face_vert_indices[face.index])
+                                ply.write(struct.pack('<B', lfvi))
+                                ply.write(struct.pack('<%dI' % lfvi, *face_vert_indices[face.index]))
+
+                            del co_no_uv_vc_cache
+                            del face_vert_indices
+
+                        print('Binary PLY file written: %s' % ply_path)
+                        return mesh, ply_path
+                    else:
+                        print('PLY file %s already exists or object %s is already a proxy, skipping it' % (
+                            ply_path, obj.name))
+
+                except InvalidGeometryException as err:
+                    print('Mesh export failed, skipping this mesh: %s' % err)
+
+            del ffaces_mats
+
+        except UnexportableObjectException as err:
+            print('Object export failed, skipping this object: %s' % err)
+
 # Register operator in Blender File -> Export menu
 proxy_menu_func = lambda self, context: self.layout.operator("export.export_luxrender_proxy", text="Export LuxRender Proxy")
 bpy.types.INFO_MT_file_export.append(proxy_menu_func)
