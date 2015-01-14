@@ -1402,22 +1402,18 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 elapsedTimeSinceLastRefresh = now - lastRefreshTime
                 elapsedTimeSinceStart = now - startTime
 
-                displayInterval = scene.camera.data.luxrender_camera.luxrender_film.displayinterval
+                displayInterval = scene.camera.data.luxrender_camera.luxcore_imagepipeline_settings.displayinterval
                 # use higher displayInterval for the first 10 seconds
                 if elapsedTimeSinceStart < 10.0:
-                    displayInterval = 1.0
+                    displayInterval = 2.0
                     
                 # Update statistics
                 lcSession.UpdateStats()
                 stats = lcSession.GetStats()
-                
-                # Print some information about the rendering progress
-                #self.PrintStats(lcConfig, stats)
-
                 blender_stats = self.CreateBlenderStats(lcConfig, stats, scene, 
                         time_until_update = displayInterval - elapsedTimeSinceLastRefresh)
                 self.update_stats('Rendering...', blender_stats)
-                
+
                 # check if any halt conditions are met
                 done = self.haltConditionMet(scene, stats)
 
@@ -1433,15 +1429,14 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     
                     if (scene.luxcore_enginesettings.renderengine_type in ['BIASPATHCPU', 'BIASPATHOCL'] and
                             scene.luxcore_tile_highlighting.use_tile_highlighting):
-                        show_converged = scene.luxcore_tile_highlighting.show_converged
-                        show_unconverged = scene.luxcore_tile_highlighting.show_unconverged
-                        show_pending = scene.luxcore_tile_highlighting.show_pending
                         # mark tiles
                         self.draw_tiles(scene, stats, tempImage, filmWidth, filmHeight, 
-                                        show_converged, show_unconverged, show_pending)
-                    
+                                        scene.luxcore_tile_highlighting.show_converged,
+                                        scene.luxcore_tile_highlighting.show_unconverged,
+                                        scene.luxcore_tile_highlighting.show_pending)
                     layer.rect = tempImage
-                    self.update_result(result)
+                    self.end_result(result)
+                    del tempImage
 
                     lastRefreshTime = now
 

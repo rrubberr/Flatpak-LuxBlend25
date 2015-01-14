@@ -148,7 +148,7 @@ class translator(render_panel):
     Translator settings UI Panel
     """
 
-    bl_label = 'LuxRender Translator'
+    bl_label = 'LuxRender Export Settings'
     bl_options = {'DEFAULT_CLOSED'}
 
     display_property_groups = [
@@ -193,28 +193,6 @@ class networking(render_panel):
             self.layout.label("Note: not yet supported by LuxCore")
 
         super().draw(context)
-
-# @LuxRenderAddon.addon_register_class
-# class imagepipeline(render_panel):
-#     """
-#     LuxCore Imagepipeline settings UI Panel
-#     """
-#
-#     bl_label = 'LuxRender Imagepipeline'
-#     bl_options = {'DEFAULT_CLOSED'}
-#
-#     display_property_groups = [
-#         ( ('scene',), 'luxcore_imagepipeline_settings' ),
-#     ]
-#
-#     def draw(self, context):
-#         if UseLuxCore():
-#             layout = self.layout
-#             super().draw(context)
-#
-#     def draw_crf_preset_menu(self, context):
-#         self.layout.menu('IMAGEPIPELINE_MT_luxrender_crf',
-#                          text=context.scene.luxcore_imagepipeline_settings.crf_preset)
 
 @LuxRenderAddon.addon_register_class
 class postprocessing(render_panel):
