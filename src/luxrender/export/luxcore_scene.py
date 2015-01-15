@@ -2023,8 +2023,9 @@ class BlenderSceneConverter(object):
             self.ConvertObject(obj)
         
         # Debug information
-        LuxLog('Scene Properties:')
-        LuxLog(str(self.scnProps))
+        if self.blScene.luxcore_translatorsettings.print_config:
+            LuxLog('Scene Properties:')
+            LuxLog(str(self.scnProps))
 
         self.lcScene.Parse(self.scnProps)
 
@@ -2046,8 +2047,9 @@ class BlenderSceneConverter(object):
         self.cfgProps.Set(pyluxcore.Property('film.height', [filmHeight]))
 
         # Debug information
-        LuxLog('RenderConfig Properties:')
-        LuxLog(str(self.cfgProps))
+        if self.blScene.luxcore_translatorsettings.print_config:
+            LuxLog('RenderConfig Properties:')
+            LuxLog(str(self.cfgProps))
 
         self.lcConfig = pyluxcore.RenderConfig(self.cfgProps, self.lcScene)
         BlenderSceneConverter.clear()  # for scalers_count etc.

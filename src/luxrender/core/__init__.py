@@ -1818,7 +1818,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             
         elif bpy.data.objects.is_updated:
             # check if visibility of objects was changed
-            print(self.lastVisibilitySettings)
             if self.lastVisibilitySettings is None:
                 self.lastVisibilitySettings = set(context.visible_objects)
             else:
@@ -1829,7 +1828,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     update_changes.set_cause(mesh = True)
                     update_changes.changed_objects_mesh.extend(objectsToAdd)
                     
-                # Note: removing objects still missing
+                if len(objectsToRemove) > 0:
+                    update_changes.set_cause(objectsRemoved = True)
+                    update_changes.removed_objects.extend(objectsToRemove)
             
             self.lastVisibilitySettings = set(context.visible_objects)
             
@@ -1934,6 +1935,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         print("changed_objects_transform", update_changes.changed_objects_transform)
         print("changed_objects_mesh", update_changes.changed_objects_mesh)
         print("changed_materials", update_changes.changed_materials)
+        print("removed_objects", update_changes.removed_objects)
         print("    Update caused by:")
         print("unknown", update_changes.cause_unknown)
         print("startViewportRender", update_changes.cause_startViewportRender)
@@ -1944,6 +1946,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         print("layers", update_changes.cause_layers)
         print("materials", update_changes.cause_materials)
         print("config", update_changes.cause_config)
+        print("objectsRemoved", update_changes.cause_objectsRemoved)
         print("===================================")
         
         if update_changes.cause_unknown or update_changes.cause_startViewportRender:
@@ -2053,6 +2056,11 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     converter.ConvertObject(ob, preview = True, 
                                             update_mesh = False, 
                                             update_transform = True)
+                                            
+            if update_changes.cause_objectsRemoved:
+                for ob in update_changes.removed_objects:
+                    LuxLog('Removing object: ' + ob.name)
+                    # missing
             
             # Debug output
             print("\nUpdated scene properties:\n", converter.scnProps, "\n")
@@ -2073,6 +2081,7 @@ class UpdateChanges:
         self.changed_objects_transform = []
         self.changed_objects_mesh = []
         self.changed_materials = []
+        self.removed_objects = []
         
         self.cause_unknown = True
         self.cause_startViewportRender = False
@@ -2083,6 +2092,7 @@ class UpdateChanges:
         self.cause_layers = False
         self.cause_materials = False
         self.cause_config = False
+        self.cause_objectsRemoved = False
         
     def set_cause(self,
                   startViewportRender = None, 
@@ -2092,7 +2102,8 @@ class UpdateChanges:
                   objectTransform = None, 
                   layers = None,
                   materials = None, 
-                  config = None):
+                  config = None,
+                  objectsRemoved = None):
         # automatically switch off unkown
         self.cause_unknown = False
         
@@ -2112,3 +2123,6 @@ class UpdateChanges:
             self.cause_materials = materials 
         if config is not None:
             self.cause_config = config 
+        if objectsRemoved is not None:
+            self.cause_objectsRemoved = objectsRemoved
+            

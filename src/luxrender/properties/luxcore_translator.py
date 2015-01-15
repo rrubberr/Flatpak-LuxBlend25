@@ -41,7 +41,9 @@ class luxcore_translatorsettings(declarative_property_group):
 
     controls = [
         'override_materials',
-        ['override_glass', 'override_lights', 'override_null']
+        ['override_glass', 'override_lights', 'override_null'],
+        'label_debug',
+        'print_config'
     ]
 
     visibility = {
@@ -82,6 +84,19 @@ class luxcore_translatorsettings(declarative_property_group):
             'attr': 'override_null',
             'name': 'Null',
             'description': 'Replace null materials, too',
+            'default': False,
+            'save_in_preset': True
+        },
+        {
+            'type': 'text',
+            'attr': 'label_debug',
+            'name': 'Debug:',
+        },
+        {
+            'type': 'bool',
+            'attr': 'print_config',
+            'name': 'Print Config in Terminal',
+            'description': 'Print generated renderconfig and sceneconfig in system console',
             'default': False,
             'save_in_preset': True
         },
