@@ -40,6 +40,26 @@ from ..export import ParamSet
 from ..export.materials import get_texture_from_scene
 
 
+class ExportedObjectData(object):
+    lcObjName = ''
+    lcMeshName = ''
+    lcMaterialName = ''
+    matIndex = 0
+
+    def __init__(self, lcObjName, lcMeshName, lcMaterialName, matIndex):
+        self.lcObjName = lcObjName
+        self.lcMeshName = lcMeshName
+        self.lcMaterialName = lcMaterialName
+        self.matIndex = matIndex
+
+    def __str__(self):
+        output = ("ExportedObjectData:\n" +
+                  "lcObjName: " + self.lcObjName +
+                  ", lcMeshName: " + self.lcMeshName +
+                  ", lcMaterialName: " + self.lcMaterialName +
+                  ", matIndex: " + str(self.matIndex))
+        return output
+
 class BlenderSceneConverter(object):
     scalers_count = 0
     unique_material_number = 0
@@ -47,6 +67,11 @@ class BlenderSceneConverter(object):
     outputCounter = 0
     material_id_mask_counter = 0
     by_material_id_counter = 0
+
+    # Name cache: contains key value pairs of the types:
+    # BlenderMesh : ExportedObjectData
+    # where ExportedObjectData contains the luxcore object, mesh and material names and the material index
+    exported_meshes = {}
 
     @staticmethod
     def next_scale_value():
@@ -56,7 +81,7 @@ class BlenderSceneConverter(object):
     @staticmethod
     def get_unique_name(name):
         BlenderSceneConverter.unique_material_number += 1
-        return (name + str(BlenderSceneConverter.unique_material_number))
+        return (name + " " + str(BlenderSceneConverter.unique_material_number))
 
     @staticmethod
     def clear():
@@ -225,6 +250,12 @@ class BlenderSceneConverter(object):
         self.lcScene.DefineMesh('Mesh-' + lcObjName, points, face_vert_indices, normals,
                                 uvs if uv_layer else None, cols if color_layer else None, None)
 
+    def GenerateMeshName(self, blenderMeshName, matIndex = -1):
+        mesh_name = '%s-%s_m' % (blenderMeshName, self.blScene.name)
+        if matIndex != -1:
+            mesh_name += '%03d' % matIndex
+        return ToValidLuxCoreName(mesh_name)
+
     def CreateExportMesh(self, obj, apply_modifiers, preview):
         mode = 'PREVIEW' if preview else 'RENDER'
         mesh = obj.to_mesh(self.blScene, apply_modifiers, mode)
@@ -236,13 +267,22 @@ class BlenderSceneConverter(object):
     def ConvertObjectGeometry(self, obj, preview = False, update_mesh = True):
         try:
             mesh_definitions = []
-            mesh_name = '%s-%s_m' % (obj.data.name, self.blScene.name)
 
+            # check if the object should not/cannot be exported
             if (not is_obj_visible(self.blScene, obj) or
-                        obj.data.luxrender_mesh.portal or
                         obj.type not in ['MESH', 'CURVE', 'SURFACE', 'META', 'FONT'] or
+                        obj.data.luxrender_mesh.portal or
                         (self.renderengine is not None and self.renderengine.test_break())):
                 return mesh_definitions
+
+            # check if mesh is already in cache
+            #if obj.data in self.exported_meshes:
+            #    print("found mesh \"%s\" of object \"%s\" in cache, skipping export" % (obj.data.name, obj.name))
+
+            #    for exported_mesh_data in self.exported_meshes[obj.data]:
+            #        mesh_definitions.append((exported_mesh_data.lcObjName, exported_mesh_data.matIndex))
+
+            #    return mesh_definitions
 
             #convert_blender_start = int(round(time.time() * 1000)) #### DEBUG
 
@@ -262,9 +302,9 @@ class BlenderSceneConverter(object):
             if getattr(pyluxcore.Scene, "DefineBlenderMesh", None) is not None:
                 LuxLog("Using c++ accelerated mesh export")
                 if update_mesh:
-                    lcObjName = ToValidLuxCoreName(mesh_name)
+                    lcMeshName = self.GenerateMeshName(obj.data.name)
 
-                    meshInfoList = self.DefineBlenderMeshAccelerated(lcObjName, mesh)
+                    meshInfoList = self.DefineBlenderMeshAccelerated(lcMeshName, mesh)
                     mesh_definitions.extend(meshInfoList)
                 else:
                     number_of_mats = len(mesh.materials)
@@ -274,9 +314,8 @@ class BlenderSceneConverter(object):
                         iterator_range = [0]
 
                     for i in iterator_range:
-                        mesh_name += '%03d' % i
-                        lcObjName = ToValidLuxCoreName(mesh_name)
-                        mesh_definitions.append((lcObjName, i))
+                        lcMeshName = self.GenerateMeshName(obj.data.name, i)
+                        mesh_definitions.append((lcMeshName, i))
             else:
                 LuxLog("Using classic python mesh export (c++ acceleration not available)")
                 # Collate faces by mat index
@@ -303,13 +342,12 @@ class BlenderSceneConverter(object):
                         if i not in material_indices:
                             continue
 
-                        mesh_name += '%03d' % i
-                        lcObjName = ToValidLuxCoreName(mesh_name)
+                        lcMeshName = self.GenerateMeshName(obj.data.name, i)
 
                         if update_mesh:
-                            self.DefineBlenderMeshDeprecated(lcObjName, mesh)
+                            self.DefineBlenderMeshDeprecated(lcMeshName, mesh)
 
-                        mesh_definitions.append((lcObjName, i))
+                        mesh_definitions.append((lcMeshName, i))
 
                     except Exception as err:
                         LuxLog('Mesh export failed, skipping this mesh: %s\n' % err)
@@ -1562,48 +1600,66 @@ class BlenderSceneConverter(object):
         else:
             raise Exception('Unknown lighttype ' + light.type + ' for light: ' + luxcore_name)
 
+    def SetObjectProperties(self, lcObjName, lcMeshName, lcMatName, transform):
+        self.scnProps.Set(pyluxcore.Property('scene.objects.' + lcObjName + '.material', [lcMatName]))
+        self.scnProps.Set(pyluxcore.Property('scene.objects.' + lcObjName + '.ply', [lcMeshName]))
+
+        if transform is not None:
+            self.scnProps.Set(pyluxcore.Property('scene.objects.' + lcObjName + '.transformation', transform))
 
     def ConvertObject(self, obj, preview = False, update_mesh = True, update_transform = True, update_material = True):
-        # Convert the object geometry
-        meshDefinitions = []
-        meshDefinitions.extend(self.ConvertObjectGeometry(obj, preview, update_mesh))
+        transform = matrix_to_list(obj.matrix_world) if update_transform else None
 
-        for meshDefinition in meshDefinitions:
-            objName = meshDefinition[0]
-            objMatIndex = meshDefinition[1]
+        if obj.data in self.exported_meshes:
+            for export_data in self.exported_meshes[obj.data]:
+                name = self.GenerateMeshName(obj.data.name, export_data.matIndex)
+                # make name unique, but reproducable
+                name += obj.name
 
-            # Convert the (main) material
-            try:
-                objMat = obj.material_slots[objMatIndex].material
+                self.SetObjectProperties(name, export_data.lcMeshName, export_data.lcMaterialName, transform)
+        else:
+            meshDefinitions = []
+            meshDefinitions.extend(self.ConvertObjectGeometry(obj, preview, update_mesh))
+            cache_data = []
 
-                # material override (clay render)
-                translator_settings = self.blScene.luxcore_translatorsettings
-                if translator_settings.override_materials:
-                    matType = objMat.luxrender_material.type
-                    if 'glass' in matType:
-                        if translator_settings.override_glass:
+            for meshDefinition in meshDefinitions:
+                lcObjName = meshDefinition[0]
+                objMatIndex = meshDefinition[1]
+
+                # Convert the (main) material
+                try:
+                    objMat = obj.material_slots[objMatIndex].material
+
+                    # material override (clay render)
+                    translator_settings = self.blScene.luxcore_translatorsettings
+                    if translator_settings.override_materials:
+                        matType = objMat.luxrender_material.type
+                        if 'glass' in matType:
+                            if translator_settings.override_glass:
+                                objMat = None
+                        elif matType == 'null':
+                            if translator_settings.override_null:
+                                objMat = None
+                        elif objMat.luxrender_emission.use_emission:
+                            if translator_settings.override_lights:
+                                objMat = None
+                        else:
+                            # all materials that are not glass, lights or null
                             objMat = None
-                    elif matType == 'null':
-                        if translator_settings.override_null:
-                            objMat = None
-                    elif objMat.luxrender_emission.use_emission:
-                        if translator_settings.override_lights:
-                            objMat = None
-                    else:
-                        # all materials that are not glass, lights or null
-                        objMat = None
-            except IndexError:
-                objMat = None
-                LuxLog('WARNING: material slot %d on object "%s" is unassigned!' % (objMatIndex + 1, obj.name))
+                except IndexError:
+                    objMat = None
+                    LuxLog('WARNING: material slot %d on object "%s" is unassigned!' % (objMatIndex + 1, obj.name))
 
-            objMatName = self.ConvertMaterial(objMat, obj.material_slots, no_conversion = not update_material)
+                objMatName = self.ConvertMaterial(objMat, obj.material_slots, no_conversion = not update_material)
+                objMeshName = 'Mesh-' + lcObjName
 
-            self.scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.material', [objMatName]))
-            self.scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.ply', ['Mesh-' + objName]))
+                # Add to cache
+                exported_object_data = ExportedObjectData(lcObjName, objMeshName, objMatName, objMatIndex)
+                cache_data.append(exported_object_data)
 
-            if update_transform:
-                transform = matrix_to_list(obj.matrix_world)
-                self.scnProps.Set(pyluxcore.Property('scene.objects.' + objName + '.transformation', transform))
+                self.SetObjectProperties(lcObjName, objMeshName, objMatName, transform)
+
+            self.exported_meshes[obj.data] = cache_data
 
         if obj.type == 'LAMP':
             try:
@@ -1985,6 +2041,9 @@ class BlenderSceneConverter(object):
         if self.renderengine is not None:
             self.renderengine.update_stats('Exporting...', '')
 
+        # clear cache
+        self.exported_meshes = {}
+
         # #######################################################################
         # Convert camera definition
         ########################################################################
@@ -2079,5 +2138,12 @@ class BlenderSceneConverter(object):
 
         #        import pydevd
         #        pydevd.settrace('localhost', port=9999, stdoutToServer=True, stderrToServer=True)
+
+        print("Cached meshes: (" + str(len(self.exported_meshes)) + ")")
+        for key in self.exported_meshes:
+            print("-----")
+            print(key.name)
+            for elem in self.exported_meshes[key]:
+                print(elem)
 
         return self.lcConfig

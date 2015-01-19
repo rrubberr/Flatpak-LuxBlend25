@@ -1955,24 +1955,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if self.update_counter == 2 and update_changes.cause_unknown:
             LuxLog('Dynamic updates: skipping useless second update at startup')
             return
-        
-        print("============ Debug ================")
-        print("changed_objects_transform", update_changes.changed_objects_transform)
-        print("changed_objects_mesh", update_changes.changed_objects_mesh)
-        print("changed_materials", update_changes.changed_materials)
-        print("removed_objects", update_changes.removed_objects)
-        print("    Update caused by:")
-        print("unknown", update_changes.cause_unknown)
-        print("startViewportRender", update_changes.cause_startViewportRender)
-        print("mesh", update_changes.cause_mesh)
-        print("light", update_changes.cause_light)
-        print("camera", update_changes.cause_camera)
-        print("objectTransform", update_changes.cause_objectTransform)
-        print("layers", update_changes.cause_layers)
-        print("materials", update_changes.cause_materials)
-        print("config", update_changes.cause_config)
-        print("objectsRemoved", update_changes.cause_objectsRemoved)
-        print("===================================")
+
+        update_changes.print_updates()
         
         if update_changes.cause_unknown or update_changes.cause_startViewportRender:
             try:
@@ -2095,7 +2079,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     print("new object count:", lcScene.GetObjectCount())
             
             # Debug output
-            print("\nUpdated scene properties:\n", converter.scnProps, "\n")
+            print("------- Updated scene properties: ------")
+            print(converter.scnProps)
+            print("----------------------------------------")
             
             # parse scene changes and end sceneEdit
             lcScene.Parse(converter.scnProps)
@@ -2158,3 +2144,36 @@ class UpdateChanges:
         if objectsRemoved is not None:
             self.cause_objectsRemoved = objectsRemoved
             
+    def print_updates(self):
+        print("===== Realtime update information: =====")
+
+        if self.cause_unknown:
+            print("cause unknown")
+        if self.cause_startViewportRender:
+            print("realtime preview was started")
+        if self.cause_mesh:
+            print("object meshes were updated:")
+            for obj in self.changed_objects_mesh:
+                print("    " + obj.name)
+        if self.cause_light:
+            print("light update")
+        if self.cause_camera:
+            print("camera update")
+        if self.cause_objectTransform:
+            print("objects where transformed:")
+            for obj in self.changed_objects_transform:
+                print("    " + obj.name)
+        if self.cause_layers:
+            print("layer visibility was changed")
+        if self.cause_materials:
+            print("materials where changed:")
+            for mat in self.changed_materials:
+                print("    " + mat.name)
+        if self.cause_config:
+            print("configuration was changed")
+        if self.cause_objectsRemoved:
+            print("objects where removed:")
+            for obj in self.removed_objects:
+                print("    " + obj.name)
+
+        print("========================================")
