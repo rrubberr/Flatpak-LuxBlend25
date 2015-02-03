@@ -1430,7 +1430,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     # Here we write the pixel values to the RenderResult
                     result = self.begin_result(0, 0, filmWidth, filmHeight)
                     layer = result.layers[0]
-
                     
                     if (scene.luxcore_enginesettings.renderengine_type in ['BIASPATHCPU', 'BIASPATHOCL'] and
                             scene.luxcore_tile_highlighting.use_tile_highlighting):
@@ -1578,6 +1577,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             LuxLog('Done.')
         except Exception as exc:
             LuxLog('Rendering aborted: %s' % exc)
+            self.report({'ERROR'}, str(exc))
             import traceback
 
             traceback.print_exc()
