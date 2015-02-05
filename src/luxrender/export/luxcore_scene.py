@@ -59,6 +59,27 @@ class ExportedObjectData(object):
                   ",\nmatIndex: " + str(self.matIndex))
         return output
 
+# not finished, not in use yet
+class ExportCache(object):
+    cache = {}
+
+    def add_blender_object(self, obj):
+        """
+
+        :param obj: Blender object
+        :return:
+        """
+        pass
+
+    def get_luxcore_data(self, obj = None, mesh = None):
+        """
+
+        :param obj: Blender object
+        :param mesh: Blender mesh (obj.data)
+        :return: ExportedObjectData
+        """
+        pass
+
 class BlenderSceneConverter(object):
     scalers_count = 0
     unique_material_number = 0
@@ -77,6 +98,7 @@ class BlenderSceneConverter(object):
     exported_meshes = {}
 
     volumes_cache = {}
+    lightgroups_cache = {}
 
     @staticmethod
     def next_scale_value():
@@ -136,9 +158,10 @@ class BlenderSceneConverter(object):
         Sets configuration properties for LuxCore AOV output
         """
 
-        # the OpenCL engines only support 1 MATERIAL_ID_MASK and 1 BY_MATERIAL_ID channel
+        # the OpenCL engines only support 1 MATERIAL_ID_MASK, 1 BY_MATERIAL_ID channel and 8 RADIANCE_GROUP channels
         engine = self.blScene.luxcore_enginesettings.renderengine_type
-        if engine in ['BIASPATHOCL', 'PATHOCL']:
+        is_ocl_engine = engine in ['BIASPATHOCL', 'PATHOCL']
+        if is_ocl_engine:
             if channelName == 'MATERIAL_ID_MASK':
                 if self.material_id_mask_counter == 0:
                     self.material_id_mask_counter += 1
@@ -153,6 +176,11 @@ class BlenderSceneConverter(object):
                     # don't create the output channel
                     return
 
+        if channelName == 'RADIANCE_GROUP':
+            if id > 7 and is_ocl_engine:
+                # don't create the output channel
+                return
+
         self.outputCounter += 1
 
         # list of channels that don't use a HDR format
@@ -166,7 +194,8 @@ class BlenderSceneConverter(object):
         # output filename (e.g. "film.outputs.1.filename")
         suffix = ('.png' if (channelName in LDR_channels) else '.exr')
         outputStringFilename = 'film.outputs.' + str(self.outputCounter) + '.filename'
-        self.cfgProps.Set(pyluxcore.Property(outputStringFilename, [channelName + suffix]))
+        filename = channelName + suffix if id == -1 else channelName + '_' + str(id) + suffix
+        self.cfgProps.Set(pyluxcore.Property(outputStringFilename, [filename]))
 
         # output id
         if id != -1:
@@ -1366,7 +1395,19 @@ class BlenderSceneConverter(object):
                         props.Set(pyluxcore.Property(prefix + '.emission.power', material.luxrender_emission.power))
                         props.Set(pyluxcore.Property(prefix + '.emission.efficency', material.luxrender_emission.efficacy))
 
+                        lightgroup = material.luxrender_emission.lightgroup
+                        if lightgroup in self.lightgroups_cache:
+                            # there is already an material with this lightgroup, use the same id
+                            lightgroup_id = self.lightgroups_cache[lightgroup]
+                        else:
+                            # this is the first material to use this lightgroup, add an entry with a new id
+                            lightgroup_id = len(self.lightgroups_cache)
+                            self.lightgroups_cache[lightgroup] = lightgroup_id
+
+                        props.Set(pyluxcore.Property(prefix + '.emission.id', [lightgroup_id]))
+
             # alpha transparency
+            # TODO: add support for diffuse/mean, diffuse/alpha etc.
             use_alpha_transparency = False
             name_mix = matName + '_alpha_mix'
 
@@ -1836,10 +1877,10 @@ class BlenderSceneConverter(object):
                     if dupli:
                         name += '_dupli_' + str(self.dupli_number)
                         self.dupli_number += 1
-                        print("Exported dupli", name)
 
                         if self.dupli_number % 100 == 0 and self.renderengine is not None:
                             self.renderengine.update_stats('Exporting...', 'Exported Dupli %s' % name)
+                            print("Exported dupli", name)
 
                     new_export_data = ExportedObjectData(name, export_data.lcMeshName, export_data.lcMaterialName, export_data.matIndex)
                     cache_data.append(new_export_data)
@@ -1888,7 +1929,6 @@ class BlenderSceneConverter(object):
                 import traceback
 
                 traceback.print_exc()
-
 
     def ConvertCamera(self):
         blCamera = self.blScene.camera
@@ -2148,6 +2188,22 @@ class BlenderSceneConverter(object):
 
         self.ConvertImagepipelineSettings(realtime_preview)
         self.ConvertChannelSettings(realtime_preview)
+        #self.ConvertLightgroups() # disabled because it crashes LuxCore 1.4
+
+    def ConvertVolumes(self):
+        # default volumes
+        if self.blScene.camera.data.luxrender_camera.Exterior_volume:
+            # Default volume from camera exterior
+            volume = ToValidLuxCoreName(self.blScene.camera.data.luxrender_camera.Exterior_volume)
+            self.scnProps.Set(pyluxcore.Property('scene.world.volume.default', [volume]))
+        elif self.blScene.luxrender_world.default_exterior_volume:
+            # Default volume from world
+            volume = ToValidLuxCoreName(self.blScene.luxrender_world.default_exterior_volume)
+            self.scnProps.Set(pyluxcore.Property('scene.world.volume.default', [volume]))
+
+        # convert all volumes
+        for volume in self.blScene.luxrender_volumes.volumes:
+            self.convert_volume(volume)
 
     def convert_volume(self, volume):
         def absorption_at_depth_scaled(abs_col):
@@ -2259,6 +2315,11 @@ class BlenderSceneConverter(object):
             if channels.IRRADIANCE or output_switcher_channel == 'IRRADIANCE':
                 self.createChannelOutputString('IRRADIANCE')
 
+    def ConvertLightgroups(self):
+        if not self.blScene.luxrender_lightgroups.ignore:
+            for i in range(len(self.lightgroups_cache)):
+                self.createChannelOutputString('RADIANCE_GROUP', i)
+
     def Convert(self, imageWidth=None, imageHeight=None, realtime_preview=False):
         export_start = time.time()
 
@@ -2282,22 +2343,9 @@ class BlenderSceneConverter(object):
         self.scnProps.Set(pyluxcore.Property('scene.materials.LUXBLEND_LUXCORE_NULL_MATERIAL.type', ['null']))
 
         ########################################################################
-        # Default volume
-        ########################################################################
-        if self.blScene.camera.data.luxrender_camera.Exterior_volume:
-            # Default volume from camera exterior
-            volume = ToValidLuxCoreName(self.blScene.camera.data.luxrender_camera.Exterior_volume)
-            self.scnProps.Set(pyluxcore.Property('scene.world.volume.default', [volume]))
-        elif self.blScene.luxrender_world.default_exterior_volume:
-            # Default volume from world
-            volume = ToValidLuxCoreName(self.blScene.luxrender_world.default_exterior_volume)
-            self.scnProps.Set(pyluxcore.Property('scene.world.volume.default', [volume]))
-
-        ########################################################################
         # Convert all volumes
         ########################################################################
-        for volume in self.blScene.luxrender_volumes.volumes:
-            self.convert_volume(volume)
+        self.ConvertVolumes()
 
         ########################################################################
         # Convert all objects
