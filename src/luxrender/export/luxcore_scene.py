@@ -2140,7 +2140,7 @@ class BlenderSceneConverter(object):
             self.cfgProps.Set(pyluxcore.Property('opencl.devices.select', [dev_string]))
 
         # Accelerator settings
-        self.cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [False]))
+        self.cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [engine_settings.instancing]))
 
         # Sampler settings
         self.cfgProps.Set(pyluxcore.Property('sampler.type', [realtime_settings.sampler_type]))
