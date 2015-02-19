@@ -35,6 +35,7 @@ from .. import LuxRenderAddon
 from ..export import ParamSet
 from ..export.materials import ExportedTextures
 from ..outputs.pure_api import LUXRENDER_VERSION
+from ..outputs.luxcore_api import UseLuxCore
 from ..properties.material import texture_append_visibility
 from ..properties.texture import (
     ColorTextureParameter, FloatTextureParameter, FresnelTextureParameter
@@ -193,7 +194,8 @@ class luxrender_volume_data(declarative_property_group):
             'stepsize': {'type': 'heterogeneous'},
             'depth': O([A([{'type': 'clear'}, {'absorption_usecolortexture': False}]),
                         A([{'type': O(['homogeneous', 'heterogeneous'])}, {'sigma_a_usecolortexture': False}])]),
-            'multiscattering': {'type': O(['homogeneous', 'heterogeneous'])}
+            'priority': lambda: UseLuxCore(),
+            'multiscattering': A([{'type': O(['homogeneous', 'heterogeneous'])}, lambda: UseLuxCore()])
         },
         TFR_IOR.visibility,
         TC_absorption.visibility,
