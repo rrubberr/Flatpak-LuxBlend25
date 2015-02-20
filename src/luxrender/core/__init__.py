@@ -1957,6 +1957,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         elif update_changes.cause_startViewportRender:
             try:
+                self.lastRenderSettings = ''
+                self.lastVolumeSettings = ''
+                self.lastHaltConditions = []
+                self.lastCameraSettings = ''
+                self.lastVisibilitySettings = None
+                self.update_counter = 0
+
                 if update_changes.cause_startViewportRender:
                     LuxLog('Starting viewport render')
                 
