@@ -1584,7 +1584,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                         mask_ids.add(props.Get(i + '.id').GetInt())
     
                 for i in range(len(mask_ids)):
-                    self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'MATERIAL_ID_MASK', channels.saveToDisk, buffer_id = i)
+                    self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight,
+                                               'MATERIAL_ID_MASK', channels.saveToDisk, buffer_id = i)
     
                 # Convert all BY_MATERIAL_ID channels
                 ids = set()
@@ -1593,7 +1594,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                         ids.add(props.Get(i + '.id').GetInt())
     
                 for i in range(len(ids)):
-                    self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'BY_MATERIAL_ID', channels.saveToDisk, buffer_id = i)
+                    self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight,
+                                               'BY_MATERIAL_ID', channels.saveToDisk, buffer_id = i)
 
                 from ..outputs.luxcore_api import LUXCORE_VERSION
                 # crashes in 1.4
@@ -1601,7 +1603,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     # Convert all RADIANCE_GROUP channels
                     lightgroup_count = lcSession.GetFilm().GetRadianceGroupCount()
                     for i in range(lightgroup_count):
-                        self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight, 'RADIANCE_GROUP', channels.saveToDisk, buffer_id = i)
+                        self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight,
+                                                   'RADIANCE_GROUP', channels.saveToDisk, buffer_id = i)
     
                 channelCalcTime = time.time() - channelCalcStartTime
                 LuxLog('AOV conversion took %.1f seconds' % channelCalcTime)
