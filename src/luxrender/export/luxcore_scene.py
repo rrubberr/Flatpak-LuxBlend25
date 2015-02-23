@@ -964,7 +964,7 @@ class BlenderSceneConverter(object):
                     self.scnProps.Set(pyluxcore.Property('scene.textures.' + sctexName + '.type', ['scale']))
                     if variant == 'color':
                         self.scnProps.Set(pyluxcore.Property('scene.textures.' + sctexName + '.texture1', ' '.join(
-                        str(i) for i in (getattr(luxMaterial, materialChannel + '_%s' % variant)))))
+                        str(i) for i in (getattr(luxMaterial, materialChannel + '_color')))))
                     else:
                         self.scnProps.Set(pyluxcore.Property('scene.textures.' + sctexName + '.texture1', str(getattr(
                             luxMaterial, materialChannel + '_%svalue' % variant))))
@@ -976,12 +976,10 @@ class BlenderSceneConverter(object):
                 else:
                     return self.ConvertTexture(texture)
         else:
-            if variant == 'float':
-                return str(getattr(luxMaterial, materialChannel + '_floatvalue'))
-            elif variant == 'color':
+            if variant == 'color':
                 return ' '.join(str(i) for i in getattr(luxMaterial, materialChannel + '_color'))
-            elif variant == 'fresnel':
-                return str(getattr(luxMaterial, materialChannel + '_fresnelvalue'))
+            else:
+                return str(getattr(luxMaterial, materialChannel + '_%svalue' % variant))
 
         raise Exception(
             'Unknown texture in channel' + materialChannel + ' for material ' + luxMaterial.luxrender_material.type)
@@ -2531,7 +2529,7 @@ class BlenderSceneConverter(object):
 
             # Scattering color
             if volume.sigma_s_usecolortexture:
-                s_col = self.convert_volume_channel(volume, 'sigma_s')
+                s_col = self.convert_volume_channel(volume, 'sigma_s', 'color')
             else:
                 s_col = [volume.sigma_s_color.r * volume.scattering_scale,
                          volume.sigma_s_color.g * volume.scattering_scale,
