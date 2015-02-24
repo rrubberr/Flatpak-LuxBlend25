@@ -342,10 +342,7 @@ class BlenderSceneConverter(object):
             #convert_blender_start = int(round(time.time() * 1000)) #### DEBUG
 
             # applying modifiers takes time, so don't do it if we won't update the mesh anyway
-            if update_mesh:
-                mesh = self.CreateExportMesh(obj, True, preview)
-            else:
-                mesh = self.CreateExportMesh(obj, False, preview)
+            mesh = self.CreateExportMesh(obj, update_mesh, preview)
 
             if mesh is None:
                 LuxLog('Cannot create render/export object: %s' % obj.name)
