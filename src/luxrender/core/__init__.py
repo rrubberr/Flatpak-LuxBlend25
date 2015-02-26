@@ -1602,9 +1602,12 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 if LUXCORE_VERSION[:3] >= '1.5':
                     # Convert all RADIANCE_GROUP channels
                     lightgroup_count = lcSession.GetFilm().GetRadianceGroupCount()
-                    for i in range(lightgroup_count):
-                        self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight,
-                                                   'RADIANCE_GROUP', channels.saveToDisk, buffer_id = i)
+
+                    # don't import the standard lightgroup that contains all lights even if no groups are set
+                    if lightgroup_count > 1:
+                        for i in range(lightgroup_count):
+                            self.convertChannelToImage(lcSession, scene, filmWidth, filmHeight,
+                                                       'RADIANCE_GROUP', channels.saveToDisk, buffer_id = i)
     
                 channelCalcTime = time.time() - channelCalcStartTime
                 LuxLog('AOV conversion took %.1f seconds' % channelCalcTime)

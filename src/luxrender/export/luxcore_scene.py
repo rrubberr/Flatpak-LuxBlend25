@@ -462,10 +462,11 @@ class BlenderSceneConverter(object):
         tex_loc = mathutils.Matrix.Translation((luxTranslate))
 
         # create an identitiy matrix
-        tex_sca0 = mathutils.Matrix.Scale((luxScale[0]), 4)
-        tex_sca1 = mathutils.Matrix.Scale((luxScale[1]), 4)
-        tex_sca2 = mathutils.Matrix.Scale((luxScale[2]), 4)
-        tex_sca = tex_sca0 * tex_sca1 * tex_sca2
+        tex_sca = mathutils.Matrix()
+        tex_sca[0][0] = luxScale[0] # X
+        tex_sca[1][1] = luxScale[1] # Y
+        tex_sca[2][2] = luxScale[2] # Z
+
 
         # create a rotation matrix
         tex_rot0 = mathutils.Matrix.Rotation(math.radians(luxRotate[0]), 4, 'X')
@@ -979,14 +980,12 @@ class BlenderSceneConverter(object):
 
         def set_volumes(prefix):
             # Interior volume
-            if hasattr(material.luxrender_material, 'Interior_volume') and \
-                    material.luxrender_material.Interior_volume:
+            if hasattr(material.luxrender_material, 'Interior_volume') and material.luxrender_material.Interior_volume:
                 validInteriorName = BlenderSceneConverter.volumes_cache[material.luxrender_material.Interior_volume]
                 props.Set(pyluxcore.Property(prefix + '.volume.interior', validInteriorName))
 
             # Exterior volume
-            if hasattr(material.luxrender_material, 'Exterior_volume') and \
-                    material.luxrender_material.Exterior_volume:
+            if hasattr(material.luxrender_material, 'Exterior_volume') and material.luxrender_material.Exterior_volume:
                 validExteriorName = BlenderSceneConverter.volumes_cache[material.luxrender_material.Exterior_volume]
                 props.Set(pyluxcore.Property(prefix + '.volume.exterior', validExteriorName))
 
@@ -1856,6 +1855,8 @@ class BlenderSceneConverter(object):
         # Motion blur
         if (self.blScene.camera is not None and self.blScene.camera.data.luxrender_camera.usemblur and
                 self.blScene.camera.data.luxrender_camera.objectmblur):
+            print('exporting motion blur')
+
             steps = self.blScene.camera.data.luxrender_camera.motion_blur_samples
             anim_matrices = object_anim_matrices(self.blScene, obj, steps = steps)
 
