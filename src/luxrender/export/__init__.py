@@ -331,7 +331,7 @@ else:
     fix_matrix_order = fix_matrix_order_old
 
 
-def matrix_to_list(matrix, apply_worldscale=False):
+def matrix_to_list(matrix, apply_worldscale=False, invert=False):
     """
     matrix		  Matrix
 
@@ -344,13 +344,16 @@ def matrix_to_list(matrix, apply_worldscale=False):
         matrix = matrix.copy()
         sm = get_worldscale()
         matrix *= sm
-        sm = get_worldscale(as_scalematrix=False)
+        ws = get_worldscale(as_scalematrix=False)
         matrix = fix_matrix_order(matrix)  # matrix indexing hack
-        matrix[0][3] *= sm
-        matrix[1][3] *= sm
-        matrix[2][3] *= sm
+        matrix[0][3] *= ws
+        matrix[1][3] *= ws
+        matrix[2][3] *= ws
     else:
         matrix = fix_matrix_order(matrix)  # matrix indexing hack
+
+    if invert:
+        matrix.invert()
 
     l = [matrix[0][0], matrix[1][0], matrix[2][0], matrix[3][0],
          matrix[0][1], matrix[1][1], matrix[2][1], matrix[3][1],

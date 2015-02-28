@@ -1886,7 +1886,7 @@ class BlenderSceneConverter(object):
         if anim_matrices and len(anim_matrices) > 1:
             for i in range(len(anim_matrices)):
                 time = i / (len(anim_matrices) - 1)
-                matrix = matrix_to_list(anim_matrices[i].inverted())
+                matrix = matrix_to_list(anim_matrices[i], apply_worldscale = True, invert = True)
                 self.scnProps.Set(pyluxcore.Property('scene.objects.%s.motion.%d.time' % (lcObjName, i), time))
                 self.scnProps.Set(pyluxcore.Property('scene.objects.%s.motion.%d.transformation' % (lcObjName, i), matrix))
 
