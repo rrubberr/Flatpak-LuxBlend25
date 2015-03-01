@@ -1793,44 +1793,6 @@ class BlenderSceneConverter(object):
         # create cache entry
         BlenderSceneConverter.export_cache.add_obj(obj, luxcore_data)
 
-    def dupli_anim_matrices(self, scene, obj, steps=1):
-        """
-        Returns a dict of animated matrices for all duplis of the object, key is the persistent_id of the duplis
-        The number of matrices returned is at most steps+1.
-        """
-        old_sf = scene.frame_subframe
-        cur_frame = scene.frame_current
-
-        animated = False
-
-        dupli_matrices = {}
-        for i in range(0, steps + 1):
-            scene.frame_set(cur_frame, subframe = i / steps)
-
-            obj.dupli_list_create(self.blScene, settings = 'RENDER')
-
-            for dupli_ob in obj.dupli_list:
-                sub_matrix = dupli_ob.matrix.copy()
-
-                if dupli_ob.persistent_id in dupli_matrices:
-                    ref_matrix = dupli_matrices[dupli_ob.persistent_id][-1]
-                    animated |= sub_matrix != ref_matrix
-                    if sub_matrix == ref_matrix:
-                        print('DEBUG: matrices are identical')
-
-                    dupli_matrices[dupli_ob.persistent_id].append(sub_matrix)
-                else:
-                    dupli_matrices[dupli_ob.persistent_id] = [sub_matrix]
-
-            obj.dupli_list_clear()
-
-        if not animated:
-            dupli_matrices = None
-
-        # restore subframe value
-        scene.frame_set(cur_frame, old_sf)
-        return dupli_matrices
-
     def ConvertDuplis(self, obj, duplicator_name):
         """
         Converts duplis and OBJECT and GROUP particle systems
@@ -1838,39 +1800,94 @@ class BlenderSceneConverter(object):
         print('Exporting duplis of duplicator %s' % duplicator_name)
 
         try:
-            dupli_matrices = None
-
-            # Motion blur
-            if (self.blScene.camera is not None and self.blScene.camera.data.luxrender_camera.usemblur and
-                    self.blScene.camera.data.luxrender_camera.objectmblur):
-                dupli_matrices = self.dupli_anim_matrices(self.blScene, obj)
-
             obj.dupli_list_create(self.blScene, settings = 'RENDER')
             self.dupli_amount = len(obj.dupli_list)
-
-            print("len(obj.dupli_list):", len(obj.dupli_list))
-            print("len(dupli_matrices):", len(dupli_matrices))
+            self.dupli_number = 0
 
             for dupli_ob in obj.dupli_list:
-                anim_matrices = None
-
-                if dupli_matrices is not None:
-                    # duplis are animated
-                    if dupli_ob.persistent_id in dupli_matrices:
-                        anim_matrices = dupli_matrices[dupli_ob.persistent_id]
-                        print("found entry, len(anim_matrices) =", len(anim_matrices))
-                    else:
-                        print("didn't find entry")
-
                 self.ConvertObject(dupli_ob.object, matrix = dupli_ob.matrix.copy(), is_dupli = True,
-                                   duplicator_name = duplicator_name, anim_matrices = anim_matrices)
+                                   duplicator_name = duplicator_name)
 
             obj.dupli_list_clear()
-            self.dupli_number = 0
 
             print('Dupli export finished')
         except Exception as err:
             LuxLog('Error in ConvertDuplis for object %s: %s' % (obj.name, err))
+            import traceback
+            traceback.print_exc()
+
+
+    def ConvertParticles(self, obj, particle_system):
+        print('Exporting particle system %s...' % particle_system.name)
+
+        try:
+            if (self.blScene.camera is not None and self.blScene.camera.data.luxrender_camera.usemblur
+                    and self.blScene.camera.data.luxrender_camera.objectmblur):
+                steps = self.blScene.camera.data.luxrender_camera.motion_blur_samples + 1
+            else:
+                steps = 1
+
+            old_subframe = self.blScene.frame_subframe
+            current_frame = self.blScene.frame_current
+
+            # Collect particles that should be visible
+            particles = [p for p in particle_system.particles if p.alive_state == 'ALIVE' or (
+                         p.alive_state == 'UNBORN' and particle_system.settings.show_unborn) or (
+                         p.alive_state in ['DEAD', 'DYING'] and particle_system.settings.use_dead)]
+
+            obj.dupli_list_create(self.blScene, settings = 'RENDER')
+            self.dupli_amount = len(obj.dupli_list)
+            self.dupli_number = 0
+
+            dupli_objects = [dupli.object for dupli in obj.dupli_list]
+            particle_dupliobj_pairs = list(zip(particles, dupli_objects))
+
+            # dict of the form {particle: [dupli_object, []]} (the empty list will contain the matrices)
+            particle_dupliobj_dict = {pair[0]: [pair[1], []] for pair in particle_dupliobj_pairs}
+
+            for i in range(steps):
+                self.blScene.frame_set(current_frame, subframe = i / steps)
+
+                # Calculate matrix for each particle
+                # I'm not using obj.dupli_list[i].matrix because it contains wrong positions
+                for particle in particle_dupliobj_dict:
+                    scale = particle_dupliobj_dict[particle][0].scale * particle.size
+                    scale_matrix = mathutils.Matrix()
+                    scale_matrix[0][0] = scale.x
+                    scale_matrix[1][1] = scale.y
+                    scale_matrix[2][2] = scale.z
+
+                    rotation_matrix = particle.rotation.to_matrix()
+                    rotation_matrix.resize_4x4()
+
+                    transform_matrix = mathutils.Matrix()
+                    transform_matrix[0][3] = particle.location.x
+                    transform_matrix[1][3] = particle.location.y
+                    transform_matrix[2][3] = particle.location.z
+
+                    transform = transform_matrix * rotation_matrix * scale_matrix
+
+                    if particle.alive_state == 'ALIVE':
+                        # Only use motion blur (and append new matrices) for living particles
+                        particle_dupliobj_dict[particle][1].append(transform)
+                    else:
+                        # Overwrite old matrix
+                        particle_dupliobj_dict[particle][1] = [transform]
+
+            obj.dupli_list_clear()
+            self.blScene.frame_set(current_frame, subframe = old_subframe)
+
+            # Export particles
+            for particle in particle_dupliobj_dict:
+                dupli_object = particle_dupliobj_dict[particle][0]
+                anim_matrices = particle_dupliobj_dict[particle][1]
+
+                self.ConvertObject(dupli_object, matrix = anim_matrices[0], is_dupli = True,
+                                       duplicator_name = particle_system.name, anim_matrices = anim_matrices)
+
+            print('Particle export finished')
+        except Exception as err:
+            LuxLog('Could not convert particle system %s of object %s: %s' % (particle_system.name, obj.name, err))
             import traceback
             traceback.print_exc()
 
@@ -1925,6 +1942,7 @@ class BlenderSceneConverter(object):
 
     def ConvertObject(self, obj, matrix = None, is_dupli = False, duplicator_name = '', anim_matrices = None,
                       preview = False, update_mesh = True, update_transform = True, update_material = True):
+
         if obj is None or obj.type == 'CAMERA' or (self.renderengine is not None and self.renderengine.test_break()):
             return
 
@@ -1974,7 +1992,7 @@ class BlenderSceneConverter(object):
 
                 if self.blScene.luxcore_translatorsettings.export_particles:
                     if psys.settings.render_type in ['OBJECT', 'GROUP']:
-                        self.ConvertDuplis(obj, psys.name)
+                        self.ConvertParticles(obj, psys)
                     elif psys.settings.render_type == 'PATH':
                         self.ConvertHair()
 

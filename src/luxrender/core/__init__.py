@@ -1846,7 +1846,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     if ob.is_updated:
                         if ob.type in ['MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'EMPTY']:
                             # check if a new material was assigned
-                            if ob.data.is_updated:
+                            if ob.data is not None and ob.data.is_updated:
                                 update_changes.set_cause(mesh = True)
                                 update_changes.changed_objects_mesh.append(ob)
                             else:
