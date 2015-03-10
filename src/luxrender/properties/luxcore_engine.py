@@ -68,7 +68,6 @@ class luxcore_enginesettings(declarative_property_group):
         'renderengine_type',
         'label_custom_properties',
         'custom_properties',
-        'instancing',
         # BIDIR
         ['bidir_eyedepth', 'bidir_lightdepth'],
         # PATH
@@ -98,6 +97,9 @@ class luxcore_enginesettings(declarative_property_group):
         # Filter settings (for all but BIASPATH)
         'filter_type',
         'filter_width',
+        # Accelerator settings
+        'accelerator_type',
+        'instancing',
         # Halt condition settings (halt time and halt spp)
         'label_halt',
         ['halt_samples', 'halt_time'],
@@ -110,7 +112,6 @@ class luxcore_enginesettings(declarative_property_group):
 
     visibility = {
                     'label_custom_properties': {'advanced': True},
-                    'instancing': {'advanced': True},
                     'custom_properties': {'advanced': True},
                     # BIDIR
                     'bidir_eyedepth': {'renderengine_type': 'BIDIRCPU'},
@@ -161,6 +162,9 @@ class luxcore_enginesettings(declarative_property_group):
                     # Filter settings, show for all but BIASPATH
                     'filter_type': A([{'advanced': True}, 
                     	{'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])}]),
+                    # Accelerator settings
+                    'accelerator_type': {'advanced': True},
+                    'instancing': {'advanced': True},
                     # don't show filter width if NONE filter is selected
                     'filter_width': A([{'advanced': True}, 
                     	{'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
@@ -205,14 +209,6 @@ class luxcore_enginesettings(declarative_property_group):
             'name': '',
             'description': 'LuxCore custom properties (separated by \'|\', suggested only for advanced users)',
             'default': '',
-            'save_in_preset': True
-        },
-        {
-            'type': 'bool',
-            'attr': 'instancing',
-            'name': 'Use Instancing',
-            'description': 'Lower memory usage for instances (like particles), but also lower rendering speed',
-            'default': True,
             'save_in_preset': True
         },
         {   # BIDIR
@@ -555,6 +551,31 @@ class luxcore_enginesettings(declarative_property_group):
             'soft_min': 0.5,
             'max': 10.0,
             'soft_max': 4.0,
+            'save_in_preset': True
+        },
+        # Accelerator settings
+        {
+            'type': 'enum',
+            'attr': 'accelerator_type',
+            'name': 'Accelerator',
+            'description': 'Accelerator to use',
+            'default': 'AUTO',
+            'items': [
+                ('AUTO', 'Auto', 'Automatically choose the best accelerator for the current device'),
+                ('BVH', 'BVH', 'Static BVH'),
+                ('MBVH', 'MBVH', 'Dynamic BVH'),
+                ('QBVH', 'QBVH', 'Static QBVH'),
+                ('MQBVH', 'MQBVH', 'Dynamic QBVH'),
+                ('EMBREE', 'Embree', 'Fastest build times and render speed. Supports only one substep for motion blur. Not supported for OpenCL engines')
+            ],
+            'save_in_preset': True
+        },
+        {
+            'type': 'bool',
+            'attr': 'instancing',
+            'name': 'Use Instancing',
+            'description': 'Lower memory usage for instances (like particles), but also lower rendering speed',
+            'default': True,
             'save_in_preset': True
         },
         # Compute settings

@@ -73,7 +73,9 @@ class ExportedObject(object):
 class ExportCache(object):
     """
     Basically a name cache storing the mapping of Blender objects/Blender data to the corresponding exported
-    LuxCore objects
+    LuxCore objects.
+    The dupli_key, composed of (duplicated_object, duplicator), is the key to a list of all generated duplis for this
+    object/particle system combination.
     """
 
     def __init__(self):
@@ -2414,6 +2416,17 @@ class BlenderSceneConverter(object):
         self.cfgProps.Set(pyluxcore.Property('film.filter.type', [engine_settings.filter_type]))
         self.cfgProps.Set(pyluxcore.Property('film.filter.width', [engine_settings.filter_width]))
 
+    def ConvertAcceleratorSettings(self):
+        engine_settings = self.blScene.luxcore_enginesettings
+        accelerator = engine_settings.accelerator_type
+
+        # Embree does not support OpenCL engines
+        if str.endswith(engine_settings.renderengine_type, 'OCL') and accelerator == 'EMBREE':
+            accelerator = 'AUTO'
+
+        self.cfgProps.Set(pyluxcore.Property('accelerator.type', [accelerator]))
+        self.cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [engine_settings.instancing]))
+
     def ConvertEngineSettings(self):
         engine_settings = self.blScene.luxcore_enginesettings
         engine = engine_settings.renderengine_type
@@ -2493,9 +2506,6 @@ class BlenderSceneConverter(object):
 
             self.cfgProps.Set(pyluxcore.Property('opencl.devices.select', [dev_string]))
 
-        # Accelerator settings
-        self.cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [engine_settings.instancing]))
-
     def ConvertRealtimeSettings(self):
         realtime_settings = self.blScene.luxcore_realtimesettings
         engine_settings = self.blScene.luxcore_enginesettings
@@ -2525,9 +2535,6 @@ class BlenderSceneConverter(object):
                 dev_string += '1' if dev.opencl_device_enabled else '0'
 
             self.cfgProps.Set(pyluxcore.Property('opencl.devices.select', [dev_string]))
-
-        # Accelerator settings (global)
-        self.cfgProps.Set(pyluxcore.Property('accelerator.instances.enable', [engine_settings.instancing]))
 
         # Sampler settings
         self.cfgProps.Set(pyluxcore.Property('sampler.type', [realtime_settings.sampler_type]))
@@ -2562,6 +2569,7 @@ class BlenderSceneConverter(object):
             self.ConvertFilterSettings()
             self.ConvertSamplerSettings()
 
+        self.ConvertAcceleratorSettings()
         self.ConvertCustomProps()
         self.ConvertImagepipelineSettings(realtime_preview)
         self.ConvertChannelSettings(realtime_preview)
