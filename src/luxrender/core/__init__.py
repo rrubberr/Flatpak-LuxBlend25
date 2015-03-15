@@ -985,11 +985,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000.0),
                 (stats.Get('stats.dataset.trianglecount').GetFloat() / 1000.0)))
 
+    mem_peak = 0
+
     def CreateBlenderStats(self, lcConfig, stats, scene, realtime_preview = False, time_until_update = -1.0):
         """
         Returns: string of formatted statistics
         """
-    
+
         engine = lcConfig.GetProperties().Get('renderengine.type').GetString()
         engine_dict = {
             'PATHCPU' : 'Path',
@@ -1007,29 +1009,41 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             'METROPOLIS' : 'Metropolis'
         }
 
-        # Statistics that are the same for all renderengines
-        stats_main = 'Samples/Sec %3.2fM | %s' % (
-                (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000.0),
-                engine_dict[engine])
+        if realtime_preview:
+            halt_samples = scene.luxcore_realtimesettings.halt_samples
+            halt_time = scene.luxcore_realtimesettings.halt_time
+        else:
+            halt_samples = scene.luxcore_enginesettings.halt_samples
+            halt_time = scene.luxcore_enginesettings.halt_time
 
-        if not engine in ['BIASPATHCPU', 'BIASPATHOCL']:
-            stats_main += ' + ' + sampler_dict[sampler]
-
-        # show remaining time until next film update (final render only)
-        if not realtime_preview and time_until_update > 0.0:
-            stats_main += ' | Next update in %.1fs' % (time_until_update)
-        elif time_until_update != -1:
-            stats_main += ' | Updating preview...'
-        
         # Progress
         progress_time = 0.0
         progress_samples = 0.0
         progress_tiles = 0.0
-        # Statistics strings
-        stats_tiles = ''
-        stats_time = ''
-        stats_samples = ''
-        
+
+        stats_list = []
+
+        # Time stats
+        time_running = stats.Get('stats.renderengine.time').GetFloat()
+        # Add time stats for realtime preview because Blender doesn't display it there
+        if realtime_preview and halt_time == 0:
+            stats_list.append('Time: %.1fs' % (time_running))
+        # For final renderings, only display time if it is set as halt condition
+        elif halt_time != 0:
+            stats_list.append('Time: %.1fs/%ds' % (time_running, halt_time))
+            if not realtime_preview:
+                progress_time = time_running / halt_time
+
+        # Samples/Passes stats
+        samples_count = stats.Get('stats.renderengine.pass').GetInt()
+        samples_term = 'Pass' if engine in ['BIASPATHCPU', 'BIASPATHOCL'] else 'Samples'
+        if halt_samples != 0:
+            stats_list.append('%s: %d/%d' % (samples_term, samples_count, halt_samples))
+            if not realtime_preview:
+                progress_samples = samples_count / halt_samples
+        else:
+            stats_list.append('%s: %d' % (samples_term, samples_count))
+
         # Tile stats
         if engine in ['BIASPATHCPU', 'BIASPATHOCL']:
             converged = stats.Get('stats.biaspath.tiles.converged.count').GetInt()
@@ -1037,50 +1051,59 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             pending = stats.Get('stats.biaspath.tiles.pending.count').GetInt()
 
             tiles_amount = converged + notconverged + pending
-            stats_tiles = 'Tiles: %d/%d Converged | ' % (converged, tiles_amount)
-            progress_tiles = float(converged) / float(tiles_amount)
-        
-        if realtime_preview:
-            halt_samples = scene.luxcore_realtimesettings.halt_samples
-            halt_time = scene.luxcore_realtimesettings.halt_time
-        else:
-            halt_samples = scene.luxcore_enginesettings.halt_samples
-            halt_time = scene.luxcore_enginesettings.halt_time
-        
-        # Time stats
-        time_running = stats.Get('stats.renderengine.time').GetFloat()
-        # Add time stats for realtime preview because Blender doesn't display it there
-        if realtime_preview and halt_time == 0:
-            stats_time = 'Time: %.1fs | ' % (time_running)
-        # For final renderings, only display time if it is set as halt condition
-        elif halt_time != 0:
-            stats_time = 'Time: %.1fs/%ds | ' % (
-                    time_running,
-                    halt_time)
-            if not realtime_preview:
-                progress_time = time_running / float(halt_time)
-            
-        # Samples/Passes stats
-        samples_count = stats.Get('stats.renderengine.pass').GetInt()
-        samples_term = 'Pass' if engine in ['BIASPATHCPU', 'BIASPATHOCL'] else 'Samples'
-        if halt_samples != 0:
-            stats_samples = '%s: %d/%d | ' % (
-                    samples_term,
-                    samples_count,
-                    halt_samples)
-            if not realtime_preview:
-                progress_samples = float(samples_count) / float(halt_samples)
-        else:
-            stats_samples = '%s: %d | ' % (
-                    samples_term,
-                    samples_count)
+            stats_list.append('Tiles: %d/%d Converged' % (converged, tiles_amount))
+            progress_tiles = converged / tiles_amount
+
+        # Samples per second
+        stats_list.append('Samples/Sec %3.2fM' % (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000))
+
+        # Memory usage
+        device_stats = stats.Get("stats.renderengine.devices")
+
+        max_memory = 0
+        used_memory = 0
+
+        for i in range(device_stats.GetSize()):
+            device_name = device_stats.GetString(i)
+
+            device_max_memory = stats.Get("stats.renderengine.devices." + device_name + ".memory.total").GetFloat()
+            device_max_memory = int(device_max_memory / (1024 * 1024))
+            if device_max_memory > max_memory:
+                max_memory = device_max_memory
+
+            device_used_memory = stats.Get("stats.renderengine.devices." + device_name + ".memory.used").GetFloat()
+            device_used_memory = int(device_used_memory / (1024 * 1024))
+            if device_used_memory > used_memory:
+                used_memory = device_used_memory
+
+        if used_memory > self.mem_peak:
+            self.mem_peak = used_memory
+
+        if str.endswith(engine, 'OCL'):
+            stats_list.append('Memory: %dM/%dM' % (used_memory, max_memory))
+
+        # Engine and sampler info
+        engine_info = engine_dict[engine]
+        if not engine in ['BIASPATHCPU', 'BIASPATHOCL']:
+            engine_info += ' + ' + sampler_dict[sampler]
+        stats_list.append(engine_info)
+
+        # Show remaining time until next film update (final render only)
+        if not realtime_preview and time_until_update > 0.0:
+            stats_list.append('Next update in %.1fs' % (time_until_update))
+        elif time_until_update != -1:
+            stats_list.append('Updating preview...')
                 
-        # update progressbar (final render only)    
+        # Update progressbar (final render only)
         if not realtime_preview:
             progress = max([progress_time, progress_samples, progress_tiles])
             self.update_progress(progress)
 
-        return '%s%s%s%s' % (stats_time, stats_samples, stats_tiles, stats_main)
+        # Pass memory usage information to Blender
+        if str.endswith(engine, 'OCL'):
+            self.update_memory_stats(used_memory, self.mem_peak)
+
+        return ' | '.join(stats_list)
 
     def haltConditionMet(self, scene, stats, realtime_preview = False):
         """
