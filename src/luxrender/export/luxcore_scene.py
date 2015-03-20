@@ -1102,9 +1102,10 @@ class BlenderSceneConverter(object):
                 if m_type != 'nk':
                     props.Set(pyluxcore.Property(prefix + '.preset', m_type))
 
-                # TODO: nk_data
-                else:
-                    print('WARNING: Not yet supported metal type: %s' % m_type)
+                elif m2_type == 'nk':
+                    full_name, base_name = get_expanded_file_name(material, luxMat.filename)
+                    props.Set(pyluxcore.Property('scene.textures.' + matName + '.type', ['fresnelsopra']))
+                    props.Set(pyluxcore.Property('scene.textures.' + matName + '.file', [full_name]))
 
                 props.Set(pyluxcore.Property(prefix + '.uroughness',
                                              self.ConvertTextureChannel(luxMat, 'uroughness', 'float')))
@@ -1117,6 +1118,7 @@ class BlenderSceneConverter(object):
             ####################################################################
             elif matType == 'metal2':
                 props.Set(pyluxcore.Property(prefix + '.type', ['metal2']))
+                props.Set(pyluxcore.Property(prefix + '.fresnel', [matName]))
                 m2_type = material.luxrender_material.luxrender_mat_metal2.metaltype
 
                 if m2_type == 'preset':
@@ -1133,7 +1135,11 @@ class BlenderSceneConverter(object):
                     props.Set(pyluxcore.Property('scene.textures.' + fk_dummy_tex + '.type', 'fresnelapproxk'))
                     props.Set(pyluxcore.Property('scene.textures.' + fk_dummy_tex + '.texture',
                                                  self.ConvertTextureChannel(luxMat, 'Kr', 'color')))
-                # TODO: nk_data and fresneltex
+                elif m2_type == 'nk':
+                    full_name, base_name = get_expanded_file_name(material, luxMat.filename)
+                    props.Set(pyluxcore.Property('scene.textures.' + matName + '.type', ['fresnelsopra']))
+                    props.Set(pyluxcore.Property('scene.textures.' + matName + '.file', [full_name]))
+
                 else:
                     print('WARNING: Not yet supported metal2 type: %s' % m2_type)
 
