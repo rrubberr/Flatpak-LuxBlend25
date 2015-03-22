@@ -1052,7 +1052,7 @@ class BlenderSceneConverter(object):
 
             matName = BlenderSceneConverter.generate_material_name(material.name)
 
-            # in realtimepreview, we sometimes only need the name
+            # In realtimepreview, we sometimes only want the name without re-exporting the whole material
             if no_conversion and self.lcScene.IsMaterialDefined(matName):
                 return matName
 
@@ -1067,7 +1067,7 @@ class BlenderSceneConverter(object):
             props = pyluxcore.Properties()
             prefix = 'scene.materials.' + matName
 
-            # material override (clay render)
+            # Material override (clay render)
             translator_settings = self.blScene.luxcore_translatorsettings
             if translator_settings.override_materials and matType != 'mix':
                 if 'glass' in matType:
@@ -1400,15 +1400,17 @@ class BlenderSceneConverter(object):
             # Common settings for all material types
             ####################################################################
             if not translator_settings.override_materials:
-                # Common material settings
+                # Bump mapping
                 if material.luxrender_material.bumpmap_usefloattexture:
                     props.Set(pyluxcore.Property(prefix + '.bumptex',
                                                  self.ConvertTextureChannel(material.luxrender_material, 'bumpmap', 'float')))
 
+                # Normal mapping
                 if material.luxrender_material.normalmap_usefloattexture:
                     props.Set(pyluxcore.Property(prefix + '.normaltex',
                                                  self.ConvertTextureChannel(material.luxrender_material, 'normalmap', 'float')))
 
+                # Interior/exterior volumes
                 set_volumes(prefix)
 
             # coating for all materials
@@ -2082,7 +2084,7 @@ class BlenderSceneConverter(object):
                 objMat = obj.material_slots[objMatIndex].material
             except IndexError:
                 objMat = None
-                print('WARNING: material slot %d on object \"%s\" is unassigned!' % (objMatIndex + 1, obj.name))
+                print('WARNING: material slot %d on object "%s" is unassigned!' % (objMatIndex + 1, obj.name))
 
             objMatName = self.ConvertMaterial(objMat, obj.material_slots, no_conversion = not update_material)
             objMeshName = 'Mesh-' + lcObjName
@@ -2140,7 +2142,12 @@ class BlenderSceneConverter(object):
             name = ToValidLuxCoreName(obj.name)
             material = self.ConvertMaterial(obj.active_material, obj.material_slots, no_conversion = not update_material)
 
-            self.SetObjectProperties(obj, name, path, material, transform, anim_matrices)
+            # Create shape definition
+            name_shape = 'Mesh-' + name
+            self.scnProps.Set(pyluxcore.Property('scene.shapes.' + name_shape + '.type', 'mesh'))
+            self.scnProps.Set(pyluxcore.Property('scene.shapes.' + name_shape + '.ply', path))
+
+            self.SetObjectProperties(obj, name, name_shape, material, transform, anim_matrices)
 
         # Check if object is particle/hair emitter
         if len(obj.particle_systems) > 0:
@@ -2198,6 +2205,7 @@ class BlenderSceneConverter(object):
                 for exported_object_data in exported_object.luxcore_data:
                     # Create unique name for the lcObject
                     name = obj.name + str(exported_object_data.matIndex)
+
                     if is_dupli:
                         name += '_%s_%d' % (duplicator.name, self.dupli_number)
                         self.dupli_number += 1
@@ -2212,15 +2220,14 @@ class BlenderSceneConverter(object):
                                                                   exported_object_data.lcMeshName,
                                                                   exported_object_data.lcMaterialName,
                                                                   exported_object_data.matIndex)
+
                     new_luxcore_data.append(new_exported_object_data)
 
                     self.SetObjectProperties(obj, name, exported_object_data.lcMeshName,
                                              exported_object_data.lcMaterialName, transform, anim_matrices)
 
-                if is_dupli:
-                    dupli_key = (obj, duplicator)
-                else:
-                    dupli_key = ()
+
+                dupli_key = (obj, duplicator) if is_dupli else ()
 
                 # Create new entry in cache
                 cache.add_obj(obj, new_luxcore_data, dupli_key)
