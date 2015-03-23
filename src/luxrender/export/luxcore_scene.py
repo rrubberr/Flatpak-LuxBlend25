@@ -961,12 +961,18 @@ class BlenderSceneConverter(object):
                 full_name, base_name = get_expanded_file_name(texture, luxTex.filename)
                 props.Set(pyluxcore.Property(prefix + '.file', full_name))
             ####################################################################
+            # Pointiness (hitpointalpha texture behind the scenes, just that it
+            #            implicitly enables pointiness calculation on the mesh)
+            ####################################################################
+            elif texType == 'pointiness':
+                props.Set(pyluxcore.Property(prefix + '.type', 'hitpointalpha'))
+            ####################################################################
             # Fallback to exception
             ####################################################################
             else:
                 raise Exception('Unknown type ' + texType + ' for texture: ' + texture.name)
 
-            if texType not in ('normalmap', 'checkerboard', 'constant', 'fresnelname', 'luxpop', 'sopra'):
+            if texType not in ('normalmap', 'checkerboard', 'constant', 'fresnelname', 'luxpop', 'sopra', 'pointiness'):
                 props.Set(pyluxcore.Property(prefix + '.type', texType))
 
             self.scnProps.Set(props)
@@ -2047,13 +2053,22 @@ class BlenderSceneConverter(object):
             self.scnProps.Set(pyluxcore.Property('scene.objects.' + lcObjName + '.ply', lcMeshName))
         else:
             # New shape syntax
-            self.scnProps.Set(pyluxcore.Property('scene.objects.' + lcObjName + '.shape', lcMeshName))
+            name_shape = lcMeshName
 
-            # Pointiness test, still WIP
-            #self.scnProps.Set(pyluxcore.Property('scene.shapes.' + lcMeshName + '_pointiness' + '.type', 'pointiness'))
-            #self.scnProps.Set(pyluxcore.Property('scene.shapes.' + lcMeshName + '_pointiness' + '.source', lcMeshName))
+            # Insert a pointiness shape if a pointiness texture is used
+            use_pointiness = False
+            for mat_slot in obj.material_slots:
+                for tex_slot in mat_slot.material.texture_slots:
+                    if tex_slot and tex_slot.texture.luxrender_texture.type == 'pointiness':
+                        use_pointiness = True
 
-            #self.scnProps.Set(pyluxcore.Property('scene.objects.' + lcObjName + '.shape', lcMeshName + '_pointiness'))
+            if use_pointiness:
+                name_shape_pointiness = name_shape + '_pointiness'
+                self.scnProps.Set(pyluxcore.Property('scene.shapes.' + name_shape_pointiness + '.type', 'pointiness'))
+                self.scnProps.Set(pyluxcore.Property('scene.shapes.' + name_shape_pointiness + '.source', name_shape))
+                name_shape = name_shape_pointiness
+
+            self.scnProps.Set(pyluxcore.Property('scene.objects.' + lcObjName + '.shape', name_shape))
 
         if transform is not None:
             self.scnProps.Set(pyluxcore.Property('scene.objects.' + lcObjName + '.transformation', transform))

@@ -696,6 +696,7 @@ tex_names = (
          ('hitpointcolor', 'Vertex Color'),
          ('hitpointgrey', 'Vertex Grey'),
          ('hitpointalpha', 'Vertex Alpha'),
+         ('pointiness', 'Pointiness'),
          ('windy', 'Windy'),
          ('wrinkled', 'Wrinkled'),
      )),
@@ -4608,6 +4609,31 @@ class luxrender_tex_wrinkled(declarative_property_group):
         for psi in ps:
             if psi['name'] in psi_accept_keys and psi['type'].lower() == psi_accept[psi['name']]:
                 setattr(self, psi['name'], psi['value'])
+
+
+class luxrender_tex_pointiness(declarative_property_group):
+    ef_attach_to = ['luxrender_texture']
+    alert = {}
+
+    controls = []
+
+    visibility = {}
+
+    properties = [
+        {
+            'attr': 'variant',
+            'type': 'string',
+            'default': 'float'
+        },
+    ]
+
+    def get_paramset(self, scene, texture):
+        pointiness_params = ParamSet()
+
+        return set(), pointiness_params
+
+    def load_paramset(self, variant, ps):
+        pass
 
 
 def import_paramset_to_blender_texture(texture, tex_type, ps):
