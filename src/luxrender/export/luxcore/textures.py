@@ -25,7 +25,7 @@
 # ***** END GPL LICENCE BLOCK *****
 #
 
-import bpy, math, mathutils, os
+import bpy, math, mathutils, os, tempfile
 
 from ...extensions_framework import util as efutil
 from ...outputs.luxcore_api import pyluxcore
@@ -179,23 +179,14 @@ class TextureExporter(object):
             # IMAGE/MOVIE/SEQUENCE
             ####################################################################
             elif bl_texType == 'IMAGE' and texture.image and texture.image.source in ['GENERATED', 'FILE', 'SEQUENCE']:
-                extract_path = os.path.join(
-                    efutil.scene_filename(),
-                    bpy.path.clean_name(self.blender_scene.name),
-                    '%05d' % self.blender_scene.frame_current
-                )
+                temp_file = tempfile.NamedTemporaryFile(delete=False)
+                tex_image = temp_file.name
 
                 if texture.image.source == 'GENERATED':
-                    tex_image = 'luxblend_baked_image_%s.%s' % (
-                        bpy.path.clean_name(texture.name), self.blender_scene.render.image_settings.file_format)
-                    tex_image = os.path.join(extract_path, tex_image)
                     texture.image.save_render(tex_image, self.blender_scene)
 
                 if texture.image.source == 'FILE':
                     if texture.image.packed_file:
-                        tex_image = 'luxblend_extracted_image_%s.%s' % (
-                            bpy.path.clean_name(texture.name), self.blender_scene.render.image_settings.file_format)
-                        tex_image = os.path.join(extract_path, tex_image)
                         texture.image.save_render(tex_image, self.blender_scene)
                     else:
                         if texture.library is not None:
@@ -273,9 +264,6 @@ class TextureExporter(object):
                     pyluxcore.Property(prefix + '.gamma', [texture.luxrender_texture.luxrender_tex_imagesampling.gamma]))
                 self.properties.Set(
                     pyluxcore.Property(prefix + '.gain', [texture.luxrender_texture.luxrender_tex_imagesampling.gain]))
-
-                # if texture.image.use_alpha:
-                #    self.properties.Set(pyluxcore.Property(prefix + '.channel', [texture.luxrender_texture.luxrender_tex_imagesampling.channel]))
 
                 self.__convert_mapping(prefix, texture)
             ####################################################################
