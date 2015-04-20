@@ -25,6 +25,7 @@
 # ***** END GPL LICENCE BLOCK *****
 #
 
+import math
 from ...outputs.luxcore_api import pyluxcore
 from ...outputs.luxcore_api import ToValidLuxCoreName
 from ...export.materials import get_texture_from_scene
