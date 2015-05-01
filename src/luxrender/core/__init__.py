@@ -2265,11 +2265,12 @@ class UpdateChanges(object):
 @persistent
 def stop_viewport_render(context):
     # Check if there should be an active viewport rendering session
-    for area in bpy.context.screen.areas:
-        if area.type == 'VIEW_3D':
-            for space in area.spaces:
-                if space.type == 'VIEW_3D' and space.viewport_shade == 'RENDERED':
-                    return
+    if bpy.context.screen:
+        for area in bpy.context.screen.areas:
+            if area.type == 'VIEW_3D':
+                for space in area.spaces:
+                    if space.type == 'VIEW_3D' and space.viewport_shade == 'RENDERED':
+                        return
 
     # No viewport in "RENDERED" mode found, stop running rendersessions
     RENDERENGINE_luxrender.stop_luxcore_session()
