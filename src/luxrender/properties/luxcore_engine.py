@@ -101,6 +101,8 @@ class luxcore_enginesettings(declarative_property_group):
         # Accelerator settings
         'accelerator_type',
         'instancing',
+        # Kernel cache
+        'kernelcache',
         # Halt condition settings (halt time and halt spp)
         'label_halt',
         ['halt_samples', 'halt_time'],
@@ -170,6 +172,8 @@ class luxcore_enginesettings(declarative_property_group):
                     # Accelerator settings
                     'accelerator_type': {'advanced': True},
                     'instancing': {'advanced': True},
+                    # Kernel cache
+                    'kernelcache': A([{'advanced': True}, {'renderengine_type': O(['PATHOCL', 'BIASPATHOCL'])}]),
     }
 
     alert = {}
@@ -593,6 +597,20 @@ class luxcore_enginesettings(declarative_property_group):
             'name': 'Use Instancing',
             'description': 'Lower memory usage for instances (like particles), but also lower rendering speed',
             'default': True,
+            'save_in_preset': True
+        },
+        # Kernel cache
+        {
+            'type': 'enum',
+            'attr': 'kernelcache',
+            'name': 'Kernel Cache',
+            'description': 'Kernel cache mode',
+            'default': 'PERSISTENT',
+            'items': [
+                ('PERSISTENT', 'Persistent', ''),
+                ('VOLATILE', 'Volatile', ''),
+                ('NONE', 'None', ''),
+            ],
             'save_in_preset': True
         },
         # Compute settings

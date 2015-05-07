@@ -296,6 +296,10 @@ class ConfigExporter(object):
                 dev_string += '1' if dev.opencl_device_enabled else '0'
     
             self.properties.Set(pyluxcore.Property('opencl.devices.select', [dev_string]))
+            
+            kernelcache = engine_settings.kernelcache
+            self.properties.Set(pyluxcore.Property('opencl.kernelcache', [kernelcache]))
+            
     
     
     def __convert_realtime_settings(self):
