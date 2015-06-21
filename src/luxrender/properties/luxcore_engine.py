@@ -103,11 +103,12 @@ class luxcore_enginesettings(declarative_property_group):
         # Kernel cache
         'kernelcache',
         # Halt condition settings (halt time and halt spp)
-        'use_halt_condition',
-        ['halt_samples', 'halt_time'],
+        'label_halt_conditions',
+        ['use_halt_samples', 'halt_samples'],
+        ['use_halt_noise', 'halt_noise'],
+        ['use_halt_time', 'halt_time'],
         # BIASPATH specific halt condition
-        'tile_multipass_enable',
-        'tile_multipass_convergencetest_threshold',
+        ['tile_multipass_enable', 'tile_multipass_convergencetest_threshold'],
         ['tile_multipass_use_threshold_reduction', 'tile_multipass_convergencetest_threshold_reduction'],
     ]
 
@@ -178,11 +179,13 @@ class luxcore_enginesettings(declarative_property_group):
                     # Kernel cache
                     'kernelcache': A([{'advanced': True}, {'renderengine_type': O(['PATHOCL', 'BIASPATHOCL'])}]),
                     # Halt conditions, show for all but BIASPATH
-                    'use_halt_condition': {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
-                    'halt_samples': A([{'use_halt_condition': True},
-                        {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])}]),
-                    'halt_time': A([{'use_halt_condition': True},
-                        {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])}]),
+                    #'label_halt_conditions': {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
+                    'use_halt_samples': {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
+                    'halt_samples': {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
+                    'use_halt_noise': {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
+                    'halt_noise': {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
+                    'use_halt_time': {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
+                    'halt_time': {'renderengine_type': O(['PATHCPU', 'PATHOCL', 'BIDIRCPU', 'BIDIRVMCPU'])},
     }
 
     alert = {}
@@ -193,6 +196,10 @@ class luxcore_enginesettings(declarative_property_group):
         'biaspath_clamping_pdf_value': {'use_clamping': True},
         # BIASPATH noise multiplier
         'tile_multipass_convergencetest_threshold_reduction': {'tile_multipass_use_threshold_reduction': True},
+        # Halt conditions
+        'halt_samples': {'use_halt_samples': True},
+        'halt_noise': {'use_halt_noise': True},
+        'halt_time': {'use_halt_time': True},
     }
 
     properties = [
@@ -343,9 +350,9 @@ class luxcore_enginesettings(declarative_property_group):
             'name': 'Noise level',
             'description': 'Lower values mean less noise',
             'default': 0.05,
-            'min': 0.001,
+            'min': 0.000001,
+            'soft_min': 0.02,
             'max': 0.9,
-            'precision': 3,
             'save_in_preset': True
         },
         {
@@ -532,7 +539,7 @@ class luxcore_enginesettings(declarative_property_group):
             'attr': 'largesteprate',
             'name': 'Large Mutation Probability',
             'description': 'Probability of a completely random mutation rather than a guided one. Lower values \
-            increase sampler strength',
+increase sampler strength',
             'default': 0.4,
             'min': 0,
             'max': 1,
@@ -544,7 +551,7 @@ class luxcore_enginesettings(declarative_property_group):
             'attr': 'maxconsecutivereject',
             'name': 'Max. Consecutive Rejections',
             'description': 'Maximum amount of samples in a particular area before moving on. Setting this too low \
-            may mute lamps and caustics',
+may mute lamps and caustics',
             'default': 512,
             'min': 128,
             'max': 2048,
@@ -670,36 +677,66 @@ class luxcore_enginesettings(declarative_property_group):
             'operator': 'luxrender.opencl_device_list_update',
             'text': 'Update OpenCL device list',
         },
-        
         # Halt condition settings (halt time and halt spp)
         {
+            'type': 'text',
+            'name': 'Halt Conditions:',
+            'attr': 'label_halt_conditions',
+        },
+        {
             'type': 'bool',
-            'attr': 'use_halt_condition',
-            'name': 'Halt Rendering',
-            'description': 'Set halt conditions for the rendering so it stops at some point (required for animations)',
+            'attr': 'use_halt_samples',
+            'name': 'Samples',
+            'description': 'Rendering process will stop at specified amount of samples',
             'default': False,
             'save_in_preset': True
         },
         {
             'type': 'int',
             'attr': 'halt_samples',
-            'name': 'Samples',
-            'description': 'Rendering process will stop at specified amount of samples (0 = disabled)',
-            'default': 0,
-            'min': 0,
-            'max': 1000000,
-            'soft_max': 1000,
+            'name': '',
+            'description': 'Rendering process will stop at specified amount of samples',
+            'default': 100,
+            'min': 1,
+            'soft_min': 5,
+            'soft_max': 2000,
+            'save_in_preset': True
+        },
+        {
+            'type': 'bool',
+            'attr': 'use_halt_time',
+            'name': 'Time',
+            'description': 'Rendering process will stop after specified amount of seconds',
+            'default': False,
             'save_in_preset': True
         },
         {
             'type': 'int',
             'attr': 'halt_time',
-            'name': 'Seconds',
-            'description': 'Rendering process will stop after specified amount of seconds (0 = disabled)',
-            'default': 0,
-            'min': 0,
-            'max': 500000,
+            'name': '',
+            'description': 'Rendering process will stop after specified amount of seconds',
+            'default': 60,
+            'min': 1,
+            'soft_min': 5,
             'soft_max': 3600,
+            'save_in_preset': True
+        },
+        {
+            'type': 'bool',
+            'attr': 'use_halt_noise',
+            'name': 'Noise',
+            'description': 'Rendering process will stop when the specified noise level is reached',
+            'default': False,
+            'save_in_preset': True
+        },
+        {
+            'type': 'float',
+            'attr': 'halt_noise',
+            'name': '',
+            'description': 'Rendering process will stop when the specified noise level is reached (lower = less noise)',
+            'default': 0.0001,
+            'min': 0.000001,
+            'max': 0.9,
             'save_in_preset': True
         },
     ]

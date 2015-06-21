@@ -45,6 +45,7 @@ class luxcore_rendering_controls(declarative_property_group):
         'configure_stats_label',
         'stats_samples',
         'stats_samples_per_sec',
+        'stats_convergence',
         'stats_memory',
         'stats_tris',
         'stats_engine_info',
@@ -74,6 +75,13 @@ class luxcore_rendering_controls(declarative_property_group):
             'name': 'Samples',
             'description': '',
             'default': True,
+        },
+        {
+            'type': 'bool',
+            'attr': 'stats_convergence',
+            'name': 'Convergence',
+            'description': 'Level of noise convergence, 1.0 = not converged, 0.0 = fully converged',
+            'default': False,
         },
         {
             'type': 'bool',

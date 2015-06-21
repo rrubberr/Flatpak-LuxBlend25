@@ -223,7 +223,7 @@ class ConfigExporter(object):
         engine = engine_settings.renderengine_type
         if len(engine) == 0:
             engine = 'PATHCPU'
-    
+
         if self.blender_scene.luxcore_translatorsettings.use_filesaver:
             output_path = efutil.filesystem_path(self.blender_scene.render.filepath)
             if not os.path.isdir(output_path):
@@ -312,13 +312,20 @@ class ConfigExporter(object):
             
             kernelcache = engine_settings.kernelcache
             self.properties.Set(pyluxcore.Property('opencl.kernelcache', [kernelcache]))
-            
+
+        # Halt conditions
+        if engine_settings.use_halt_noise:
+            self.properties.Set(pyluxcore.Property('batch.haltthreshold', engine_settings.halt_noise))
     
     
     def __convert_realtime_settings(self):
         realtime_settings = self.blender_scene.luxcore_realtimesettings
         engine_settings = self.blender_scene.luxcore_enginesettings
-    
+
+        # Halt conditions
+        if realtime_settings.use_halt_noise:
+            self.properties.Set(pyluxcore.Property('batch.haltthreshold', realtime_settings.halt_noise))
+
         # Renderengine
         if realtime_settings.device_type == 'CPU':
             engine = realtime_settings.cpu_renderengine_type

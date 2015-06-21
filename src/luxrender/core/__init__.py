@@ -1037,10 +1037,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         # Time stats
         time_running = stats.Get('stats.renderengine.time').GetFloat()
         # Add time stats for realtime preview because Blender doesn't display it there
-        if realtime_preview and (halt_time == 0 or not settings.use_halt_condition):
-            stats_list.append('Time: %.1fs' % (time_running))
+        if realtime_preview and not settings.use_halt_time:
+            stats_list.append('Time: %.1fs' % time_running)
         # For final renderings, only display time if it is set as halt condition
-        elif halt_time != 0 and settings.use_halt_condition:
+        elif settings.use_halt_time:
             stats_list.append('Time: %.1fs/%ds' % (time_running, halt_time))
             if not realtime_preview:
                 progress_time = time_running / halt_time
@@ -1049,7 +1049,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if rendering_controls.stats_samples:
             samples_count = stats.Get('stats.renderengine.pass').GetInt()
             samples_term = 'Pass' if engine in ['BIASPATHCPU', 'BIASPATHOCL'] else 'Samples'
-            if halt_samples != 0 and settings.use_halt_condition:
+            if settings.use_halt_samples:
                 stats_list.append('%s: %d/%d' % (samples_term, samples_count, halt_samples))
                 if not realtime_preview:
                     progress_samples = samples_count / halt_samples
@@ -1069,6 +1069,18 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         # Samples per second
         if rendering_controls.stats_samples_per_sec:
             stats_list.append('Samples/Sec %3.2fM' % (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000))
+
+        # Convergence stats
+        if rendering_controls.stats_convergence:
+            convergence = stats.Get('stats.renderengine.convergence').GetFloat()
+            # Flip convergence so 1.0 is not converged and 0.0 is fully converged, to be consistent with noise settings
+            # in the UI (e.g. target noise level = 0.04)
+            convergence = 1.0 - convergence
+
+            if settings.use_halt_noise:
+                stats_list.append('Noise Level: %f/%f' % (convergence, settings.halt_noise))
+            else:
+                stats_list.append('Noise Level: %f' % convergence)
 
         # Memory usage (only available for OpenCL engines)
         if str.endswith(engine, 'OCL') and rendering_controls.stats_memory:
@@ -1134,21 +1146,24 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         Checks if any halt conditions are met
         """
         settings = scene.luxcore_realtimesettings if realtime_preview else scene.luxcore_enginesettings
-
-        halt_samples = settings.halt_samples
-        halt_time = settings.halt_time
         
         rendered_samples = stats.Get('stats.renderengine.pass').GetInt()
         rendered_time = stats.Get('stats.renderengine.time').GetFloat()
+        rendered_noise = stats.Get('stats.renderengine.convergence').GetFloat()
 
-        halt_samples_met = settings.use_halt_condition and halt_samples != 0 and rendered_samples >= halt_samples
-        halt_time_met = settings.use_halt_condition and halt_time != 0 and rendered_time >= halt_time
+        halt_samples_met = settings.use_halt_samples and rendered_samples >= settings.halt_samples
+        halt_time_met = settings.use_halt_time and rendered_time >= settings.halt_time
+
+        if settings.use_halt_noise:
+            halt_noise_met = rendered_noise > (1.0 - settings.halt_noise)
+        else:
+            halt_noise_met = rendered_noise == 1.0
 
         # Samples and time make no sense as halt conditions when BIASPATH is used
         if not realtime_preview and settings.renderengine_type in ['BIASPATHCPU', 'BIASPATHOCL']:
-            return stats.Get('stats.renderengine.convergence').GetFloat() == 1.0
+            return halt_noise_met
 
-        return halt_samples_met or halt_time_met or stats.Get('stats.renderengine.convergence').GetFloat() == 1.0
+        return halt_samples_met or halt_time_met or halt_noise_met
 
     def normalizeChannel(self, channel_buffer):
         isInf = math.isinf
@@ -1436,9 +1451,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 # Check if a halt condition is set, cancel the rendering and warn the user otherwise
                 settings = scene.luxcore_enginesettings
 
-                if not (settings.use_halt_condition and (settings.halt_samples != 0 or settings.halt_time != 0)):
-                    raise Exception('You need to set a halt condition for animations! Activate "Halt Rendering" in the \
-render settings.')
+                if not (settings.use_halt_samples or settings.use_halt_noise or settings.use_halt_time):
+                    raise Exception('You need to set a halt condition for animations, otherwise the rendering of the \
+first frame will never stop!')
 
             self.set_export_path_luxcore(scene)
 
@@ -1739,7 +1754,7 @@ render settings.')
         from ..export.luxcore.materialpreview import MaterialPreviewExporter
 
         try:
-            def update_result(self, luxcore_session, imageBufferFloat, filmWidth, filmHeight):
+            def update_result(luxcore_session, imageBufferFloat, filmWidth, filmHeight):
                 # Update the image
                 luxcore_session.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, imageBufferFloat)
 
@@ -1791,14 +1806,14 @@ render settings.')
 
                 while not self.test_break() and time.time() - startTime < stopTime and not done:
                     time.sleep(0.1)
-                    update_result(self, luxcore_session, imageBufferFloat, filmWidth, filmHeight)
+                    update_result(luxcore_session, imageBufferFloat, filmWidth, filmHeight)
 
                     # Update statistics
                     luxcore_session.UpdateStats()
                     stats = luxcore_session.GetStats()
                     done = stats.Get('stats.renderengine.convergence').GetFloat() == 1.0
 
-            update_result(self, luxcore_session, imageBufferFloat, filmWidth, filmHeight)
+            update_result(luxcore_session, imageBufferFloat, filmWidth, filmHeight)
 
             luxcore_session.Stop()
             LuxLog('Preview render done (%.2fs)' % (time.time() - startTime))

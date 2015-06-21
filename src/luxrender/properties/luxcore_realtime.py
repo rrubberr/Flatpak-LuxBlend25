@@ -39,8 +39,10 @@ class luxcore_realtimesettings(declarative_property_group):
     ef_attach_to = ['Scene']
 
     controls = [
-        'use_halt_condition',
-        ['halt_samples', 'halt_time'],
+        'label_halt_conditions',
+        ['use_halt_samples', 'halt_samples'],
+        ['use_halt_noise', 'halt_noise'],
+        ['use_halt_time', 'halt_time'],
         'use_finalrender_settings',
         'device_type', 
         'advanced',
@@ -59,42 +61,78 @@ class luxcore_realtimesettings(declarative_property_group):
                     'sampler_type': {'advanced': True, 'use_finalrender_settings': False},
                     'filter_type_cpu': {'advanced': True, 'use_finalrender_settings': False, 'device_type': 'CPU'},
                     'filter_type_ocl': {'advanced': True, 'use_finalrender_settings': False, 'device_type': 'OCL'},
-                    # Halt conditions
-                    'halt_samples': {'use_halt_condition': True},
-                    'halt_time': {'use_halt_condition': True},
+    }
+
+    enabled = {
+        # Halt conditions
+        'halt_samples': {'use_halt_samples': True},
+        'halt_noise': {'use_halt_noise': True},
+        'halt_time': {'use_halt_time': True},
     }
 
     alert = {}
 
     properties = [
+        # Halt condition settings (halt time and halt spp)
+        {
+            'type': 'text',
+            'name': 'Viewport Halt Conditions:',
+            'attr': 'label_halt_conditions',
+        },
         {
             'type': 'bool',
-            'attr': 'use_halt_condition',
-            'name': 'Halt Realtime Preview',
-            'description': 'Set halt conditions for the realtime rendering so it stops at some point',
+            'attr': 'use_halt_samples',
+            'name': 'Samples',
+            'description': 'Rendering process will stop at specified amount of samples',
             'default': True,
             'save_in_preset': True
         },
         {
             'type': 'int',
             'attr': 'halt_samples',
-            'name': 'Preview Samples',
-            'description': 'Preview will pause at specified amount of samples (0 = disabled)',
-            'default': 20,
-            'min': 0,
-            'max': 1000000,
-            'soft_max': 1000,
+            'name': '',
+            'description': 'Rendering process will stop at specified amount of samples',
+            'default': 10,
+            'min': 1,
+            'soft_min': 5,
+            'soft_max': 100,
+            'save_in_preset': True
+        },
+        {
+            'type': 'bool',
+            'attr': 'use_halt_time',
+            'name': 'Time',
+            'description': 'Rendering process will stop after specified amount of seconds',
+            'default': True,
             'save_in_preset': True
         },
         {
             'type': 'int',
             'attr': 'halt_time',
-            'name': 'Preview Seconds',
-            'description': 'Preview will pause after specified amount of seconds (0 = disabled)',
-            'default': 8,
-            'min': 0,
-            'max': 500000,
-            'soft_max': 3600,
+            'name': '',
+            'description': 'Rendering process will stop after specified amount of seconds',
+            'default': 4,
+            'min': 1,
+            'soft_max': 30,
+            'save_in_preset': True
+        },
+        {
+            'type': 'bool',
+            'attr': 'use_halt_noise',
+            'name': 'Noise',
+            'description': 'Rendering process will stop when the specified noise level is reached',
+            'default': True,
+            'save_in_preset': True
+        },
+        {
+            'type': 'float',
+            'attr': 'halt_noise',
+            'name': '',
+            'description': 'Rendering process will stop when the specified noise level is reached (lower = less noise)',
+            'default': 0.10,
+            'min': 0.001,
+            'max': 0.9,
+            'precision': 3,
             'save_in_preset': True
         },
         {
