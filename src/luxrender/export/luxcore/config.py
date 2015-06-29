@@ -307,9 +307,8 @@ class ConfigExporter(object):
             self.properties.Set(pyluxcore.Property('bidirvm.alpha', [engine_settings.bidirvm_alpha]))
     
         # CPU settings
-        if engine_settings.native_threads_count > 0:
-            self.properties.Set(
-                pyluxcore.Property('native.threads.count', [engine_settings.native_threads_count]))
+        if not engine_settings.auto_threads:
+            self.properties.Set(pyluxcore.Property('native.threads.count', engine_settings.native_threads_count))
     
         # OpenCL settings
         if len(engine_settings.luxcore_opencl_devices) > 0:
@@ -376,7 +375,11 @@ class ConfigExporter(object):
             self.properties.Set(pyluxcore.Property('film.filter.width', 1.3))
         else:
             self.properties.Set(pyluxcore.Property('film.filter.type', 'NONE'))
-    
+
+        # CPU settings
+        if not engine_settings.auto_threads:
+            self.properties.Set(pyluxcore.Property('native.threads.count', engine_settings.native_threads_count))
+
         # OpenCL settings
         if len(self.blender_scene.luxcore_enginesettings.luxcore_opencl_devices) > 0:
             dev_string = ''
