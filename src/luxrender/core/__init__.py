@@ -1510,7 +1510,7 @@ first frame will never stop!')
 
                     # Here we write the pixel values to the RenderResult
                     result = self.begin_result(0, 0, filmWidth, filmHeight)
-                    layer = result.layers[0] if bpy.app.version < (2, 74, 4 ) else result.layers[0].passes[0]
+                    layer = result.layers[0] if bpy.app.version < (2, 74, 4) else result.layers[0].passes[0]
 
                     if (scene.luxcore_enginesettings.renderengine_type == 'BIASPATH' and
                             scene.luxcore_tile_highlighting.use_tile_highlighting):
@@ -1534,7 +1534,7 @@ first frame will never stop!')
             luxcore_session.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, imageBufferFloat)
             # write final render result
             result = self.begin_result(0, 0, filmWidth, filmHeight)
-            layer = result.layers[0] if bpy.app.version < (2, 74, 4 ) else result.layers[0].passes[0]
+            layer = result.layers[0] if bpy.app.version < (2, 74, 4) else result.layers[0].passes[0]
             layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight,
                                                                                    imageBufferFloat)
             self.end_result(result)

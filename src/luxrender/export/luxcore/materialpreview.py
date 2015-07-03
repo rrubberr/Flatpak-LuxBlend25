@@ -300,6 +300,7 @@ class MaterialPreviewExporter(object):
             cfg_props.Set(pyluxcore.Property('biaspath.pathdepth.specular', 4))
             cfg_props.Set(pyluxcore.Property('biaspath.clamping.radiance.maxvalue', 3))
         else:
+            # Texture preview
             cfg_props.Set(pyluxcore.Property('film.filter.width', 2.0))
             cfg_props.Set(pyluxcore.Property('renderengine.type', 'PATHCPU'))
             cfg_props.Set(pyluxcore.Property('path.maxdepth', 1))

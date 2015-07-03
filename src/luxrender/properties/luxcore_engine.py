@@ -432,7 +432,7 @@ rendering with the reduced noise level',
         {
             'type': 'int',
             'attr': 'biaspath_sampling_aa_size',
-            'name': 'AA',
+            'name': 'AA Samples',
             'description': 'Anti-aliasing samples',
             'default': 3,
             'min': 1,
