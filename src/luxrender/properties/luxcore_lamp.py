@@ -40,24 +40,27 @@ class luxcore_lamp(declarative_property_group):
     ef_attach_to = ['luxrender_lamp']
 
     controls = [
+        'label_message',
         'label_light_visibility',
         ['visibility_indirect_diffuse_enable', 'visibility_indirect_glossy_enable', 'visibility_indirect_specular_enable'],
     ]
 
     visibility = {
-        'label_light_visibility':
-            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
-        'visibility_indirect_diffuse_enable':
-            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
-        'visibility_indirect_glossy_enable':
-            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
-        'visibility_indirect_specular_enable':
-            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
+        'label_message': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'label_light_visibility': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
+        'visibility_indirect_diffuse_enable': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
+        'visibility_indirect_glossy_enable': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
+        'visibility_indirect_specular_enable': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
     }
 
     alert = {}
 
     properties = [
+        {
+            'type': 'text',
+            'attr': 'label_message',
+            'name': 'Only available when Biased Path engine is used'
+        },
         {
             'type': 'text',
             'attr': 'label_light_visibility',
