@@ -28,6 +28,7 @@ import re
 import bpy
 
 from ..extensions_framework import declarative_property_group
+from ..extensions_framework.validate import Logic_AND as A
 
 from .. import LuxRenderAddon
 from ..properties import find_node
@@ -40,6 +41,7 @@ from ..export.materials import (
     MaterialCounter, ExportedMaterials, ExportedTextures, add_texture_parameter, get_texture_from_scene
 )
 from ..outputs import LuxManager, LuxLog
+from ..outputs.luxcore_api import UseLuxCore
 from ..util import dict_merge
 
 
@@ -3458,7 +3460,7 @@ class luxrender_emission(declarative_property_group):
         'importance': {'use_emission': True},
         'lightgroup_chooser': {'use_emission': True},
         'iesname': {'use_emission': True},
-        'nsamples': {'use_emission': True},
+        'nsamples': A([{'use_emission': True}, lambda: not UseLuxCore()]),
         'L_colorlabel': {'use_emission': True},
         'L_color': {'use_emission': True},
         'L_usecolortexture': {'use_emission': True},

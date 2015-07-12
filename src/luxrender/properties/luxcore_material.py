@@ -40,19 +40,22 @@ class luxcore_material(declarative_property_group):
     ef_attach_to = ['Material']
 
     controls = [
-        'advanced',
         'id',
         'create_MATERIAL_ID_MASK',
         'create_BY_MATERIAL_ID',
+        'label_biaspath_only_settings',
         ['samples', 'emission_samples'],
-        'bumpsamplingdistance',
         'label_material_visibility',
         ['visibility_indirect_diffuse_enable', 'visibility_indirect_glossy_enable', 'visibility_indirect_specular_enable'],
     ]
 
     visibility = {
+        'label_biaspath_only_settings':
+            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+    }
+
+    enabled = {
         'samples': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
-        'bumpsamplingdistance': {'advanced': True},
         'label_material_visibility': {
         ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
         'emission_samples': {
@@ -68,14 +71,6 @@ class luxcore_material(declarative_property_group):
     alert = {}
 
     properties = [
-        {
-            'type': 'bool',
-            'attr': 'advanced',
-            'name': 'Advanced Settings',
-            'description': 'Configure advanced LuxCore material settings',
-            'default': False,
-            'save_in_preset': True
-        },
         {
             'type': 'int',
             'attr': 'id',
@@ -135,16 +130,6 @@ class luxcore_material(declarative_property_group):
             'save_in_preset': True
         },
         {
-            'type': 'float',
-            'attr': 'bumpsamplingdistance',
-            'name': 'Bump mapping sampling distance',
-            'description': 'Bump mapping sampling distance',
-            'default': 0.001,
-            'min': 0.00001,
-            'max': 1000.0,
-            'save_in_preset': True
-        },
-        {
             'type': 'text',
             'attr': 'label_material_visibility',
             'name': 'Visibility for indirect rays:'
@@ -172,5 +157,10 @@ class luxcore_material(declarative_property_group):
             'description': 'Enable material visibility for specular rays',
             'default': True,
             'save_in_preset': True
+        },
+        {
+            'type': 'text',
+            'attr': 'label_biaspath_only_settings',
+            'name': 'Biased Path only:'
         },
     ]

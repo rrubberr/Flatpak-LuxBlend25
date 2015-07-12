@@ -571,9 +571,6 @@ class MaterialExporter(object):
             self.properties.Set(pyluxcore.Property(prefix + '.samples', [lc_mat.samples]))
             self.properties.Set(pyluxcore.Property(prefix + '.emission.samples', [lc_mat.emission_samples]))
 
-            if lc_mat.advanced:
-                self.properties.Set(pyluxcore.Property(prefix + '.bumpsamplingdistance', [lc_mat.bumpsamplingdistance]))
-
             self.properties.Set(pyluxcore.Property(prefix + '.visibility.indirect.diffuse.enable',
                                          lc_mat.visibility_indirect_diffuse_enable))
             self.properties.Set(pyluxcore.Property(prefix + '.visibility.indirect.glossy.enable',
