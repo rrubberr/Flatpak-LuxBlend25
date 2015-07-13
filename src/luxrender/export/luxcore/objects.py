@@ -97,16 +97,12 @@ class ObjectExporter(object):
             self.__convert_proxy(update_material, anim_matrices, convert_object, transform)
 
         # Check if object is duplicator (particle/hair emitter or using dupliverts/frames/...)
-        if len(obj.particle_systems) > 0:
-            # Particle/hair
-            convert_object = False
+        if len(obj.particle_systems) > 0 or obj.is_duplicator:
+            self.luxcore_exporter.convert_duplis(luxcore_scene, obj)
 
+            convert_object = False
             for psys in obj.particle_systems:
                 convert_object |= psys.settings.use_render_emitter
-                self.luxcore_exporter.convert_duplis(luxcore_scene, obj, psys)
-        elif obj.is_duplicator:
-            # Dupliverts/frames/...
-            self.luxcore_exporter.convert_duplis(luxcore_scene, obj)
 
         # Some dupli types should hide the original
         if obj.is_duplicator and obj.dupli_type in ('VERTS', 'FACES', 'GROUP'):
@@ -185,7 +181,7 @@ class ObjectExporter(object):
                 material = self.blender_object.material_slots[shape.material_index].material
             except IndexError:
                 material = None
-                print('WARNING: material slot %d on object "%s" is unassigned!' % (shape.material_index + 1, self.blender_object.name))
+                print('WARNING: material slot %d on object "%s" is unassigned' % (shape.material_index + 1, self.blender_object.name))
 
             # Convert material
             if update_material or get_elem_key(material) not in self.luxcore_exporter.material_cache:

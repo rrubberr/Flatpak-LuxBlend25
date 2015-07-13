@@ -240,8 +240,8 @@ class LuxCoreExporter(object):
 
 
     def convert_duplis(self, luxcore_scene, duplicator, dupli_system=None):
-        exporter = DupliExporter(self, self.blender_scene, duplicator, dupli_system, self.is_viewport_render)
-        self.__convert_element((get_elem_key(duplicator), dupli_system), self.dupli_cache, exporter, luxcore_scene)
+        exporter = DupliExporter(self, self.blender_scene, duplicator, self.is_viewport_render)
+        self.__convert_element(get_elem_key(duplicator), self.dupli_cache, exporter, luxcore_scene)
 
 
     def __convert_element(self, cache_key, cache, exporter, luxcore_scene=None):

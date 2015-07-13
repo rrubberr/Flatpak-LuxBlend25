@@ -202,7 +202,7 @@ class luxcore_enginesettings(declarative_property_group):
         # BIASPATH noise multiplier
         'tile_multipass_convergencetest_threshold': {'tile_multipass_enable': True},
         'tile_multipass_use_threshold_reduction': {'tile_multipass_enable': True},
-        'tile_multipass_convergencetest_threshold_reduction': {'tile_multipass_enable': True, 
+        'tile_multipass_convergencetest_threshold_reduction': {'tile_multipass_enable': True,
                                                                'tile_multipass_use_threshold_reduction': True},
     }
 
