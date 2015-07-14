@@ -53,7 +53,7 @@ class DupliExporter(object):
             if len(self.duplicator.particle_systems) > 0:
                 for particle_system in self.duplicator.particle_systems:
                     if particle_system.settings.render_type in ['OBJECT', 'GROUP'] and export_settings.export_particles:
-                        self.__convert_particles2(luxcore_scene)
+                        self.__convert_particles(luxcore_scene)
                     elif particle_system.settings.render_type == 'PATH' and export_settings.export_hair:
                         self.__convert_hair(luxcore_scene, particle_system)
             else:
@@ -129,7 +129,7 @@ class DupliExporter(object):
         print('[%s] Dupli export finished (%.3fs)' % (self.duplicator.name, time_elapsed))
 
 
-    def __convert_particles2(self, luxcore_scene):
+    def __convert_particles(self, luxcore_scene):
         """
         Ported from export/geometry.py (classic export)
         This function always exports with correct rotation, but does not support particle motion blur
@@ -154,10 +154,6 @@ class DupliExporter(object):
             if not is_obj_visible(self.blender_scene, dupli_ob.object, is_dupli=True):
                 continue
 
-            # Make it possible to interrupt the export process
-            if self.luxcore_exporter.renderengine.test_break():
-                return
-
             # metaballs are omitted from this function intentionally.
             if dupli_ob.object.type not in ['MESH', 'SURFACE', 'FONT', 'CURVE']:
                 continue
@@ -175,6 +171,9 @@ class DupliExporter(object):
 
         # dupli object, dupli matrix
         for do, dm, psys_name, persistent_id in duplis:
+            # Increment dupli number for progress display
+            self.dupli_number += 1
+
             # Check for group layer visibility, if the object is in a group
             gviz = len(do.users_group) == 0
 
@@ -196,7 +195,7 @@ class DupliExporter(object):
             #self.dupli_number += 1
             object_exporter = ObjectExporter(self.luxcore_exporter, self.blender_scene, self.is_viewport_render,
                                              do, dupli_name_suffix)
-            properties = object_exporter.convert(update_mesh=True, update_material=True, luxcore_scene=luxcore_scene,
+            properties = object_exporter.convert(update_mesh=False, update_material=False, luxcore_scene=luxcore_scene,
                                                  matrix=dm, is_dupli=True, anim_matrices=None)
             self.properties.Set(properties)
 
@@ -206,7 +205,7 @@ class DupliExporter(object):
         print('[%s:] Particle export finished (%.3fs)' % (obj.name, time_elapsed))
 
 
-    def __convert_particles(self, luxcore_scene):
+    def __convert_particles_deprecated(self, luxcore_scene):
         """
         This function supports particle motion blur, but exports particles with wrong rotations in some cases
 
