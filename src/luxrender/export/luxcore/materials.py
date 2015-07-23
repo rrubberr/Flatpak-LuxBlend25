@@ -587,10 +587,10 @@ class MaterialExporter(object):
                         self.properties.Set(pyluxcore.Property(prefix + '.emission',
                                                      convert_texture_channel(self.luxcore_exporter, self.properties, self.luxcore_name, material.luxrender_emission, 'L', 'color')))
 
-                        gain = [material.luxrender_emission.gain] * 3
-                        self.properties.Set(pyluxcore.Property(prefix + '.emission.gain', gain))
                         self.properties.Set(pyluxcore.Property(prefix + '.emission.power', material.luxrender_emission.power))
                         self.properties.Set(pyluxcore.Property(prefix + '.emission.efficency', material.luxrender_emission.efficacy))
+
+                        gain = material.luxrender_emission.gain
 
                         if not self.blender_scene.luxrender_lightgroups.ignore:
                             lightgroup = material.luxrender_emission.lightgroup
@@ -604,6 +604,13 @@ class MaterialExporter(object):
                                 self.luxcore_exporter.lightgroup_cache[lightgroup] = lightgroup_id
 
                             self.properties.Set(pyluxcore.Property(prefix + '.emission.id', [lightgroup_id]))
+
+                            if lightgroup:
+                                # Material is assigned to a lightgroup, use lightgroup gain etc. settings
+                                lightgroup_settings = self.blender_scene.luxrender_lightgroups.lightgroups[lightgroup]
+                                gain *= lightgroup_settings.gain
+
+                        self.properties.Set(pyluxcore.Property(prefix + '.emission.gain', [gain] * 3))
 
             # alpha transparency
             name_mix = self.luxcore_name + '_alpha_mix'
