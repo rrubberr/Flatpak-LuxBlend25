@@ -2171,8 +2171,29 @@ first frame will never stop!')
                     self.luxcore_exporter.convert_object(ob, luxcore_scene, update_mesh=False, update_material=False)
 
             if update_changes.cause_objectsRemoved:
-                # TODO: implement this with new interface
-                pass
+
+                from ..export.luxcore.utils import get_elem_key
+
+                for ob in update_changes.removed_objects:
+                    key = get_elem_key(ob)
+
+                    if ob.type == 'LAMP':
+                        if key in self.luxcore_exporter.light_cache:
+                            # In case of sunsky there might be multiple light sources, loop through them
+                            for exported_light in self.luxcore_exporter.light_cache[key].exported_lights:
+                                luxcore_name = exported_light.luxcore_name
+
+                                if exported_light.type == 'AREA':
+                                    # Area lights are meshlights and treated like objects with glowing materials
+                                    luxcore_scene.DeleteObject(luxcore_name)
+                                else:
+                                    luxcore_scene.DeleteLight(luxcore_name)
+                    else:
+                        if key in self.luxcore_exporter.object_cache:
+                            # loop through object components (split by materials)
+                            for exported_object in self.luxcore_exporter.object_cache[key].exported_objects:
+                                luxcore_name = exported_object.luxcore_object_name
+                                luxcore_scene.DeleteObject(luxcore_name)
 
                 '''
                 def remove_object(ob, exported_object):

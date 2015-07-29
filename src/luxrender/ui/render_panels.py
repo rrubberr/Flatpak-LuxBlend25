@@ -120,6 +120,18 @@ class render_settings(render_panel):
                 sub.enabled = False
                 sub.prop(engine_settings, 'device_cpu_only', expand=True)
 
+            if engine_settings.renderengine_type == 'BIASPATH':
+                aa = engine_settings.biaspath_sampling_aa_size
+                diffuse = engine_settings.biaspath_sampling_diffuse_size
+                glossy = engine_settings.biaspath_sampling_glossy_size
+                specular = engine_settings.biaspath_sampling_specular_size
+
+                # All samples are squared, then multiplied times the aa samples
+                effective_samples = aa**2 * (diffuse**2 + glossy**2 + specular**2)
+
+                layout.label(text='Effective samples: %d² × (%d² + %d² + %d²) = %d' %
+                                  (aa, diffuse, glossy, specular, effective_samples))
+
         # Draw property groups
         super().draw(context)
 

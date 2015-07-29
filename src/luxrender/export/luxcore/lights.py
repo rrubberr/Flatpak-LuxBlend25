@@ -38,6 +38,12 @@ from ...export import get_expanded_file_name
 from .utils import convert_param_to_luxcore_property
 
 
+class ExportedLight(object):
+    def __init__(self, name, type):
+        self.luxcore_name = name
+        self.type = type
+
+
 class LightExporter(object):
     def __init__(self, luxcore_exporter, blender_scene, blender_object):
         self.luxcore_exporter = luxcore_exporter
@@ -46,6 +52,7 @@ class LightExporter(object):
 
         self.properties = pyluxcore.Properties()
         self.luxcore_name = ''
+        self.exported_lights = []
 
 
     def convert(self, luxcore_scene):
@@ -173,6 +180,8 @@ class LightExporter(object):
     
             if 'sun' in sunsky_type:
                 name = luxcore_name + '_sun'
+                self.exported_lights.append(ExportedLight(name, 'SUN'))
+
                 if lightgroup_id != -1 and not self.blender_scene.luxrender_lightgroups.ignore:
                     self.properties.Set(pyluxcore.Property('scene.lights.' + name + '.id', [lightgroup_id]))
     
@@ -198,6 +207,8 @@ class LightExporter(object):
     
             if 'sky' in sunsky_type:
                 name = luxcore_name + '_sky'
+                self.exported_lights.append(ExportedLight(name, 'SKY'))
+
                 if lightgroup_id != -1 and not self.blender_scene.luxrender_lightgroups.ignore:
                     self.properties.Set(pyluxcore.Property('scene.lights.' + name + '.id', [lightgroup_id]))
     
@@ -220,6 +231,8 @@ class LightExporter(object):
                                                      light.luxrender_lamp.luxcore_lamp.visibility_indirect_specular_enable))
     
             if sunsky_type == 'distant':
+                self.exported_lights.append(ExportedLight(luxcore_name, 'DISTANT'))
+
                 if lightgroup_id != -1 and not self.blender_scene.luxrender_lightgroups.ignore:
                     self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.id', [lightgroup_id]))
     
@@ -246,6 +259,8 @@ class LightExporter(object):
         # Hemi (infinite)
         ####################################################################
         elif light.type == 'HEMI':
+            self.exported_lights.append(ExportedLight(luxcore_name, 'HEMI'))
+
             infinite_map_path = getattr(lux_lamp, 'infinite_map')
             if infinite_map_path:
                 infinite_map_path_abs, basename = get_expanded_file_name(light, infinite_map_path)
@@ -264,8 +279,8 @@ class LightExporter(object):
         # Point
         ####################################################################
         elif light.type == 'POINT':
-            # if getattr(lux_lamp, 'usesphere'):
-            # print('------------------------', getattr(lux_lamp, 'pointsize'))
+            self.exported_lights.append(ExportedLight(luxcore_name, 'POINT'))
+
             if iesfile:
                 self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.type', ['mappoint']))
             else:
@@ -287,7 +302,10 @@ class LightExporter(object):
         elif light.type == 'SPOT':
             coneangle = math.degrees(light.spot_size) * 0.5
             conedeltaangle = math.degrees(light.spot_size * 0.5 * light.spot_blend)
+
             if getattr(lux_lamp, 'projector'):
+                self.exported_lights.append(ExportedLight(luxcore_name, 'PROJECTION'))
+
                 projector_map_path = getattr(lux_lamp, 'mapname')
                 projector_map_path_abs, basename = get_expanded_file_name(light, projector_map_path)
                 self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.type', ['projection']))
@@ -295,6 +313,7 @@ class LightExporter(object):
                     pyluxcore.Property('scene.lights.' + luxcore_name + '.mapfile', projector_map_path_abs))
                 self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.fov', coneangle * 2))
             else:
+                self.exported_lights.append(ExportedLight(luxcore_name, 'SPOT'))
                 self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.type', ['spot']))
     
             spot_fix = mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'Z')  # match to lux
@@ -314,6 +333,7 @@ class LightExporter(object):
         ####################################################################
         elif light.type == 'AREA':
             if light.luxrender_lamp.luxrender_lamp_laser.is_laser:
+                self.exported_lights.append(ExportedLight(luxcore_name, 'LASER'))
                 # Laser lamp
                 transform = matrix_to_list(obj.matrix_world, apply_worldscale=True)
                 self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.transformation', transform))
@@ -323,6 +343,8 @@ class LightExporter(object):
                 self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.radius', [light.size]))
                 self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.samples', [samples]))
             else:
+                self.exported_lights.append(ExportedLight(luxcore_name, 'AREA'))
+
                 # TODO: visibility for indirect rays
     
                 # Area lamp workaround: create plane and add emitting material
