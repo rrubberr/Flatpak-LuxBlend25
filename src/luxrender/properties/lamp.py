@@ -214,7 +214,7 @@ class luxrender_lamp_point(luxrender_lamp_basic):
             'name': 'Use Sphere',
             'update': sphere_lamp_prop,
             'description': 'Use a spherical area light instead of a true point light. This is more realistic, but \
-            can deform IES profiles',
+can deform IES profiles',
             'default': False,
 
         },
@@ -246,7 +246,7 @@ class luxrender_lamp_point(luxrender_lamp_basic):
             'attr': 'null_lamp',
             'name': 'Hide geometry',
             'description': 'Use a null material for lamp geometry (lamp will still be visible when viewed directly, \
-            as it emits its own light',
+as it emits its own light',
             'default': True,
         },
     ]
@@ -350,6 +350,7 @@ class luxrender_lamp_sun(declarative_property_group):
                    :]  # Pin this at the end so the sun type menu isn't jumping around when you select the distant lamp
 
     visibility = {  # Do L visibility manually because we only need it for distant
+                    'nsamples': {lambda: not UseLuxCore()},
                     'L_colorlabel': {'sunsky_type': 'distant'},
                     'L_color': {'sunsky_type': 'distant'},
                     'L_usecolortexture': {'sunsky_type': 'distant'},
@@ -526,6 +527,7 @@ class luxrender_lamp_area(declarative_property_group):
     visibility = dict_merge(
         TC_L.visibility,
         {'null_lamp': lambda: not UseLuxCore()},
+        {'nsamples': lambda: not UseLuxCore()},
     )
 
     #visibility = TC_L.visibility
@@ -567,7 +569,7 @@ class luxrender_lamp_area(declarative_property_group):
             'attr': 'null_lamp',
             'name': 'Hide geometry',
             'description': 'Use a null material for lamp geometry (lamp will still be visible when viewed on \
-            emitting side, as it emits its own light',
+emitting side, as it emits its own light',
             'default': True,
         },
     ]
@@ -600,9 +602,8 @@ class luxrender_lamp_hemi(declarative_property_group):
         'mapping_type': {'infinite_map': LO({'!=': ''})},
         'hdri_multiply': {'infinite_map': LO({'!=': ''})},
         'gamma': {'infinite_map': LO({'!=': ''})},
-        'nsamples': {'infinite_map': LO({'!=': ''})},
+        'nsamples': A([{'infinite_map': LO({'!=': ''})}, lambda: not UseLuxCore()]),
         'hdri_infinitesample': {'infinite_map': LO({'!=': ''})},
-
     }
 
     properties = TC_L.properties[:] + [
@@ -648,7 +649,7 @@ class luxrender_lamp_hemi(declarative_property_group):
             'attr': 'hdri_infinitesample',
             'name': 'Intensity Sampling',
             'description': 'Use intensity based sampling for hemi texture, recommended for high contrast HDR \
-            images. Will disable use of portals for this light!',
+images. Will disable use of portals for this light!',
             'default': False
         },
         {

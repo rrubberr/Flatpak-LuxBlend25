@@ -33,8 +33,8 @@ sys.path.append("/home/tomb/Projects/PyCharm/luxblend25/src/luxrender/pycharm-de
 bl_info = {
     "name": "LuxRender",
     "author": "LuxRender Project: Doug Hammond (dougal2), Asbjørn Heid (LordCrc), Daniel Genrich (Genscher), \
-    Jens Verwiebe, Jason Clarke (JtheNinja), Michael Klemm (neo2068)",
-    "version": (1, 5, 'RC1'),
+    Jens Verwiebe, Jason Clarke (JtheNinja), Michael Klemm (neo2068), Simon Wendsche (B.Y.O.B.)",
+    "version": (1, 5, 'RC2'),
     "blender": (2, 67, 1),
     "api": 57908,
     "category": "Render",
@@ -127,10 +127,14 @@ else:
 
         def draw(self, context):
             layout = self.layout
+
             layout.prop(self, "install_path")
             layout.label(text="After updating LuxRender installation path "
                          "please restart Blender for changes to take "
                          "effect.")
+
+            layout.operator("luxrender.update_luxblend", icon='RECOVER_AUTO')
+            layout.label(text="After updating LuxBlend please restart Blender for the changes to take effect.")
 
     LuxRenderAddon = Addon(bl_info)
     addon_register, addon_unregister = LuxRenderAddon.init_functions()

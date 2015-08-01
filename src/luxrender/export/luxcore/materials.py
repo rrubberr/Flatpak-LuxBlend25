@@ -32,7 +32,7 @@ from ...outputs.luxcore_api import ToValidLuxCoreName
 from ...export.materials import get_texture_from_scene
 from ...properties import find_node
 
-from .utils import convert_texture_channel, generate_volume_name
+from .utils import convert_texture_channel, generate_volume_name, get_elem_key
 from .textures import TextureExporter
 
 
@@ -85,6 +85,9 @@ class MaterialExporter(object):
 
 
     def __generate_material_name(self, name):
+        if self.material.library:
+            name += '_' + self.material.library.name
+
         # materials and volumes must not have the same names
         self.luxcore_name = ToValidLuxCoreName(name + '_mat')
 
@@ -141,7 +144,7 @@ class MaterialExporter(object):
 
     def __set_volume(self, prop_string, volume):
         self.luxcore_exporter.convert_volume(volume)
-        volume_exporter = self.luxcore_exporter.volume_cache[volume]
+        volume_exporter = self.luxcore_exporter.volume_cache[get_elem_key(volume)]
         self.properties.Set(pyluxcore.Property(prop_string, volume_exporter.luxcore_name))
 
 
@@ -250,7 +253,7 @@ class MaterialExporter(object):
 
                             if texture is not None:
                                 self.luxcore_exporter.convert_texture(texture)
-                                texture_exporter = self.luxcore_exporter.texture_cache[texture]
+                                texture_exporter = self.luxcore_exporter.texture_cache[get_elem_key(texture)]
 
                                 is_multiplied = getattr(lux_mat, 'Kr_multiplycolor')
 
@@ -329,7 +332,7 @@ class MaterialExporter(object):
 
                         base = bpy.data.materials[material_base_name]
                         self.luxcore_exporter.convert_material(base)
-                        base_exporter = self.luxcore_exporter.material_cache[base]
+                        base_exporter = self.luxcore_exporter.material_cache[get_elem_key(base)]
                         luxcore_base_name = base_exporter.luxcore_material_name
 
                         self.properties.Set(pyluxcore.Property(prefix + '.base', [luxcore_base_name]))
@@ -510,8 +513,8 @@ class MaterialExporter(object):
                         self.luxcore_exporter.convert_material(mat1)
                         self.luxcore_exporter.convert_material(mat2)
 
-                        mat1_luxcore_name = self.luxcore_exporter.material_cache[mat1].luxcore_name
-                        mat2_luxcore_name = self.luxcore_exporter.material_cache[mat2].luxcore_name
+                        mat1_luxcore_name = self.luxcore_exporter.material_cache[get_elem_key(mat1)].luxcore_name
+                        mat2_luxcore_name = self.luxcore_exporter.material_cache[get_elem_key(mat2)].luxcore_name
 
                         self.properties.Set(pyluxcore.Property(prefix + '.type', ['mix']))
                         self.properties.Set(pyluxcore.Property(prefix + '.material1', mat1_luxcore_name))
@@ -590,9 +593,6 @@ class MaterialExporter(object):
             self.properties.Set(pyluxcore.Property(prefix + '.samples', [lc_mat.samples]))
             self.properties.Set(pyluxcore.Property(prefix + '.emission.samples', [lc_mat.emission_samples]))
 
-            if lc_mat.advanced:
-                self.properties.Set(pyluxcore.Property(prefix + '.bumpsamplingdistance', [lc_mat.bumpsamplingdistance]))
-
             self.properties.Set(pyluxcore.Property(prefix + '.visibility.indirect.diffuse.enable',
                                          lc_mat.visibility_indirect_diffuse_enable))
             self.properties.Set(pyluxcore.Property(prefix + '.visibility.indirect.glossy.enable',
@@ -609,10 +609,10 @@ class MaterialExporter(object):
                         self.properties.Set(pyluxcore.Property(prefix + '.emission',
                                                      convert_texture_channel(self.luxcore_exporter, self.properties, self.luxcore_name, material.luxrender_emission, 'L', 'color')))
 
-                        gain = [material.luxrender_emission.gain] * 3
-                        self.properties.Set(pyluxcore.Property(prefix + '.emission.gain', gain))
                         self.properties.Set(pyluxcore.Property(prefix + '.emission.power', material.luxrender_emission.power))
                         self.properties.Set(pyluxcore.Property(prefix + '.emission.efficency', material.luxrender_emission.efficacy))
+
+                        gain = material.luxrender_emission.gain
 
                         if not self.blender_scene.luxrender_lightgroups.ignore:
                             lightgroup = material.luxrender_emission.lightgroup
@@ -626,6 +626,13 @@ class MaterialExporter(object):
                                 self.luxcore_exporter.lightgroup_cache[lightgroup] = lightgroup_id
 
                             self.properties.Set(pyluxcore.Property(prefix + '.emission.id', [lightgroup_id]))
+
+                            if lightgroup:
+                                # Material is assigned to a lightgroup, use lightgroup gain etc. settings
+                                lightgroup_settings = self.blender_scene.luxrender_lightgroups.lightgroups[lightgroup]
+                                gain *= lightgroup_settings.gain
+
+                        self.properties.Set(pyluxcore.Property(prefix + '.emission.gain', [gain] * 3))
 
             # alpha transparency
             name_mix = self.luxcore_name + '_alpha_mix'

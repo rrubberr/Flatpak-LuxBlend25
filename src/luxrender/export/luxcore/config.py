@@ -29,6 +29,8 @@ import os
 
 from ...outputs.luxcore_api import pyluxcore
 from ...extensions_framework import util as efutil
+from ...export import get_output_filename
+
 
 class ConfigExporter(object):
     def __init__(self, luxcore_exporter, blender_scene, is_viewport_render=False):
@@ -41,6 +43,7 @@ class ConfigExporter(object):
         self.outputCounter = 0
         self.material_id_mask_counter = 0
         self.by_material_id_counter = 0
+        self.active_outputswitcher_channels = []
 
 
     def convert(self, film_width, film_height):
@@ -48,10 +51,10 @@ class ConfigExporter(object):
             self.__convert_realtime_settings()
         else:
             # Config for final render
-            self.__convert_engine()
             self.__convert_filter()
             self.__convert_sampler()
 
+        self.__convert_engine()
         self.__convert_halt_conditions()
         self.__convert_compute_settings()
         self.__convert_film_size(film_width, film_height)
@@ -106,8 +109,19 @@ class ConfigExporter(object):
         # output filename (e.g. 'film.outputs.1.filename')
         suffix = ('.png' if (channelName in LDR_channels) else '.exr')
         outputStringFilename = 'film.outputs.' + str(self.outputCounter) + '.filename'
-        filename = channelName + suffix if id == -1 else channelName + '_' + str(id) + suffix
-        self.properties.Set(pyluxcore.Property(outputStringFilename, [filename]))
+
+        filename = channelName
+        if id != -1:
+            filename += '_' + str(id)
+        filename = get_output_filename(self.blender_scene) + '_' + filename + suffix
+
+        output_path = efutil.filesystem_path(self.blender_scene.render.filepath)
+        if not os.path.isdir(output_path):
+            os.makedirs(output_path)
+
+        path = os.path.join(output_path, filename)
+
+        self.properties.Set(pyluxcore.Property(outputStringFilename, path))
 
         # output id
         if id != -1:
@@ -189,10 +203,10 @@ class ConfigExporter(object):
     def __convert_halt_conditions(self):
         engine_settings = self.blender_scene.luxcore_enginesettings
 
-        if engine_settings.use_halt_noise or self.is_viewport_render:
-            haltthreshold = engine_settings.halt_noise_preview if self.is_viewport_render else engine_settings.halt_noise
+        if engine_settings.use_halt_noise:
+            haltthreshold = engine_settings.halt_noise
             self.properties.Set(pyluxcore.Property('batch.haltthreshold', haltthreshold))
-            # All other halt conditions are controlled in core/__init__.py and not set via properties
+            # All other halt conditions are controlled in core/__init__.py and not set via luxcore properties
 
     
     def __convert_sampler(self):
@@ -237,10 +251,6 @@ class ConfigExporter(object):
         engine = engine_settings.renderengine_type
         device = engine_settings.device_preview if self.is_viewport_render else engine_settings.device
 
-        # Biased Path engine is sluggish for realtime preview, don't use it
-        if self.is_viewport_render and engine == 'BIASPATH':
-            engine = 'PATH'
-
         # Set engine type
         if engine in ['BIDIR', 'BIDIRVM'] or device == 'CPU':
             # CPU only engines
@@ -256,7 +266,7 @@ class ConfigExporter(object):
         engine_settings = self.blender_scene.luxcore_enginesettings
         engine = self.__get_engine()
 
-        if self.blender_scene.luxcore_translatorsettings.use_filesaver:
+        if self.blender_scene.luxcore_translatorsettings.use_filesaver and not self.is_viewport_render:
             output_path = efutil.filesystem_path(self.blender_scene.render.filepath)
             if not os.path.isdir(output_path):
                 os.makedirs(output_path)
@@ -333,49 +343,13 @@ class ConfigExporter(object):
     def __convert_realtime_settings(self):
         engine_settings = self.blender_scene.luxcore_enginesettings
 
-        # Halt conditions
-        self.properties.Set(pyluxcore.Property('batch.haltthreshold', engine_settings.halt_noise_preview))
-
-        # Use same renderengine as final render
-        engine = engine_settings.renderengine_type
-
-        # Biased Path engine is sluggish for realtime preview, don't use it
-        if engine == 'BIASPATH':
-            engine = 'PATH'
-
-        # Append 'CPU' or 'OCL' from realtime settings
-        if engine == 'PATH':
-            engine += engine_settings.device_preview
-        else:
-            engine += 'CPU'
-
-        self.properties.Set(pyluxcore.Property('renderengine.type', engine))
-
-        # Use global path/light depth
-        if engine_settings.renderengine_type in ['PATH', 'BIASPATH']:
-            self.properties.Set(pyluxcore.Property('path.maxdepth', engine_settings.path_maxdepth))
-
-            # Use global clamping settings
-            if engine_settings.use_clamping:
-                radiance_clamp = engine_settings.biaspath_clamping_radiance_maxvalue
-                pdf_clamp = engine_settings.biaspath_clamping_pdf_value
-            else:
-                radiance_clamp = 0
-                pdf_clamp = 0
-
-            self.properties.Set(pyluxcore.Property('path.clamping.radiance.maxvalue', radiance_clamp))
-            self.properties.Set(pyluxcore.Property('path.clamping.pdf.value', pdf_clamp))
-        else:
-            self.properties.Set(pyluxcore.Property('path.maxdepth', engine_settings.bidir_eyedepth))
-            self.properties.Set(pyluxcore.Property('light.maxdepth', engine_settings.bidir_lightdepth))
-
         # Sampler settings (same as for final render)
         self.properties.Set(pyluxcore.Property('sampler.type', engine_settings.sampler_type))
 
-        # Filter settings
+        # Special filter settings optimized for realtime preview
         if engine_settings.device_preview == 'CPU':
             self.properties.Set(pyluxcore.Property('film.filter.type', 'BLACKMANHARRIS'))
-            self.properties.Set(pyluxcore.Property('film.filter.width', 1.3))
+            self.properties.Set(pyluxcore.Property('film.filter.width', 1.0))
         else:
             self.properties.Set(pyluxcore.Property('film.filter.type', 'NONE'))
 
@@ -404,7 +378,7 @@ class ConfigExporter(object):
         engine_settings = self.blender_scene.luxcore_enginesettings
         # Custom Properties
         if engine_settings.advanced and engine_settings.custom_properties:
-            custom_params = engine_settings.custom_properties.replace(' ', '').split('|')
+            custom_params = engine_settings.custom_properties.replace(' ', '').replace(';', ' ').split('|')
             for prop in custom_params:
                 prop = prop.split('=')
                 self.properties.Set(pyluxcore.Property(prop[0], prop[1]))
@@ -418,7 +392,8 @@ class ConfigExporter(object):
         output_switcher_channel = luxrender_camera.luxcore_imagepipeline_settings.output_switcher_pass
         channels = self.blender_scene.luxrender_channels
 
-        if (channels.enable_aovs and not self.is_viewport_render) or output_switcher_channel != 'disabled':
+        if channels.enable_aovs and not self.is_viewport_render and (
+                    channels.import_into_blender or channels.saveToDisk):
             if channels.RGB:
                 self.convert_channel('RGB')
             if channels.RGBA:
@@ -427,40 +402,45 @@ class ConfigExporter(object):
                 self.convert_channel('RGB_TONEMAPPED')
             if channels.RGBA_TONEMAPPED:
                 self.convert_channel('RGBA_TONEMAPPED')
-            if channels.ALPHA or output_switcher_channel == 'ALPHA':
+            if channels.ALPHA:
                 self.convert_channel('ALPHA')
-            if channels.DEPTH or output_switcher_channel == 'DEPTH':
+            if channels.DEPTH:
                 self.convert_channel('DEPTH')
-            if channels.POSITION or output_switcher_channel == 'POSITION':
+            if channels.POSITION:
                 self.convert_channel('POSITION')
-            if channels.GEOMETRY_NORMAL or output_switcher_channel == 'GEOMETRY_NORMAL':
+            if channels.GEOMETRY_NORMAL:
                 self.convert_channel('GEOMETRY_NORMAL')
-            if channels.SHADING_NORMAL or output_switcher_channel == 'SHADING_NORMAL':
+            if channels.SHADING_NORMAL:
                 self.convert_channel('SHADING_NORMAL')
-            if channels.MATERIAL_ID or output_switcher_channel == 'MATERIAL_ID':
+            if channels.MATERIAL_ID:
                 self.convert_channel('MATERIAL_ID')
-            if channels.DIRECT_DIFFUSE or output_switcher_channel == 'DIRECT_DIFFUSE':
+            if channels.DIRECT_DIFFUSE:
                 self.convert_channel('DIRECT_DIFFUSE')
-            if channels.DIRECT_GLOSSY or output_switcher_channel == 'DIRECT_GLOSSY':
+            if channels.DIRECT_GLOSSY:
                 self.convert_channel('DIRECT_GLOSSY')
-            if channels.EMISSION or output_switcher_channel == 'EMISSION':
+            if channels.EMISSION:
                 self.convert_channel('EMISSION')
-            if channels.INDIRECT_DIFFUSE or output_switcher_channel == 'INDIRECT_DIFFUSE':
+            if channels.INDIRECT_DIFFUSE:
                 self.convert_channel('INDIRECT_DIFFUSE')
-            if channels.INDIRECT_GLOSSY or output_switcher_channel == 'INDIRECT_GLOSSY':
+            if channels.INDIRECT_GLOSSY:
                 self.convert_channel('INDIRECT_GLOSSY')
-            if channels.INDIRECT_SPECULAR or output_switcher_channel == 'INDIRECT_SPECULAR':
+            if channels.INDIRECT_SPECULAR:
                 self.convert_channel('INDIRECT_SPECULAR')
-            if channels.DIRECT_SHADOW_MASK or output_switcher_channel == 'DIRECT_SHADOW_MASK':
+            if channels.DIRECT_SHADOW_MASK:
                 self.convert_channel('DIRECT_SHADOW_MASK')
-            if channels.INDIRECT_SHADOW_MASK or output_switcher_channel == 'INDIRECT_SHADOW_MASK':
+            if channels.INDIRECT_SHADOW_MASK:
                 self.convert_channel('INDIRECT_SHADOW_MASK')
-            if channels.UV or output_switcher_channel == 'UV':
+            if channels.UV:
                 self.convert_channel('UV')
-            if channels.RAYCOUNT or output_switcher_channel == 'RAYCOUNT':
+            if channels.RAYCOUNT:
                 self.convert_channel('RAYCOUNT')
-            if channels.IRRADIANCE or output_switcher_channel == 'IRRADIANCE':
+            if channels.IRRADIANCE:
                 self.convert_channel('IRRADIANCE')
+
+        if output_switcher_channel != 'disabled':
+            if output_switcher_channel not in self.active_outputswitcher_channels:
+                self.active_outputswitcher_channels.append(output_switcher_channel)
+                self.convert_channel(output_switcher_channel)
 
 
     def __convert_lightgroups(self):

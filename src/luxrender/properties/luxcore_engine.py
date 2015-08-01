@@ -99,6 +99,7 @@ class luxcore_enginesettings(declarative_property_group):
         'biaspath_lights_samplingstrategy_type',
         'biaspath_lights_nearstart',
         ['label_sampler_type', 'sampler_type'],
+        ['label_biaspath_sampler_type', 'biaspath_sampler_type'],
         # Advanced sampler settings (for all but BIASPATH)
         ['label_largesteprate', 'largesteprate'],
         ['label_maxconsecutivereject', 'maxconsecutivereject'],
@@ -112,9 +113,16 @@ class luxcore_enginesettings(declarative_property_group):
         # Kernel cache
         ['label_kernelcache', 'kernelcache'],
         # BIASPATH specific halt condition
-        'label_halt_conditions',
+        ['spacer_halt_conditions', 'show_halt_conditions'],
+        #'label_halt_conditions',
         ['tile_multipass_enable', 'tile_multipass_convergencetest_threshold'],
         ['tile_multipass_use_threshold_reduction', 'tile_multipass_convergencetest_threshold_reduction'],
+        ['use_halt_samples', 'halt_samples'],
+        ['use_halt_time', 'halt_time'],
+        ['use_halt_noise', 'halt_noise'],
+        'label_halt_conditions_preview',
+        ['use_halt_samples_preview', 'halt_samples_preview'],
+        ['use_halt_time_preview', 'halt_time_preview'],
     ]
 
     visibility = {
@@ -132,13 +140,6 @@ class luxcore_enginesettings(declarative_property_group):
         'bidirvm_lightpath_count': {'advanced': True, 'renderengine_type': 'BIDIRVM'},
         'bidirvm_startradius_scale': {'advanced': True, 'renderengine_type': 'BIDIRVM'},
         'bidirvm_alpha': {'advanced': True, 'renderengine_type': 'BIDIRVM'},
-        # BIASPATH noise controls
-        'label_halt_conditions': {'renderengine_type': 'BIASPATH'},
-        'tile_multipass_enable': {'renderengine_type': 'BIASPATH'},
-        'tile_multipass_convergencetest_threshold': {'tile_multipass_enable': True, 'renderengine_type': 'BIASPATH'},
-        'tile_multipass_use_threshold_reduction': {'tile_multipass_enable': True, 'renderengine_type': 'BIASPATH'},
-        'tile_multipass_convergencetest_threshold_reduction':
-             {'tile_multipass_enable': True, 'renderengine_type': 'BIASPATH'},
         # BIASPATH sampling
         'label_sampling': {'renderengine_type': 'BIASPATH'},
         'biaspath_sampling_aa_size': {'renderengine_type': 'BIASPATH'},
@@ -161,6 +162,8 @@ class luxcore_enginesettings(declarative_property_group):
         'spacer_pdf_clamping': A([{'advanced': True}, {'renderengine_type': O(['BIASPATH', 'PATH'])}]),
         'biaspath_clamping_pdf_value': A([{'advanced': True}, {'renderengine_type': O(['BIASPATH', 'PATH'])}]),
         # Sampler settings, show for all but BIASPATH
+        'label_sampler_type': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'sampler_type': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
         'label_largesteprate': A([{'advanced': True}, {'sampler_type': 'METROPOLIS'},
             {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])}]),
         'largesteprate': A([{'advanced': True}, {'sampler_type': 'METROPOLIS'},
@@ -173,6 +176,9 @@ class luxcore_enginesettings(declarative_property_group):
             {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])}]),
         'imagemutationrate': A([{'advanced': True}, {'sampler_type': 'METROPOLIS'},
             {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])}]),
+        # Fake sampler settings for BIASPATH
+        'label_biaspath_sampler_type': {'renderengine_type': 'BIASPATH'},
+        'biaspath_sampler_type': {'renderengine_type': 'BIASPATH'},
         # Filter settings
         'label_filter_type': {'advanced': True},
         'filter_type': {'advanced': True},
@@ -186,6 +192,23 @@ class luxcore_enginesettings(declarative_property_group):
         # Kernel cache
         'label_kernelcache': A([{'advanced': True}, {'renderengine_type': O(['PATH', 'BIASPATH'])}, {'device': 'OCL'}]),
         'kernelcache': A([{'advanced': True}, {'renderengine_type': O(['PATH', 'BIASPATH'])}, {'device': 'OCL'}]),
+        # Halt conditions
+        'use_halt_samples': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'halt_samples': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'use_halt_time': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'halt_time': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'use_halt_noise': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'halt_noise': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'label_halt_conditions_preview': {'show_halt_conditions': True},
+        'use_halt_samples_preview': {'show_halt_conditions': True},
+        'halt_samples_preview': {'show_halt_conditions': True},
+        'use_halt_time_preview': {'show_halt_conditions': True},
+        'halt_time_preview': {'show_halt_conditions': True},
+        # BIASPATH noise controls
+        'tile_multipass_enable': {'show_halt_conditions': True, 'renderengine_type': 'BIASPATH'},
+        'tile_multipass_convergencetest_threshold': {'show_halt_conditions': True, 'renderengine_type': 'BIASPATH'},
+        'tile_multipass_use_threshold_reduction': {'show_halt_conditions': True, 'renderengine_type': 'BIASPATH'},
+        'tile_multipass_convergencetest_threshold_reduction': {'show_halt_conditions': True, 'renderengine_type': 'BIASPATH'},
     }
 
     alert = {}
@@ -194,10 +217,17 @@ class luxcore_enginesettings(declarative_property_group):
         # Clamping value
         'biaspath_clamping_radiance_maxvalue': {'use_clamping': True},
         'biaspath_clamping_pdf_value': {'use_clamping': True},
+        # Halt Conditions
+        'halt_samples': {'use_halt_samples': True},
+        'halt_time': {'use_halt_time': True},
+        'halt_noise': {'use_halt_noise': True},
+        'halt_samples_preview': {'use_halt_samples_preview': True},
+        'halt_time_preview': {'use_halt_time_preview': True},
         # BIASPATH noise multiplier
-        'tile_multipass_convergencetest_threshold_reduction': {'tile_multipass_use_threshold_reduction': True},
-        # Disable sampler dropdown when using BIASPATH
-        'sampler_type': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'tile_multipass_convergencetest_threshold': {'tile_multipass_enable': True},
+        'tile_multipass_use_threshold_reduction': {'tile_multipass_enable': True},
+        'tile_multipass_convergencetest_threshold_reduction': {'tile_multipass_enable': True,
+                                                               'tile_multipass_use_threshold_reduction': True},
     }
 
     properties = [
@@ -263,8 +293,8 @@ class luxcore_enginesettings(declarative_property_group):
             'description': 'CPU rendering has lower latency, GPU rendering is faster',
             'default': 'CPU',
             'items': [
-                ('CPU', 'CPU', 'Use the CPU (slow, fast updates)'),
-                ('OCL', 'OpenCL', 'Use the graphics card via OpenCL (fast, slow updates)'),
+                ('CPU', 'CPU', 'Use the CPU (slow rendering, fast updates)'),
+                ('OCL', 'OpenCL', 'Use the graphics card via OpenCL (fast rendering, slow updates)'),
             ],
             'expand': True,
             'save_in_preset': True
@@ -640,6 +670,23 @@ may mute lamps and caustics',
             'slider': True,
             'save_in_preset': True
         },
+        # Fake sampler to show to the user that BIASPATH sampler is fixed
+        {
+            'type': 'text',
+            'attr': 'label_biaspath_sampler_type',
+            'name': 'Sampler:',
+        },
+        {
+            'type': 'enum',
+            'attr': 'biaspath_sampler_type',
+            'name': '',
+            'description': 'Pixel sampling algorithm to use',
+            'default': 'SOBOL',
+            'items': [
+                ('SOBOL', 'Stratified Sampler', 'Biased Path uses a fixed stratified sampler'),
+            ],
+            'save_in_preset': True
+        },
         # Filter settings
         {
             'type': 'text',
@@ -655,8 +702,6 @@ may mute lamps and caustics',
             'items': [
                 ('BLACKMANHARRIS', 'Blackman-Harris', 'default'),
                 ('MITCHELL', 'Mitchell', 'can produce black ringing artifacts around bright pixels'),
-                ('MITCHELL_SS', 'Mitchell_SS', ''),
-                ('BOX', 'Box', ''),
                 ('GAUSSIAN', 'Gaussian', ''),
                 ('NONE', 'None', 'Disable pixel filtering. Fastest setting when rendering on GPU')
             ],
@@ -774,8 +819,26 @@ Not supported for OpenCL engines')
         # Halt condition settings (halt time and halt spp)
         {
             'type': 'text',
+            'name': '',
+            'attr': 'spacer_halt_conditions',
+        },
+        {
+            'type': 'bool',
+            'attr': 'show_halt_conditions',
+            'name': 'Halt Conditions',
+            'description': 'Show/hide halt conditions (settings will still be used even when hidden)',
+            'default': False,
+            'toggle': True
+        },
+        {
+            'type': 'text',
             'name': 'Halt Conditions:',
             'attr': 'label_halt_conditions',
+        },
+        {
+            'type': 'text',
+            'name': 'Preview Halt Conditions:',
+            'attr': 'label_halt_conditions_preview',
         },
         {
             'type': 'bool',
@@ -794,6 +857,14 @@ Not supported for OpenCL engines')
             'min': 1,
             'soft_min': 5,
             'soft_max': 2000,
+            'save_in_preset': True
+        },
+        {
+            'type': 'bool',
+            'attr': 'use_halt_samples_preview',
+            'name': 'Samples',
+            'description': 'Rendering process will stop at specified amount of samples',
+            'default': True,
             'save_in_preset': True
         },
         {
@@ -827,6 +898,14 @@ Not supported for OpenCL engines')
             'save_in_preset': True
         },
         {
+            'type': 'bool',
+            'attr': 'use_halt_time_preview',
+            'name': 'Time',
+            'description': 'Viewport rendering process will stop after specified amount of seconds',
+            'default': True,
+            'save_in_preset': True
+        },
+        {
             'type': 'int',
             'attr': 'halt_time_preview',
             'name': '',
@@ -850,17 +929,6 @@ Not supported for OpenCL engines')
             'name': '',
             'description': 'Rendering process will stop when the specified noise level is reached (lower = less noise)',
             'default': 0.0001,
-            'min': 0.000001,
-            'max': 0.9,
-            'save_in_preset': True
-        },
-        {
-            'type': 'float',
-            'attr': 'halt_noise_preview',
-            'name': '',
-            'description': 'Viewport rendering process will stop when the specified noise level is reached (lower = \
-less noise)',
-            'default': 0.1,
             'min': 0.000001,
             'max': 0.9,
             'save_in_preset': True
