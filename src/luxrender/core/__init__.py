@@ -1040,7 +1040,14 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         # Samples per second
         if rendering_controls.stats_samples_per_sec:
-            stats_list.append('Samples/Sec %3.2fM' % (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000))
+            samples_per_sec = stats.Get('stats.renderengine.total.samplesec').GetFloat()
+
+            if samples_per_sec > 10**6 - 1:
+                # Use megasamples as unit
+                stats_list.append('Samples/Sec %.3f M' % (samples_per_sec / 10**6))
+            else:
+                # Use kilosamples as unit
+                stats_list.append('Samples/Sec %d k' % (samples_per_sec / 10**3))
 
         if rendering_controls.stats_rays_per_sample:
             samplesec = stats.Get("stats.renderengine.total.samplesec").GetFloat()
@@ -1054,7 +1061,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 rays_per_sample = 0
 
             stats_list.append('Rays/Sample %.1f' % rays_per_sample)
-
 
         # Convergence stats
         if rendering_controls.stats_convergence:
@@ -1092,7 +1098,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             if used_memory > self.mem_peak:
                 self.mem_peak = used_memory
 
-            stats_list.append('Memory: %dM/%dM' % (used_memory, max_memory))
+            stats_list.append('Memory: %d MB/%d MB' % (used_memory, max_memory))
 
         # Show triangle count (formatted with commas, like so: 5,123,001 Tris)
         if rendering_controls.stats_tris:
@@ -1335,8 +1341,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             blenderImage.filepath_raw = self.output_dir + imageName
             blenderImage.file_format = image_format
 
-            if saveToDisk:
-                blenderImage.save()
+            #if saveToDisk: # TODO: remove, this is done via LuxCore now
+            #    blenderImage.save()
 
     def draw_tiles(self, scene, stats, imageBuffer, filmWidth, filmHeight):
         """
@@ -1427,8 +1433,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     halt_enabled = settings.use_halt_samples or settings.use_halt_noise or settings.use_halt_time
 
                 if not halt_enabled:
-                    raise Exception('You need to set a halt condition for animations, otherwise the rendering of the \
-first frame will never stop!')
+                    raise Exception('You need to set a halt condition for animations, otherwise the rendering of the '
+                                    'first frame will never stop!')
 
             self.set_export_path_luxcore(scene)
 
@@ -1540,10 +1546,15 @@ first frame will never stop!')
             layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight,
                                                                                    imageBufferFloat)
 
-            passes = result.layers[0].passes
-
             if scene.luxrender_channels.enable_aovs:
-                self.import_aov_channels(scene, luxcore_session, filmWidth, filmHeight, passes)
+                if scene.luxrender_channels.saveToDisk:
+                    output_path = efutil.filesystem_path(scene.render.filepath)
+                    self.update_stats('Saving AOV passes to disk', 'Output path: ' + str(output_path))
+                    LuxLog('Saving AOV passes to disk, output path: ' + str(output_path))
+                    luxcore_session.GetFilm().Save()
+
+                if scene.luxrender_channels.import_into_blender:
+                    self.import_aov_channels(scene, luxcore_session, filmWidth, filmHeight, result.layers[0].passes)
 
             self.end_result(result)
             LuxLog('Done.\n')

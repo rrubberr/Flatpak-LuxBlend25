@@ -148,8 +148,11 @@ class LuxCoreExporter(object):
         # Show message in Blender UI
         export_time = time.time() - start_time
         print('Export finished (%.1fs)' % export_time)
-        engine = self.blender_scene.luxcore_enginesettings.renderengine_type
-        message = 'Compiling OpenCL Kernels...' if 'OCL' in engine else 'Starting LuxRender...'
+
+        if self.blender_scene.luxcore_enginesettings.device == 'CPU':
+            message = 'Starting LuxRender...'
+        else:
+            message = 'Compiling OpenCL Kernels...'
         self.renderengine.update_stats('Export Finished (%.1fs)' % export_time, message)
 
         # Create luxcore scene and config

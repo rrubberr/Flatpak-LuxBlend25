@@ -29,6 +29,8 @@ import os
 
 from ...outputs.luxcore_api import pyluxcore
 from ...extensions_framework import util as efutil
+from ...export import get_output_filename
+
 
 class ConfigExporter(object):
     def __init__(self, luxcore_exporter, blender_scene, is_viewport_render=False):
@@ -107,7 +109,11 @@ class ConfigExporter(object):
         # output filename (e.g. 'film.outputs.1.filename')
         suffix = ('.png' if (channelName in LDR_channels) else '.exr')
         outputStringFilename = 'film.outputs.' + str(self.outputCounter) + '.filename'
-        filename = channelName + suffix if id == -1 else channelName + '_' + str(id) + suffix
+
+        filename = channelName
+        if id != -1:
+            filename += '_' + str(id)
+        filename = get_output_filename(self.blender_scene) + '_' + filename + suffix
 
         output_path = efutil.filesystem_path(self.blender_scene.render.filepath)
         if not os.path.isdir(output_path):
@@ -386,7 +392,8 @@ class ConfigExporter(object):
         output_switcher_channel = luxrender_camera.luxcore_imagepipeline_settings.output_switcher_pass
         channels = self.blender_scene.luxrender_channels
 
-        if (channels.enable_aovs and not self.is_viewport_render):
+        if channels.enable_aovs and not self.is_viewport_render and (
+                    channels.import_into_blender or channels.saveToDisk):
             if channels.RGB:
                 self.convert_channel('RGB')
             if channels.RGBA:

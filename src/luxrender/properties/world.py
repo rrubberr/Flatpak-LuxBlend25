@@ -799,7 +799,7 @@ class luxrender_channels(declarative_property_group):
     controls = [
         # 'aov_label',
         ['enable_aovs', 'saveToDisk'],
-        'import_compatible',
+        ['import_into_blender', 'import_compatible'],
         'label_unsupported_engines',
         'spacer',
         'label_info_film',
@@ -845,7 +845,8 @@ class luxrender_channels(declarative_property_group):
     enabled = {
         # Menu buttons
         'saveToDisk': {'enable_aovs': True},
-        'import_compatible': {'enable_aovs': True},
+        'import_into_blender': {'enable_aovs': True},
+        'import_compatible': {'enable_aovs': True, 'import_into_blender': True},
         'spacer': {'enable_aovs': True},
         # Info labels
         'label_unsupported_engines': {'enable_aovs': True, },
@@ -927,8 +928,15 @@ class luxrender_channels(declarative_property_group):
         },
         {
             'type': 'bool',
+            'attr': 'import_into_blender',
+            'name': 'Import into Blender',
+            'description': 'Import passes into Blender after rendering',
+            'default': True
+        },
+        {
+            'type': 'bool',
             'attr': 'import_compatible',
-            'name': 'Import Compatible Passes to Compositor',
+            'name': 'Use Blender Passes',
             'description': 'Make compatible passes available in Blenders compositor instead of importing as images',
             'default': True
         },
