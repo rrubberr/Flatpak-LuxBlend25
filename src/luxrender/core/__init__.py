@@ -88,7 +88,7 @@ from ..ui.textures import (
 
 # Exporter Operators need to be imported to ensure initialisation
 from .. import operators
-from ..operators import lrmdb
+from ..operators import lrmdb, export, materials, nodes
 
 
 def _register_elm(elm, required=False):
@@ -600,6 +600,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 self.end_result(result, 0) if bpy.app.version > (2, 63, 17 ) else self.end_result(result)
         except Exception as exc:
             LuxLog('Preview aborted: %s' % exc)
+            import traceback
+            traceback.print_exc()
 
         preview_context.exit()
         preview_context.wait()
