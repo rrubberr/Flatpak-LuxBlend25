@@ -309,6 +309,7 @@ def lux_texture_chooser(self, context):
                 self.layout.prop(context.texture, 'use_color_ramp', text='Use Color Ramp')
                 if context.texture.use_color_ramp:
                     self.layout.template_color_ramp(context.texture, 'color_ramp', expand=True)
+                    context.texture.color_ramp.elements[0].color[3] = 1.0
 
 _register_elm(bl_ui.properties_texture.TEXTURE_PT_context_texture.append(lux_texture_chooser))
 
