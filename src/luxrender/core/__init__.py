@@ -1831,6 +1831,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     luxcore_session = None
     critical_errors = False
 
+    reduced_filmsize_start_time = -1
+    reduced_filmsize_enabled = True
     viewFilmWidth = -1
     viewFilmHeight = -1
     viewImageBufferFloat = None
@@ -1876,7 +1878,28 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             RENDERENGINE_luxrender.luxcore_session.Stop()
             RENDERENGINE_luxrender.luxcore_session = None
 
-    
+
+    def is_reduced_filmsize(self, orig_width, orig_height):
+        return (time.time() - self.reduced_filmsize_start_time < 1.0) and (max(orig_width, orig_height) > 400)
+
+    def calc_viewport_filmsize(self, context):
+        if self.is_reduced_filmsize(context.region.width, context.region.height):
+            return context.region.width // 2, context.region.height // 2
+        else:
+            return context.region.width, context.region.height
+
+    def draw_screen(self, context):
+        bufferSize = self.viewFilmWidth * self.viewFilmHeight * 3
+        glBuffer = bgl.Buffer(bgl.GL_FLOAT, bufferSize, self.viewImageBufferFloat)
+        bgl.glRasterPos2i(0, 0)
+
+        if bufferSize < (context.region.width * context.region.height * 3):
+            bgl.glPixelZoom(2, 2)
+        else:
+            bgl.glPixelZoom(1, 1)
+
+        bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, bgl.GL_RGB, bgl.GL_FLOAT, glBuffer)
+
     def luxcore_view_draw(self, context):
         if self.critical_errors:
             return
@@ -1888,24 +1911,55 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         stop_redraw = False
 
-        # Check if the size of the window is changed
-        if (self.viewFilmWidth != context.region.width) or (
-                self.viewFilmHeight != context.region.height):
-            update_changes = UpdateChanges()
-            update_changes.set_cause(config = True)
-            self.luxcore_view_update(context, update_changes)
+        # Check if reduced filmsize was active and should be disabled
+        if self.reduced_filmsize_enabled and not self.is_reduced_filmsize(context.region.width, context.region.height):
+            print('Disabling reduced filmsize')
 
-        # check if camera settings have changed
-        self.luxcore_exporter.convert_camera()
-        newCameraSettings = str(self.luxcore_exporter.camera_exporter.properties)
+            new_width, new_height = self.calc_viewport_filmsize(context)
 
-        if self.lastCameraSettings == '':
-            self.lastCameraSettings = newCameraSettings
-        elif self.lastCameraSettings != newCameraSettings:
-            update_changes = UpdateChanges()
-            update_changes.set_cause(camera = True)
-            self.lastCameraSettings = newCameraSettings
-            self.luxcore_view_update(context, update_changes)
+            luxcore_config = RENDERENGINE_luxrender.luxcore_session.GetRenderConfig()
+            RENDERENGINE_luxrender.stop_luxcore_session()
+
+            # change config
+            luxcore_config.Parse(pyluxcore.Properties().
+                Set(pyluxcore.Property('film.width', new_width)).
+                Set(pyluxcore.Property('film.height', new_height)))
+
+            RENDERENGINE_luxrender.luxcore_session = pyluxcore.RenderSession(luxcore_config)
+            RENDERENGINE_luxrender.start_luxcore_session()
+
+            self.reduced_filmsize_enabled = False
+
+            # Update the screen # TODO: remove?
+            self.draw_screen(context)
+
+            self.viewFilmWidth = new_width
+            self.viewFilmHeight = new_height
+            self.viewImageBufferFloat = array.array('f', [0.0] * (self.viewFilmWidth * self.viewFilmHeight * 3))
+
+            self.tag_redraw()
+            # Nothing else to do
+            return
+        else:
+            # Check if the size of the window is changed
+            region_width, region_height = self.calc_viewport_filmsize(context)
+            if (self.viewFilmWidth != region_width) or (
+                    self.viewFilmHeight != region_height):
+                update_changes = UpdateChanges()
+                update_changes.set_cause(config = True)
+                self.luxcore_view_update(context, update_changes)
+
+            # Check if camera settings have changed
+            self.luxcore_exporter.convert_camera()
+            newCameraSettings = str(self.luxcore_exporter.camera_exporter.properties)
+
+            if self.lastCameraSettings == '':
+                self.lastCameraSettings = newCameraSettings
+            elif self.lastCameraSettings != newCameraSettings:
+                update_changes = UpdateChanges()
+                update_changes.set_cause(camera = True)
+                self.lastCameraSettings = newCameraSettings
+                self.luxcore_view_update(context, update_changes)
 
         # Update statistics
         if RENDERENGINE_luxrender.viewport_render_active:
@@ -1926,22 +1980,27 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             else:
                 self.update_stats('Rendering', blender_stats)
 
+            start = time.time()
             # Update the image buffer
             RENDERENGINE_luxrender.luxcore_session.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED,
                                                       self.viewImageBufferFloat)
 
-        # Update the screen
-        bufferSize = self.viewFilmWidth * self.viewFilmHeight * 3
-        glBuffer = bgl.Buffer(bgl.GL_FLOAT, [bufferSize], self.viewImageBufferFloat)
-        bgl.glRasterPos2i(0, 0)
-        bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, bgl.GL_RGB, bgl.GL_FLOAT, glBuffer)
+            # Update the screen
+            self.draw_screen(context)
+            print('draw took %.3fs' % (time.time() - start))
 
         if stop_redraw:
             # Pause rendering
             RENDERENGINE_luxrender.begin_scene_edit()
         else:
             # Trigger another update
-            self.tag_redraw()
+            if self.reduced_filmsize_enabled:
+                # Redraw immediately
+                self.tag_redraw()
+            else:
+                # Use a longer refresh interval so the Blender interface stays fluid
+                next_refresh_time = 2
+                threading.Timer(next_refresh_time, self.tag_redraw).start()
 
     def find_update_changes(self, context):
         """
@@ -1976,9 +2035,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 self.luxcore_exporter = LuxCoreExporter(context.scene, self, True, context)
 
             # check if filmsize has changed
+            region_width, region_height = self.calc_viewport_filmsize(context)
             if (self.viewFilmWidth == -1) or (self.viewFilmHeight == -1) or (
-                    self.viewFilmWidth != context.region.width) or (
-                    self.viewFilmHeight != context.region.height):
+                    self.viewFilmWidth != region_width) or (
+                    self.viewFilmHeight != region_height):
                 update_changes.set_cause(config = True)
 
             if bpy.data.objects.is_updated:
@@ -2124,8 +2184,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
                 LuxManager.SetCurrentScene(context.scene)
 
-                self.viewFilmWidth = context.region.width
-                self.viewFilmHeight = context.region.height
+                self.reduced_filmsize_start_time = time.time()
+                self.viewFilmWidth, self.viewFilmHeight = self.calc_viewport_filmsize(context)
                 self.viewImageBufferFloat = array.array('f', [0.0] * (self.viewFilmWidth * self.viewFilmHeight * 3))
 
                 # Export the Blender scene
@@ -2158,8 +2218,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             if update_changes.cause_config:
                 LuxLog('Configuration update')
 
-                self.viewFilmWidth = context.region.width
-                self.viewFilmHeight = context.region.height
+                self.viewFilmWidth, self.viewFilmHeight = self.calc_viewport_filmsize(context)
                 self.viewImageBufferFloat = array.array('f', [0.0] * (self.viewFilmWidth * self.viewFilmHeight * 3))
 
                 luxcore_config = RENDERENGINE_luxrender.luxcore_session.GetRenderConfig()
@@ -2224,60 +2283,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                                 luxcore_name = exported_object.luxcore_object_name
                                 luxcore_scene.DeleteObject(luxcore_name)
 
-                '''
-                def remove_object(ob, exported_object):
-                    # loop through object components (split by materials)
-                    for exported_object_data in exported_object.luxcore_data:
-                        luxcore_name = exported_object_data.lcObjName
-                        light_type = exported_object_data.lightType
-
-                        if ob.type == 'LAMP' and light_type != 'AREA':
-                            print('removing light %s (luxcore name: %s)' % (ob.name, luxcore_name))
-                            luxcore_scene.DeleteLight(luxcore_name)
-                        else:
-                            print('removing object %s (luxcore name: %s)' % (ob.name, luxcore_name))
-                            luxcore_scene.DeleteObject(luxcore_name)
-
-                cache = converter.get_export_cache()
-
-                for ob in update_changes.removed_objects:
-                    if cache.has(ob):
-                        exported_object = cache.get_exported_object(ob)
-                        remove_object(ob, exported_object)
-
-                # Remove particles/duplis
-                for ob in update_changes.removed_objects:
-                    # Dupliverts/frames/groups etc.
-                    if ob.is_duplicator and len(ob.particle_systems) == 0:
-                        ob.dupli_list_create(context.scene, settings = 'VIEWPORT')
-
-                        for dupli_ob in ob.dupli_list:
-                            dupli_key = (dupli_ob.object, ob)
-
-                            if cache.has(dupli_key):
-                                exported_object = cache.get_exported_object(dupli_key)
-                                remove_object(ob, exported_object)
-
-                        ob.dupli_list_clear()
-
-                    # Particle systems
-                    elif len(ob.particle_systems) > 0:
-                        for psys in ob.particle_systems:
-                            ob.dupli_list_create(context.scene, settings = 'VIEWPORT')
-
-                            if len(ob.dupli_list) > 0:
-                                dupli_ob = ob.dupli_list[0]
-                                dupli_key = (dupli_ob.object, psys)
-
-                                if cache.has(dupli_key):
-                                    exported_object_list = cache.get_exported_object(dupli_key)
-
-                                    for exported_object in exported_object_list:
-                                        remove_object(ob, exported_object)
-
-                            ob.dupli_list_clear()
-                '''
-
             if update_changes.cause_volumes:
                 for volume in context.scene.luxrender_volumes.volumes:
                     self.luxcore_exporter.convert_volume(volume)
@@ -2296,6 +2301,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         # report time it took to update
         view_update_time = int(round(time.time() * 1000)) - view_update_startTime
         LuxLog('Dynamic updates: update took %dms' % view_update_time)
+
+        self.reduced_filmsize_start_time = time.time()
+        self.reduced_filmsize_enabled = True
             
 class UpdateChanges(object):
     def __init__(self):
