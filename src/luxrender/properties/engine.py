@@ -139,8 +139,9 @@ class luxrender_engine(declarative_property_group):
         'mesh_type',
         'partial_ply',
         ['render', 'monitor_external'],
-        ['threads_auto', 'fixed_seed'],
-        'threads',
+        'fixed_seed',
+        # ['threads_auto', 'fixed_seed'],
+        # 'threads',
         'log_verbosity',
         ['min_epsilon', 'max_epsilon'],
     ]
@@ -235,9 +236,9 @@ class luxrender_engine(declarative_property_group):
             'description': 'Choose between LuxRender v1.x and v2.x API',
             'default': 'classic',
             'items': [
-                         ('classic', '1.x', 'Use LuxRender v1.x API'),
+                         ('classic', 'Classic API', 'Use LuxRender v1.x API'),
                      ] + ([
-                         ('luxcore', '2.x (LuxCore)', 'Use LuxRender v2.x API')
+                         ('luxcore', 'LuxCore API (Experimental)', 'Use LuxRender v2.x API (experimental and unstable!)')
                      ] if PYLUXCORE_AVAILABLE else []),
             'save_in_preset': True
         },

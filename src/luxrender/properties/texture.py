@@ -35,6 +35,7 @@ from ..extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 from .. import LuxRenderAddon
 from ..export import ParamSet, get_worldscale, process_filepath_data
 from ..export.materials import add_texture_parameter, convert_texture
+from ..outputs.luxcore_api import UseLuxCore
 from ..export.volumes import export_smoke
 from ..outputs import LuxManager
 from ..util import dict_merge, bdecode_string2file
@@ -194,6 +195,10 @@ def check_texture_variant(self, context, attr, expected_variant):
         return
 
     valid = False
+
+    # Disable all alerts due luxcore can handle either variant
+    if UseLuxCore():
+        return
 
     if tn in bpy.data.textures:
         lt = bpy.data.textures[tn].luxrender_texture
@@ -691,6 +696,7 @@ tex_names = (
          ('hitpointcolor', 'Vertex Color'),
          ('hitpointgrey', 'Vertex Grey'),
          ('hitpointalpha', 'Vertex Alpha'),
+         ('pointiness', 'Pointiness'),
          ('windy', 'Windy'),
          ('wrinkled', 'Wrinkled'),
      )),
@@ -4603,6 +4609,46 @@ class luxrender_tex_wrinkled(declarative_property_group):
         for psi in ps:
             if psi['name'] in psi_accept_keys and psi['type'].lower() == psi_accept[psi['name']]:
                 setattr(self, psi['name'], psi['value'])
+
+
+@LuxRenderAddon.addon_register_class
+class luxrender_tex_pointiness(declarative_property_group):
+    ef_attach_to = ['luxrender_texture']
+    alert = {}
+
+    controls = [
+        'curvature_mode'
+    ]
+
+    visibility = {}
+
+    properties = [
+        {
+            'attr': 'variant',
+            'type': 'string',
+            'default': 'float'
+        },
+        {
+            'attr': 'curvature_mode',
+            'type': 'enum',
+            'name': 'Curvature',
+            'default': 'both',
+            'items': [
+                ('both', 'Both', 'Use both dents and hills'),
+                ('concave', 'Concave', 'Only use dents'),
+                ('convex', 'Convex', 'Only use hills'),
+            ],
+            'expand': True,
+        }
+    ]
+
+    def get_paramset(self, scene, texture):
+        pointiness_params = ParamSet()
+
+        return set(), pointiness_params
+
+    def load_paramset(self, variant, ps):
+        pass
 
 
 def import_paramset_to_blender_texture(texture, tex_type, ps):

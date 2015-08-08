@@ -785,6 +785,9 @@ class GeometryExporter(object):
         for me_name, me_mat_index, me_shape_type, me_shape_params in mesh_definitions:
             me_shape_params.add_string('name', obj.name)
 
+            if me_mat_index == '':
+                me_mat_index = 0
+
             if use_inner_scope:
                 self.lux_context.attributeBegin()
 
@@ -997,8 +1000,10 @@ class GeometryExporter(object):
             uv_textures = mesh.tessface_uv_textures
             vertex_color = mesh.tessface_vertex_colors
 
+            has_vertex_colors = vertex_color.active and vertex_color.active.data
+
             if psys.settings.luxrender_hair.export_color == 'vertex_color':
-                if vertex_color.active and vertex_color.active.data:
+                if has_vertex_colors:
                     vertex_color_layer = vertex_color.active.data
                     colorflag = 1
 
@@ -1079,7 +1084,7 @@ class GeometryExporter(object):
                                 col = (r, g, b)
 
                             colors.append(col)
-                        elif psys.settings.luxrender_hair.export_color == 'vertex_color':
+                        elif psys.settings.luxrender_hair.export_color == 'vertex_color' and has_vertex_colors:
                             if not col:
                                 col = psys.mcol_on_emitter(mod, psys.particles[i], pindex, vertex_color.active_index)
 

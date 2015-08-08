@@ -46,6 +46,7 @@ from ..export.materials import (
 )
 
 from ..outputs import LuxManager, LuxLog
+from ..outputs.luxcore_api import UseLuxCore
 
 from ..properties.node_sockets import *
 
@@ -735,6 +736,7 @@ class luxrender_material_type_node_metal2(luxrender_material_node):
 
     def init(self, context):
         self.inputs.new('luxrender_fresnel_socket', 'IOR')
+        self.inputs['IOR'].needs_link = True  # suppress inappropiate chooser
         self.inputs.new('luxrender_TF_uroughness_socket', 'U-Roughness')
         self.inputs.new('luxrender_TF_vroughness_socket', 'V-Roughness')
         self.inputs['V-Roughness'].enabled = False  # initial state is disabled

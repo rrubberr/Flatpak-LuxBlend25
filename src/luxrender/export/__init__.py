@@ -24,7 +24,7 @@
 #
 # ***** END GPL LICENCE BLOCK *****
 #
-import collections, math, os
+import collections, math, os, sys
 
 import bpy, mathutils
 
@@ -331,7 +331,7 @@ else:
     fix_matrix_order = fix_matrix_order_old
 
 
-def matrix_to_list(matrix, apply_worldscale=False):
+def matrix_to_list(matrix, apply_worldscale=False, invert=False):
     """
     matrix		  Matrix
 
@@ -344,13 +344,16 @@ def matrix_to_list(matrix, apply_worldscale=False):
         matrix = matrix.copy()
         sm = get_worldscale()
         matrix *= sm
-        sm = get_worldscale(as_scalematrix=False)
+        ws = get_worldscale(as_scalematrix=False)
         matrix = fix_matrix_order(matrix)  # matrix indexing hack
-        matrix[0][3] *= sm
-        matrix[1][3] *= sm
-        matrix[2][3] *= sm
+        matrix[0][3] *= ws
+        matrix[1][3] *= ws
+        matrix[2][3] *= ws
     else:
         matrix = fix_matrix_order(matrix)  # matrix indexing hack
+
+    if invert:
+        matrix.invert()
 
     l = [matrix[0][0], matrix[1][0], matrix[2][0], matrix[3][0],
          matrix[0][1], matrix[1][1], matrix[2][1], matrix[3][1],
@@ -358,6 +361,21 @@ def matrix_to_list(matrix, apply_worldscale=False):
          matrix[0][3], matrix[1][3], matrix[2][3], matrix[3][3]]
 
     return [float(i) for i in l]
+
+
+def get_expanded_file_name(obj, file_path):
+    """
+    :param obj: object where file_path comes from
+    :param file_path: file name relative to object
+    :return: full file name (on disk), basename of file
+    """
+    file_path = file_path.replace("\\", os.path.sep)
+    file_basename = os.path.basename(file_path)
+
+    if hasattr(obj, 'library') and obj.library:
+        return bpy.path.abspath(file_path, library=obj.library), file_basename
+
+    return bpy.path.abspath(file_path), file_basename
 
 
 def process_filepath_data(scene, obj, file_path, paramset, parameter_name):

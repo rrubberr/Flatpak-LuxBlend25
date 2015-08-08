@@ -138,7 +138,7 @@ class ui_luxrender_material_header(luxrender_material_base):
         node_tree_selector_draw(layout, mat, 'luxrender_material_output_node')
         if not panel_node_draw(layout, mat, 'luxrender_material_output_node', 'Surface'):
             row = self.layout.row(align=True)
-            if slot.name:
+            if slot is not None and slot.name:
                 row.label("Material type")
                 row.menu('MATERIAL_MT_luxrender_type', text=context.material.luxrender_material.type_label)
                 super().draw(context)
@@ -267,12 +267,11 @@ class ui_luxrender_material_coating(luxrender_material_base):
     bl_options = {'DEFAULT_CLOSED'}
 
     display_property_groups = [
-        ( ('material',), 'luxrender_coating' )
+        ( ('material',), 'luxrender_coating')
     ]
 
     def draw_header(self, context):
         self.layout.prop(context.material.luxrender_coating, "use_coating", text="")
-
 
     def draw_coating_ior_menu(self, context):
         """

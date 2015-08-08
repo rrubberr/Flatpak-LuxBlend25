@@ -38,6 +38,7 @@ from ..export import get_worldscale, get_output_filename
 from ..export import ParamSet, LuxManager
 from ..export import fix_matrix_order
 from ..outputs.pure_api import LUXRENDER_VERSION
+from ..outputs.luxcore_api import UseLuxCore
 
 
 def CameraVolumeParameter(attr, name):
@@ -57,6 +58,29 @@ def CameraVolumeParameter(attr, name):
             'trg': lambda s, c: c.luxrender_camera,
             'trg_attr': '%s_volume' % attr,
             'name': name
+        },
+    ]
+
+def ArbitraryClippingPlane():
+    """
+    LuxCore arbitrary clipping plane
+    The user selects an object and its rotation and location are used as clipping plane parameters
+    """
+    return [
+        {
+            'attr': 'clipping_plane_obj',
+            'type': 'string',
+            'name': 'clipping_plane_obj',
+            'description': 'Arbitrary clipping plane object (only rotation and location are used)',
+        },
+        {
+            'type': 'prop_search',
+            'attr': 'clipping_plane_selector',
+            'src': lambda s, c: s.scene,
+            'src_attr': 'objects',
+            'trg': lambda s, c: c.luxrender_camera,
+            'trg_attr': 'clipping_plane_obj',
+            'name': 'Plane'
         },
     ]
 
@@ -81,6 +105,8 @@ class luxrender_camera(declarative_property_group):
         'motion_blur_samples',
         'shutterdistribution',
         ['cammblur', 'objectmblur'],
+        'enable_clipping_plane',
+        'clipping_plane_selector'
         # [0.3, 'use_dof','autofocus', 'use_clipping'], # moved to blender panels visually
         # 'blades',
         #       ['distribution', 'power'],
@@ -101,9 +127,11 @@ class luxrender_camera(declarative_property_group):
         'motion_blur_samples': {'usemblur': True},
         'cammblur': {'usemblur': True},
         'objectmblur': {'usemblur': True},
+        'enable_clipping_plane': lambda: UseLuxCore(),
+        'clipping_plane_selector': A([{'enable_clipping_plane': True}, lambda: UseLuxCore()])
     }
 
-    properties = CameraVolumeParameter('Exterior', 'Exterior') + [
+    properties = CameraVolumeParameter('Exterior', 'Exterior') + ArbitraryClippingPlane() + [
         {
             'type': 'bool',
             'attr': 'use_clipping',
@@ -315,6 +343,13 @@ class luxrender_camera(declarative_property_group):
             'name': 'Object Motion Blur',
             'default': True
         },
+        {
+            'type': 'bool',
+            'attr': 'enable_clipping_plane',
+            'name': 'Use Arbitrary Clipping Plane',
+            'description': 'LuxCore only',
+            'default': False
+        },
     ]
 
     def lookAt(self, camera, matrix=None):
@@ -344,11 +379,12 @@ class luxrender_camera(declarative_property_group):
 
         return pos[:3] + target[:3] + up[:3]
 
-    def screenwindow(self, xr, yr, scene, cam):
+    def screenwindow(self, xr, yr, scene, cam, luxcore_export=False):
         """
-        xr          float
-        yr          float
-        cam        bpy.types.camera
+        xr              float
+        yr              float
+        cam             bpy.types.camera
+        luxcore_export  bool (leave crop handling to Blender)
 
         Calculate LuxRender camera's screenwindow parameter
 
@@ -383,12 +419,13 @@ class luxrender_camera(declarative_property_group):
 
         # If we are using cropwindow, we want the full-frame screenwindow.
         # See border render handling code elsewhere in this file (do a search for "border")
-        if scene.render.use_border and not (
+        if (scene.render.use_border and not (
                     not scene.render.use_crop_to_border and (
                         not scene.luxrender_engine.render or (
                                     scene.luxrender_engine.export_type == 'EXT' and
                                     scene.luxrender_engine.binary_name == 'luxrender' and
-                                    not scene.luxrender_engine.monitor_external))):
+                                    not scene.luxrender_engine.monitor_external)))) or (
+                                    luxcore_export):
             x1, x2, y1, y2 = [
                 scene.render.border_min_x, scene.render.border_max_x,
                 scene.render.border_min_y, scene.render.border_max_y
@@ -485,7 +522,6 @@ class luxrender_camera(declarative_property_group):
             'environment' if cam.type == 'PANO' else 'perspective'
 
         return cam_type, params
-
 
 @LuxRenderAddon.addon_register_class
 class luxrender_film(declarative_property_group):
@@ -991,7 +1027,7 @@ class CAMERA_OT_set_luxrender_crf(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.camera and \
+        return hasattr(context, 'camera') and context.camera and \
                context.camera.luxrender_camera.luxrender_film.luxrender_colorspace
 
     def execute(self, context):

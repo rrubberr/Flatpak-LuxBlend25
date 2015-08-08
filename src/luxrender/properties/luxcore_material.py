@@ -40,25 +40,32 @@ class luxcore_material(declarative_property_group):
     ef_attach_to = ['Material']
 
     controls = [
-        ['id', 'emission_id'],
+        'id',
         'create_MATERIAL_ID_MASK',
         'create_BY_MATERIAL_ID',
+        'label_biaspath_only_settings',
         ['samples', 'emission_samples'],
-        'bumpsamplingdistance',
-        ['visibility_indirect_diffuse_enable', 'visibility_indirect_glossy_enable',
-         'visibility_indirect_specular_enable'],
+        'label_material_visibility',
+        ['visibility_indirect_diffuse_enable', 'visibility_indirect_glossy_enable', 'visibility_indirect_specular_enable'],
     ]
 
     visibility = {
-        'samples': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
+        'label_biaspath_only_settings':
+            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+    }
+
+    enabled = {
+        'samples': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
+        'label_material_visibility': {
+        ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
         'emission_samples': {
-        ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
+        ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
         'visibility_indirect_diffuse_enable':
-            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
+            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
         'visibility_indirect_glossy_enable':
-            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
+            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
         'visibility_indirect_specular_enable':
-            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIASPATHCPU', 'BIASPATHOCL'])},
+            {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': 'BIASPATH'},
     }
 
     alert = {}
@@ -68,10 +75,11 @@ class luxcore_material(declarative_property_group):
             'type': 'int',
             'attr': 'id',
             'name': 'Material ID',
-            'description': 'Material ID (-1 = automatic), used for AOVs',
+            'description': 'Material ID (-1 = auto), used for AOVs',
             'default': -1,
             'min': -1,
             'max': 65536,
+            'save_in_preset': True
         },
         {
             'type': 'int',
@@ -81,6 +89,7 @@ class luxcore_material(declarative_property_group):
             'default': -1,
             'min': -1,
             'max': 65536,
+            'save_in_preset': True
         },
         {
             'type': 'bool',
@@ -88,6 +97,7 @@ class luxcore_material(declarative_property_group):
             'name': 'MATERIAL_ID_MASK pass',
             'description': 'Create a mask for this material (AOV channel)',
             'default': False,
+            'save_in_preset': True
         },
         {
             'type': 'bool',
@@ -95,6 +105,7 @@ class luxcore_material(declarative_property_group):
             'name': 'BY_MATERIAL_ID pass',
             'description': 'Create a pass containing only objects with this material ID (AOV channel)',
             'default': False,
+            'save_in_preset': True
         },
         {
             'type': 'int',
@@ -103,7 +114,9 @@ class luxcore_material(declarative_property_group):
             'description': 'Material samples count (-1 = global default, size x size)',
             'default': -1,
             'min': -1,
+            'soft_max': 16,
             'max': 256,
+            'save_in_preset': True
         },
         {
             'type': 'int',
@@ -112,36 +125,42 @@ class luxcore_material(declarative_property_group):
             'description': 'Material emission samples count (-1 = global default, size x size)',
             'default': -1,
             'min': -1,
+            'soft_max': 16,
             'max': 256,
+            'save_in_preset': True
         },
         {
-            'type': 'float',
-            'attr': 'bumpsamplingdistance',
-            'name': 'Bump mapping sampling distance',
-            'description': 'Bump mapping sampling distance',
-            'default': 0.001,
-            'min': 0.00001,
-            'max': 1000.0,
+            'type': 'text',
+            'attr': 'label_material_visibility',
+            'name': 'Visibility for indirect rays:'
         },
         {
             'type': 'bool',
             'attr': 'visibility_indirect_diffuse_enable',
-            'name': 'Diffuse indirect visibility',
+            'name': 'Diffuse',
             'description': 'Enable material visibility for indirect rays',
             'default': True,
+            'save_in_preset': True
         },
         {
             'type': 'bool',
             'attr': 'visibility_indirect_glossy_enable',
-            'name': 'Glossy indirect visibility',
+            'name': 'Glossy',
             'description': 'Enable material visibility for glossy rays',
             'default': True,
+            'save_in_preset': True
         },
         {
             'type': 'bool',
             'attr': 'visibility_indirect_specular_enable',
-            'name': 'Specular indirect visibility',
+            'name': 'Specular',
             'description': 'Enable material visibility for specular rays',
             'default': True,
+            'save_in_preset': True
+        },
+        {
+            'type': 'text',
+            'attr': 'label_biaspath_only_settings',
+            'name': 'Biased Path only:'
         },
     ]

@@ -28,6 +28,7 @@ import re
 import bpy
 
 from ..extensions_framework import declarative_property_group
+from ..extensions_framework.validate import Logic_AND as A
 
 from .. import LuxRenderAddon
 from ..properties import find_node
@@ -40,6 +41,7 @@ from ..export.materials import (
     MaterialCounter, ExportedMaterials, ExportedTextures, add_texture_parameter, get_texture_from_scene
 )
 from ..outputs import LuxManager, LuxLog
+from ..outputs.luxcore_api import UseLuxCore
 from ..util import dict_merge
 
 
@@ -389,13 +391,14 @@ class luxrender_material(declarative_property_group):
             context.material.use_transparency = False
             context.material.alpha = 1.0
 
+        self.set_master_color(context.material)
+
         # Also refresh the preview when changing mat type
         refresh_preview(self, context)
 
     controls = [  # Type select Menu is drawn manually  #'nodetree', drawn manually
                   'Interior',
                   'Exterior',
-                  # 'generatetangents' TODO: Make this checkbox actually do something (it has to write a line to the mesh definition)
                ] + \
                TF_normalmap.controls + \
                TF_bumpmap.controls
@@ -444,13 +447,6 @@ class luxrender_material(declarative_property_group):
                         'name': 'Node Tree',
                         'default': ''
                     },
-                    # {
-                    # 'type': 'bool',
-                    # 'attr': 'generatetangents',
-                    # 'name': 'Generate Tangents',
-                    # 'description': 'Generate tanget space for meshes with this material. Enable when using a bake-generated normal map',
-                    # 'default': False,
-                    # },
                  ] + \
                  TF_bumpmap.get_properties() + \
                  TF_normalmap.get_properties() + \
@@ -480,6 +476,14 @@ class luxrender_material(declarative_property_group):
         'velvet': 'Kd',
     }
 
+    metal_color_map = {
+        'nk': [0.5, 0.5, 0.5],
+        'amorphous carbon': [0.1, 0.1, 0.1],
+        'copper': [0.8, 0.4, 0.3],
+        'gold': [1.0, 0.84, 0.0],
+        'silver': [0.6, 0.6, 0.7],
+        'aluminium': [0.3, 0.3, 0.3]
+    }
 
     def reset(self, prnt=None):
         super().reset()
@@ -503,11 +507,23 @@ class luxrender_material(declarative_property_group):
         if blender_material is None:
             return
 
-        if self.type in self.master_color_map.keys():
-            submat = getattr(self, 'luxrender_mat_%s' % self.type)
-            submat_col = getattr(submat, '%s_color' % self.master_color_map[self.type])
-            if blender_material.diffuse_color != submat_col:
-                blender_material.diffuse_color = submat_col
+        submat = getattr(self, 'luxrender_mat_%s' % self.type)
+
+        if self.type == 'metal' or (self.type == 'metal2' and submat.metaltype == 'preset'):
+            preset = submat.name if self.type == 'metal' else submat.preset
+
+            if preset in self.metal_color_map.keys():
+                submat_col = self.metal_color_map[preset]
+
+                if blender_material.diffuse_color != submat_col:
+                    blender_material.diffuse_color = submat_col
+
+        else:
+            if self.type in self.master_color_map.keys():
+                submat_col = getattr(submat, '%s_color' % self.master_color_map[self.type])
+
+                if blender_material.diffuse_color != submat_col:
+                    blender_material.diffuse_color = submat_col
 
     def exportNodetree(self, scene, lux_context, material, mode):
         outputNode = find_node(material, 'luxrender_material_output_node')
@@ -1673,7 +1689,9 @@ class luxrender_mat_glass2(declarative_property_group):
         'dispersion'
     ]
 
-    visibility = {}
+    visibility = {
+        'dispersion': lambda: not UseLuxCore(),
+    }
 
     properties = [
         {
@@ -1745,6 +1763,7 @@ class luxrender_mat_roughglass(declarative_property_group):
         TF_uexponent.visibility,
         TF_vroughness.visibility,
         TF_vexponent.visibility,
+        {'dispersion': lambda: not UseLuxCore()}
     )
 
     enabled = {}
@@ -2611,6 +2630,8 @@ class luxrender_mat_metal(declarative_property_group):
                              ('aluminium', 'Aluminium', 'aluminium')
                          ],
                          'default': 'aluminium',
+                         'update': lambda s, c: c.material.luxrender_material.set_master_color(c.material) if hasattr(
+                             c.material, 'luxrender_material') else None,
                          'save_in_preset': True
                      },
                      {
@@ -2757,6 +2778,8 @@ class luxrender_mat_metal2(declarative_property_group):
                              ('aluminium', 'Aluminium', 'aluminium')
                          ],
                          'default': 'aluminium',
+                         'update': lambda s, c: c.material.luxrender_material.set_master_color(c.material) if hasattr(
+                             c.material, 'luxrender_material') else None,
                          'save_in_preset': True
                      },
                      {
@@ -3433,7 +3456,9 @@ class luxrender_emission(declarative_property_group):
     alert = {}
 
     def set_viewport_emission(self, context):
-        # This litte function monkeys with the blender mat's emit value to sort-of show the meshlight in the viewport
+        """
+        This litte function monkeys with the blender mat's emit value to sort-of show the meshlight in the viewport
+        """
         if self.use_emission:
             context.material.emit = self.gain
         else:
@@ -3456,7 +3481,7 @@ class luxrender_emission(declarative_property_group):
         'importance': {'use_emission': True},
         'lightgroup_chooser': {'use_emission': True},
         'iesname': {'use_emission': True},
-        'nsamples': {'use_emission': True},
+        'nsamples': A([{'use_emission': True}, lambda: not UseLuxCore()]),
         'L_colorlabel': {'use_emission': True},
         'L_color': {'use_emission': True},
         'L_usecolortexture': {'use_emission': True},

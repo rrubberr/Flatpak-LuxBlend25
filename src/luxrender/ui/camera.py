@@ -29,6 +29,7 @@ import bpy
 
 from ..extensions_framework.ui import property_group_renderer
 
+from ..outputs.luxcore_api import UseLuxCore
 from .. import LuxRenderAddon
 
 
@@ -50,11 +51,32 @@ class film(camera_panel):
     bl_label = 'LuxRender Film'
 
     display_property_groups = [
-        ( ('camera', 'luxrender_camera'), 'luxrender_film' ),
-        ( ('camera', 'luxrender_camera', 'luxrender_film'), 'luxrender_colorspace' ),
-        ( ('camera', 'luxrender_camera', 'luxrender_film'), 'luxrender_tonemapping' ),
+        ( ('camera', 'luxrender_camera'), 'luxrender_film', lambda: not UseLuxCore() ),
+        ( ('camera', 'luxrender_camera', 'luxrender_film'), 'luxrender_colorspace', lambda: not UseLuxCore() ),
+        ( ('camera', 'luxrender_camera', 'luxrender_film'), 'luxrender_tonemapping',lambda: not UseLuxCore() ),
     ]
 
     def draw_crf_preset_menu(self, context):
         self.layout.menu('CAMERA_MT_luxrender_crf',
                          text=context.camera.luxrender_camera.luxrender_film.luxrender_colorspace.crf_preset)
+
+@LuxRenderAddon.addon_register_class
+class imagepipeline(camera_panel):
+    """
+    LuxCore Imagepipeline settings UI Panel
+    """
+
+    bl_label = 'LuxCore Imagepipeline'
+
+    display_property_groups = [
+        ( ('camera', 'luxrender_camera'), 'luxcore_imagepipeline_settings' ),
+    ]
+
+    def draw(self, context):
+        if UseLuxCore():
+            layout = self.layout
+            super().draw(context)
+
+    def draw_crf_preset_menu(self, context):
+        self.layout.menu('IMAGEPIPELINE_MT_luxrender_crf',
+                         text=context.camera.luxrender_camera.luxcore_imagepipeline_settings.crf_preset)

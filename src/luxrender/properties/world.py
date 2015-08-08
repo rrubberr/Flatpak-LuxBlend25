@@ -35,6 +35,8 @@ from .. import LuxRenderAddon
 from ..export import ParamSet
 from ..export.materials import ExportedTextures
 from ..outputs.pure_api import LUXRENDER_VERSION
+from ..outputs.luxcore_api import UseLuxCore
+from ..outputs.luxcore_api import ScenePrefix
 from ..properties.material import texture_append_visibility
 from ..properties.texture import (
     ColorTextureParameter, FloatTextureParameter, FresnelTextureParameter
@@ -142,13 +144,14 @@ TFR_IOR = VolumeDataFresnelTextureParameter('fresnel', 'IOR', add_float_value=Tr
 TC_absorption = VolumeDataColorTextureParameter('absorption', 'Absorption', default=(1.0, 1.0, 1.0))
 TC_sigma_a = VolumeDataColorTextureParameter('sigma_a', 'Absorption', default=(1.0, 1.0, 1.0))
 TC_sigma_s = VolumeDataColorTextureParameter('sigma_s', 'Scattering', default=(0.0, 0.0, 0.0))
+TC_emission = VolumeDataColorTextureParameter('emission', 'Emission Color', default=(1.0, 1.0, 1.0))
 
 
 def volume_types():
     v_types = [
-        ('clear', 'Clear', 'clear'),
-        ('homogeneous', 'Homogeneous', 'homogeneous'),
-        ('heterogeneous', 'Heterogeneous', 'heterogeneous')
+        ('clear', 'Clear', 'Use for clear/colored glass'),
+        ('homogeneous', 'Homogeneous', 'Use for volumes with uniform scattering, e.g. milk, skin, orange juice'),
+        ('heterogeneous', 'Heterogeneous', 'Use for volumes with non-uniform scattering, e.g. clouds')
     ]
 
     return v_types
@@ -182,25 +185,37 @@ class luxrender_volume_data(declarative_property_group):
                    'scattering_scale',
                    'g',
                    'stepsize',
+                   'priority',
+                   'multiscattering',
+                   'use_emission'
+               ] + \
+               TC_emission.controls + \
+               [
+                   'gain'
                ]
 
     visibility = dict_merge(
         {
-            # 'scattering_scale': { 'type': O(['homogeneous', 'heterogeneous']), 'sigma_s_usecolortexture': False },
+            'scattering_scale': { 'type': O(['homogeneous', 'heterogeneous'])},
             'g': {'type': O(['homogeneous', 'heterogeneous'])},
             'stepsize': {'type': 'heterogeneous'},
             'depth': O([A([{'type': 'clear'}, {'absorption_usecolortexture': False}]),
-                        A([{'type': O(['homogeneous', 'heterogeneous'])}, {'sigma_a_usecolortexture': False}])])
+                        A([{'type': O(['homogeneous', 'heterogeneous'])}, {'sigma_a_usecolortexture': False}])]),
+            'priority': lambda: UseLuxCore(),
+            'multiscattering': A([{'type': O(['homogeneous', 'heterogeneous'])}, lambda: UseLuxCore()]),
+            'gain': A([{'use_emission': True}, lambda: UseLuxCore()])
         },
         TFR_IOR.visibility,
         TC_absorption.visibility,
         TC_sigma_a.visibility,
-        TC_sigma_s.visibility
+        TC_sigma_s.visibility,
+        TC_emission.visibility
     )
 
     visibility = texture_append_visibility(visibility, TC_absorption, {'type': 'clear'})
     visibility = texture_append_visibility(visibility, TC_sigma_a, {'type': O(['homogeneous', 'heterogeneous'])})
     visibility = texture_append_visibility(visibility, TC_sigma_s, {'type': O(['homogeneous', 'heterogeneous'])})
+    visibility = texture_append_visibility(visibility, TC_emission, {'use_emission': True})
 
     properties = [
                      {
@@ -213,6 +228,7 @@ class luxrender_volume_data(declarative_property_group):
                          'attr': 'type',
                          'name': 'Type',
                          'items': volume_types(),
+                         'expand': True,
                          'save_in_preset': True
                      },
                  ] + \
@@ -267,7 +283,7 @@ class luxrender_volume_data(declarative_property_group):
                          'attr': 'g',
                          'name': 'Asymmetry',
                          'description': 'Scattering asymmetry RGB. -1 means backscatter, 0 is isotropic, 1 is \
-                         forwards scattering',
+forwards scattering',
                          'default': (0.0, 0.0, 0.0),
                          'min': -1.0,
                          'soft_min': -1.0,
@@ -281,8 +297,8 @@ class luxrender_volume_data(declarative_property_group):
                          'attr': 'stepsize',
                          'name': 'Step Size',
                          'description': 'Length of ray marching steps, smaller values resolve more detail, but \
-                         are slower',
-                         'default': 1.0,
+are slower',
+                         'default': 0.1,
                          'min': 0.0,
                          'soft_min': 0.0,
                          'max': 100.0,
@@ -292,10 +308,58 @@ class luxrender_volume_data(declarative_property_group):
                          'unit': 'LENGTH',
                          'save_in_preset': True
                      },
+                     {
+                         'type': 'int',
+                         'attr': 'priority',
+                         'name': 'Volume priority',
+                         'description': '[LuxCore only] Volume priority, volumes with higher values gets priority if \
+there is overlap',
+                         'default': 0,
+                         'min': 0,
+                         'max': 65535,
+                         'save_in_preset': True
+                     },
+                     {
+                         'type': 'bool',
+                         'attr': 'multiscattering',
+                         'name': 'Multiscattering',
+                         'description': '[LuxCore only] Compute multiple scattering events in this volume (recommended \
+for volumes with high scattering scale)',
+                         'default': False,
+                         'save_in_preset': True
+                     },
+                     {
+                         'type': 'bool',
+                         'attr': 'use_emission',
+                         'name': 'Light Emitter',
+                         'description': '[LuxCore only] Volume light emission (e.g. for fire)',
+                         'default': False,
+                         'save_in_preset': True
+                     },
+                 ]+ \
+                 TC_emission.properties + \
+                 [
+                     {
+                         'type': 'float',
+                         'attr': 'gain',
+                         'name': 'Gain',
+                         'description': '[LuxCore only] Multiplier for the emission color',
+                         'default': 1.0,
+                         'min': 0.00001,
+                         'soft_min': 0.00001,
+                         'soft_max': 1000.0,
+                         'precision': 6,
+                         'step': 100.0,
+                         'save_in_preset': True
+                     },
                  ]
+
 
     def api_output(self, lux_context):
         vp = ParamSet()
+
+#        import pydevd
+#        pydevd.settrace('localhost', port=9999, stdoutToServer=True, stderrToServer=True)
 
         def absorption_at_depth_scaled(i):
             # This is copied from the old LuxBlend, I don't pretend to understand it, DH
@@ -676,7 +740,7 @@ class luxrender_lightgroups(declarative_property_group):
     ef_attach_to = ['Scene']
 
     controls = [
-        'lightgroups_label',
+        # 'lightgroups_label',
         ['ignore',
          'op_lg_add'],
     ]
@@ -733,86 +797,245 @@ class luxrender_channels(declarative_property_group):
     ef_attach_to = ['Scene']
 
     controls = [
-        'aov_label',
-        'saveToDisk',
+        # 'aov_label',
+        ['enable_aovs', 'saveToDisk'],
+        ['import_into_blender', 'import_compatible'],
+        'label_unsupported_engines',
+        'spacer',
+        'label_info_film',
         'RGB',
         'RGBA',
         'RGB_TONEMAPPED',
         'RGBA_TONEMAPPED',
         'ALPHA',
-        ['DEPTH', 'normalize_DEPTH'],
-        'POSITION',
-        'GEOMETRY_NORMAL',
-        'SHADING_NORMAL',
+        'label_info_material',
         'MATERIAL_ID',
+        'EMISSION',
+        'label_info_directlight',
         ['DIRECT_DIFFUSE', 'normalize_DIRECT_DIFFUSE'],
         ['DIRECT_GLOSSY', 'normalize_DIRECT_GLOSSY'],
-        'EMISSION',
+        'label_info_indirectlight',
         ['INDIRECT_DIFFUSE', 'normalize_INDIRECT_DIFFUSE'],
         ['INDIRECT_GLOSSY', 'normalize_INDIRECT_GLOSSY'],
         ['INDIRECT_SPECULAR', 'normalize_INDIRECT_SPECULAR'],
+        'label_info_geometry',
+        ['DEPTH', 'normalize_DEPTH'],
+        'POSITION',
+        'SHADING_NORMAL',
+        'GEOMETRY_NORMAL',
+        'UV',
+        'label_info_shadow',
         'DIRECT_SHADOW_MASK',
         'INDIRECT_SHADOW_MASK',
-        'UV',
-        ['RAYCOUNT', 'normalize_RAYCOUNT']
+        'label_info_render',
+        ['RAYCOUNT', 'normalize_RAYCOUNT'],
+        'IRRADIANCE'
     ]
 
-    visibility = {}
+    visibility = {
+        'label_unsupported_engines': {ScenePrefix() + 'luxcore_enginesettings.renderengine_type': O(['BIDIR', 'BIDIRVM'])},
+        'normalize_DIRECT_DIFFUSE': {'import_compatible': False},
+        'normalize_DIRECT_GLOSSY': {'import_compatible': False},
+        'normalize_INDIRECT_DIFFUSE': {'import_compatible': False},
+        'normalize_INDIRECT_GLOSSY': {'import_compatible': False},
+        'normalize_INDIRECT_SPECULAR': {'import_compatible': False},
+        'normalize_DEPTH': {'import_compatible': False},
+    }
+
+    enabled = {
+        # Menu buttons
+        'saveToDisk': {'enable_aovs': True},
+        'import_into_blender': {'enable_aovs': True},
+        'import_compatible': {'enable_aovs': True, 'import_into_blender': True},
+        'spacer': {'enable_aovs': True},
+        # Info labels
+        'label_unsupported_engines': {'enable_aovs': True, },
+        'label_info_film': {'enable_aovs': True},
+        'label_info_material': {'enable_aovs': True},
+        'label_info_directlight': {'enable_aovs': True},
+        'label_info_indirectlight': {'enable_aovs': True},
+        'label_info_geometry': {'enable_aovs': True},
+        'label_info_shadow': {'enable_aovs': True},
+        'label_info_render': {'enable_aovs': True},
+        # AOVs
+        'RGB': {'enable_aovs': True},
+        'RGBA': {'enable_aovs': True},
+        'RGB_TONEMAPPED': {'enable_aovs': True},
+        'RGBA_TONEMAPPED': {'enable_aovs': True},
+        'ALPHA': {'enable_aovs': True},
+        'DEPTH': {'enable_aovs': True},
+        'normalize_DEPTH': A([{'enable_aovs': True}, {'DEPTH': True}]),
+        'POSITION': {'enable_aovs': True},
+        'GEOMETRY_NORMAL': {'enable_aovs': True},
+        'SHADING_NORMAL': {'enable_aovs': True},
+        'MATERIAL_ID': {'enable_aovs': True},
+        'DIRECT_DIFFUSE': {'enable_aovs': True},
+        'normalize_DIRECT_DIFFUSE': A([{'enable_aovs': True}, {'DIRECT_DIFFUSE': True}]),
+        'DIRECT_GLOSSY': {'enable_aovs': True},
+        'normalize_DIRECT_GLOSSY': A([{'enable_aovs': True}, {'DIRECT_GLOSSY': True}]),
+        'EMISSION': {'enable_aovs': True},
+        'INDIRECT_DIFFUSE': {'enable_aovs': True},
+        'normalize_INDIRECT_DIFFUSE': A([{'enable_aovs': True}, {'INDIRECT_DIFFUSE': True}]),
+        'INDIRECT_GLOSSY': {'enable_aovs': True},
+        'normalize_INDIRECT_GLOSSY': A([{'enable_aovs': True}, {'INDIRECT_GLOSSY': True}]),
+        'INDIRECT_SPECULAR': {'enable_aovs': True},
+        'normalize_INDIRECT_SPECULAR': A([{'enable_aovs': True}, {'INDIRECT_SPECULAR': True}]),
+        'DIRECT_SHADOW_MASK': {'enable_aovs': True},
+        'INDIRECT_SHADOW_MASK': {'enable_aovs': True},
+        'UV': {'enable_aovs': True},
+        'RAYCOUNT': {'enable_aovs': True},
+        'normalize_RAYCOUNT': A([{'enable_aovs': True}, {'RAYCOUNT': True}]),
+        'IRRADIANCE': {'enable_aovs': True},
+    }
+
+    def toggle_shading_normal(self, context):
+        context.scene.render.layers.active.use_pass_normal = self.SHADING_NORMAL
+
+    def toggle_depth(self, context):
+        context.scene.render.layers.active.use_pass_z = self.DEPTH
+
+    def toggle_direct_diffuse(self, context):
+        context.scene.render.layers.active.use_pass_diffuse_direct = self.DIRECT_DIFFUSE
+
+    def toggle_direct_glossy(self, context):
+        context.scene.render.layers.active.use_pass_glossy_direct = self.DIRECT_GLOSSY
+
+    def toggle_emission(self, context):
+        context.scene.render.layers.active.use_pass_emit = self.EMISSION
+
+    def toggle_indirect_diffuse(self, context):
+        context.scene.render.layers.active.use_pass_diffuse_indirect = self.INDIRECT_DIFFUSE
+
+    def toggle_indirect_glossy(self, context):
+        context.scene.render.layers.active.use_pass_glossy_indirect = self.INDIRECT_GLOSSY
+
+    def toggle_indirect_specular(self, context):
+        context.scene.render.layers.active.use_pass_transmission_indirect = self.INDIRECT_SPECULAR
 
     properties = [
+        # Menu buttons
+        {
+            'type': 'text',
+            'attr': 'aov_label',
+            'name': 'LuxRender Passes (AOVs)',
+        },
+        {
+            'type': 'bool',
+            'attr': 'enable_aovs',
+            'name': 'Enable',
+            'description': 'Enable LuxRender Passes',
+            'default': True
+        },
+        {
+            'type': 'bool',
+            'attr': 'import_into_blender',
+            'name': 'Import into Blender',
+            'description': 'Import passes into Blender after rendering',
+            'default': True
+        },
+        {
+            'type': 'bool',
+            'attr': 'import_compatible',
+            'name': 'Use Blender Passes',
+            'description': 'Make compatible passes available in Blenders compositor instead of importing as images',
+            'default': True
+        },
         {
             'type': 'bool',
             'attr': 'saveToDisk',
-            'name': 'Save passes to disk',
-            'description': 'Save the passes to the harddisk after rendering',
+            'name': 'Save',
+            'description': 'Save the passes to the output path after rendering',
             'default': False
         },
         {
             'type': 'text',
-            'name': 'LuxRender Passes (AOVs)',
-            'attr': 'aov_label',
+            'attr': 'label_unsupported_engines',
+            'name': 'Note: Bidir engines only support the Alpha and RGB passes',
         },
+        {
+            'type': 'text',
+            'attr': 'spacer',
+            'name': '',
+        },
+        # Info labels
+        {
+            'type': 'text',
+            'attr': 'label_info_film',
+            'name': 'Film Information:',
+        },
+        {
+            'type': 'text',
+            'attr': 'label_info_material',
+            'name': 'Material Information:',
+        },
+        {
+            'type': 'text',
+            'attr': 'label_info_directlight',
+            'name': 'Direct Light Information:',
+        },
+        {
+            'type': 'text',
+            'attr': 'label_info_indirectlight',
+            'name': 'Indirect Light Information:',
+        },
+        {
+            'type': 'text',
+            'attr': 'label_info_geometry',
+            'name': 'Geometry Information:',
+        },
+        {
+            'type': 'text',
+            'attr': 'label_info_shadow',
+            'name': 'Shadow Information:',
+        },
+        {
+            'type': 'text',
+            'attr': 'label_info_render',
+            'name': 'Render Information:',
+        },
+        # AOVs
         {
             'type': 'bool',
             'attr': 'RGB',
             'name': 'RGB',
-            'description': 'Raw RGB values',
+            'description': 'Raw RGB values (HDR)',
             'default': False
         },
         {
             'type': 'bool',
             'attr': 'RGBA',
             'name': 'RGBA',
-            'description': 'Raw RGBA values',
+            'description': 'Raw RGBA values (HDR)',
             'default': False
         },
         {
             'type': 'bool',
             'attr': 'RGB_TONEMAPPED',
-            'name': 'RGB_TONEMAPPED',
-            'description': 'Tonemapped RGB values',
+            'name': 'RGB Tonemapped',
+            'description': 'Tonemapped RGB values (LDR)',
             'default': False
         },
         {
             'type': 'bool',
             'attr': 'RGBA_TONEMAPPED',
-            'name': 'RGBA_TONEMAPPED',
-            'description': 'Tonemapped RGBA values',
+            'name': 'RGBA Tonemapped',
+            'description': 'Tonemapped RGBA values (LDR)',
             'default': False
         },
         {
             'type': 'bool',
             'attr': 'ALPHA',
-            'name': 'ALPHA',
+            'name': 'Alpha',
             'description': 'Alpha value [0..1]',
             'default': False
         },
         {
             'type': 'bool',
             'attr': 'DEPTH',
-            'name': 'DEPTH',
-            'description': 'Camera distance',
-            'default': False
+            'name': 'Depth',
+            'description': 'Distance from camera',
+            'default': False,
+            'update': toggle_depth
         },
         {
             'type': 'bool',
@@ -824,37 +1047,40 @@ class luxrender_channels(declarative_property_group):
         {
             'type': 'bool',
             'attr': 'POSITION',
-            'name': 'POSITION',
+            'name': 'Position',
             'description': 'World X, Y, Z',
             'default': False
         },
         {
             'type': 'bool',
             'attr': 'GEOMETRY_NORMAL',
-            'name': 'GEOMETRY_NORMAL',
+            'name': 'Geometry Normal',
             'description': 'Normal vector X, Y, Z without mesh smoothing',
             'default': False
         },
         {
             'type': 'bool',
             'attr': 'SHADING_NORMAL',
-            'name': 'SHADING_NORMAL',
+            'name': 'Shading Normal',
             'description': 'Normal vector X, Y, Z with mesh smoothing',
-            'default': False
+            'default': False,
+            'update': toggle_shading_normal,
         },
         {
             'type': 'bool',
             'attr': 'MATERIAL_ID',
-            'name': 'MATERIAL_ID',
+            'name': 'Material ID',
             'description': 'Material ID (1 color per material)',
-            'default': False
+            'default': False,
+            #'update': toggle_material_id
         },
         {
             'type': 'bool',
             'attr': 'DIRECT_DIFFUSE',
-            'name': 'DIRECT_DIFFUSE',
+            'name': 'Diffuse',
             'description': 'Diffuse R, G, B',
-            'default': False
+            'default': False,
+            'update': toggle_direct_diffuse
         },
         {
             'type': 'bool',
@@ -866,9 +1092,10 @@ class luxrender_channels(declarative_property_group):
         {
             'type': 'bool',
             'attr': 'DIRECT_GLOSSY',
-            'name': 'DIRECT_GLOSSY',
+            'name': 'Glossy',
             'description': 'Glossy R, G, B',
-            'default': False
+            'default': False,
+            'update': toggle_direct_glossy
         },
         {
             'type': 'bool',
@@ -880,16 +1107,18 @@ class luxrender_channels(declarative_property_group):
         {
             'type': 'bool',
             'attr': 'EMISSION',
-            'name': 'EMISSION',
+            'name': 'Emission',
             'description': 'Emission R, G, B',
-            'default': False
+            'default': False,
+            'update': toggle_emission
         },
         {
             'type': 'bool',
             'attr': 'INDIRECT_DIFFUSE',
-            'name': 'INDIRECT_DIFFUSE',
+            'name': 'Diffuse',
             'description': 'Indirect diffuse R, G, B',
-            'default': False
+            'default': False,
+            'update': toggle_indirect_diffuse
         },
         {
             'type': 'bool',
@@ -901,9 +1130,10 @@ class luxrender_channels(declarative_property_group):
         {
             'type': 'bool',
             'attr': 'INDIRECT_GLOSSY',
-            'name': 'INDIRECT_GLOSSY',
+            'name': 'Glossy',
             'description': 'Indirect glossy R, G, B',
-            'default': False
+            'default': False,
+            'update': toggle_indirect_glossy
         },
         {
             'type': 'bool',
@@ -915,9 +1145,10 @@ class luxrender_channels(declarative_property_group):
         {
             'type': 'bool',
             'attr': 'INDIRECT_SPECULAR',
-            'name': 'INDIRECT_SPECULAR',
-            'description': 'Indirect specular R, G, B',
-            'default': False
+            'name': 'Specular',
+            'description': 'Indirect specular (glass) R, G, B',
+            'default': False,
+            'update': toggle_indirect_specular
         },
         {
             'type': 'bool',
@@ -929,14 +1160,15 @@ class luxrender_channels(declarative_property_group):
         {
             'type': 'bool',
             'attr': 'DIRECT_SHADOW_MASK',
-            'name': 'DIRECT_SHADOW_MASK',
+            'name': 'Direct Shadow Mask',
             'description': 'Mask containing shadows by direct light',
-            'default': False
+            'default': False,
+            #'update': toggle_direct_shadow_mask
         },
         {
             'type': 'bool',
             'attr': 'INDIRECT_SHADOW_MASK',
-            'name': 'INDIRECT_SHADOW_MASK',
+            'name': 'Indirect Shadow Mask',
             'description': 'Mask containing shadows by indirect light',
             'default': False
         },
@@ -945,12 +1177,13 @@ class luxrender_channels(declarative_property_group):
             'attr': 'UV',
             'name': 'UV',
             'description': 'Texture coordinates U, V',
-            'default': False
+            'default': False,
+            #'update': toggle_uv
         },
         {
             'type': 'bool',
             'attr': 'RAYCOUNT',
-            'name': 'RAYCOUNT',
+            'name': 'Raycount',
             'description': 'Ray count per pixel',
             'default': False
         },
@@ -960,5 +1193,12 @@ class luxrender_channels(declarative_property_group):
             'name': 'Normalize',
             'description': 'Map values to 0..1 range',
             'default': True
-        }
+        },
+        {
+            'type': 'bool',
+            'attr': 'IRRADIANCE',
+            'name': 'Irradiance',
+            'description': 'Surface irradiance',
+            'default': False
+        },
     ]

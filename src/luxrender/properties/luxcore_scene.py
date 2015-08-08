@@ -26,52 +26,38 @@
 #
 
 from ..extensions_framework import declarative_property_group
-from ..extensions_framework.validate import Logic_OR as O, Logic_Operator as LO
 
 from .. import LuxRenderAddon
 
 
 @LuxRenderAddon.addon_register_class
-class luxcore_filtersettings(declarative_property_group):
+class luxcore_scenesettings(declarative_property_group):
     """
-    Storage class for LuxCore filter settings.
+    Storage class for LuxCore scene settings.
     """
-
+    
     ef_attach_to = ['Scene']
+    alert = {}
 
     controls = [
-        'filter_type',
-        'filter_width',
+                  ['label', 'imageScale']
     ]
-
-    alert = {}
 
     properties = [
         {
-            'type': 'enum',
-            'attr': 'filter_type',
-            'name': 'Filter',
-            'description': 'Pixel filter to use',
-            'default': 'BLACKMANHARRIS',
-            'items': [
-                ('BLACKMANHARRIS', 'Blackman-Harris', 'desc'),
-                ('MITCHELL', 'Mitchell', 'desc'),
-                ('MITCHELL_SS', 'Mitchell_SS', 'desc'),
-                ('BOX', 'Box', 'desc'),
-                ('GAUSSIAN', 'Gaussian', 'desc'),
-            ],
-            'save_in_preset': True
+            'type': 'text',
+            'attr': 'label',
+            'name': 'Scene Settings:'
         },
         {
             'type': 'float',
-            'attr': 'filter_width',
-            'name': 'Filter Width',
-            'description': 'Width of pixel filter curve. Higher values are smoother and more blurred',
-            'default': 2.0,
-            'min': 0.5,
-            'soft_min': 0.5,
-            'max': 10.0,
-            'soft_max': 4.0,
+            'attr': 'imageScale',
+            'name': 'Texture Scale',
+            'description': 'Scale down all image textures, e.g. 1.0 = don\'t scale, 0.5 = half size',
+            'default': 1.0,
+            'min': 0.01,
+            'max': 1.0,
+            'slider': True,
             'save_in_preset': True
-        },
+        }
     ]

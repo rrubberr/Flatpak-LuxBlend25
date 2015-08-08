@@ -39,30 +39,35 @@ import mathutils
 
 # Blender libs
 import bpy, bgl, bl_ui
+from bpy.app.handlers import persistent
 
 # Framework libs
 from ..extensions_framework import util as efutil
 
 # Exporter libs
 from .. import LuxRenderAddon
-from ..export import get_output_filename
+from ..export import get_output_filename, get_worldscale
 from ..export.scene import SceneExporter
 from ..outputs import LuxManager, LuxFilmDisplay
 from ..outputs import LuxLog
 from ..outputs.pure_api import LUXRENDER_VERSION
-from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCore
+from ..outputs.luxcore_api import ToValidLuxCoreName
+from ..outputs.luxcore_api import PYLUXCORE_AVAILABLE, UseLuxCore, pyluxcore
+from ..export.luxcore import LuxCoreExporter
 
 # Exporter Property Groups need to be imported to ensure initialisation
 from ..properties import (
     accelerator, camera, engine, filter, integrator, ior_data, lamp, lampspectrum_data,
     material, node_material, node_inputs, node_texture, node_fresnel, node_converter,
     mesh, object as prop_object, particles, rendermode, sampler, texture, world,
-    luxcore_engine, luxcore_sampler, luxcore_filter, luxcore_material
+    luxcore_engine, luxcore_scene, luxcore_material, luxcore_lamp,
+    luxcore_tile_highlighting, luxcore_imagepipeline, luxcore_translator, luxcore_rendering_controls
 )
 
 # Exporter Interface Panels need to be imported to ensure initialisation
 from ..ui import (
-    render_panels, camera, image, lamps, mesh, node_editor, object as ui_object, particles, world
+    render_panels, camera, image, lamps, mesh, node_editor, object as ui_object, particles, world,
+    imageeditor_panel
 )
 
 # Legacy material editor panels, node editor UI is initialized above
@@ -78,12 +83,12 @@ from ..ui.textures import (
     checkerboard, cloud, densitygrid, dots, equalenergy, exponential, fbm, fresnelcolor, fresnelname, gaussian,
     harlequin, hitpointcolor, hitpointalpha, hitpointgrey, imagemap, imagesampling, normalmap,
     lampspectrum, luxpop, marble, mix as tex_mix, multimix, sellmeier, scale, subtract, sopra, uv,
-    uvmask, windy, wrinkled, mapping, tabulateddata, transform
+    uvmask, windy, wrinkled, mapping, tabulateddata, transform, pointiness
 )
 
 # Exporter Operators need to be imported to ensure initialisation
 from .. import operators
-from ..operators import lrmdb
+from ..operators import lrmdb, export, materials, nodes
 
 
 def _register_elm(elm, required=False):
@@ -99,6 +104,8 @@ _register_elm(bl_ui.properties_render.RENDER_PT_dimensions, required=True)
 _register_elm(bl_ui.properties_render.RENDER_PT_output, required=True)
 _register_elm(bl_ui.properties_render.RENDER_PT_stamp)
 
+#_register_elm(bl_ui.properties_render_layer.RENDERLAYER_PT_views) # multiview
+
 _register_elm(bl_ui.properties_scene.SCENE_PT_scene, required=True)
 _register_elm(bl_ui.properties_scene.SCENE_PT_audio)
 _register_elm(bl_ui.properties_scene.SCENE_PT_physics)  # This is the gravity panel
@@ -106,6 +113,7 @@ _register_elm(bl_ui.properties_scene.SCENE_PT_keying_sets)
 _register_elm(bl_ui.properties_scene.SCENE_PT_keying_set_paths)
 _register_elm(bl_ui.properties_scene.SCENE_PT_unit)
 _register_elm(bl_ui.properties_scene.SCENE_PT_color_management)
+_register_elm(bl_ui.properties_scene.SCENE_PT_simplify)
 
 _register_elm(bl_ui.properties_scene.SCENE_PT_rigid_body_world)
 _register_elm(bl_ui.properties_scene.SCENE_PT_rigid_body_cache)
@@ -125,7 +133,7 @@ _register_elm(bl_ui.properties_data_lamp.DATA_PT_context_lamp)
 # Use this example for such overrides
 # Add output format flags to output panel
 def lux_output_hints(self, context):
-    if context.scene.render.engine == 'LUXRENDER_RENDER':
+    if context.scene.render.engine == 'LUXRENDER_RENDER' and not UseLuxCore():
 
         # In this mode, we don't use use the regular interval write
         pipe_mode = (context.scene.luxrender_engine.export_type == 'INT' and
@@ -288,6 +296,27 @@ blender_texture_ui_list = [
     bl_ui.properties_texture.TEXTURE_PT_ocean,
 ]
 
+def lux_texture_chooser(self, context):
+    if context.scene.render.engine == 'LUXRENDER_RENDER':
+        self.layout.separator()
+        row = self.layout.row(align=True)
+        if context.texture:
+            row.label('LuxRender type')
+            row.menu('TEXTURE_MT_luxrender_type', text=context.texture.luxrender_texture.type_label)
+
+            if UseLuxCore():
+                self.layout.separator()
+                self.layout.prop(context.texture, 'use_color_ramp', text='Use Color Ramp')
+                if context.texture.use_color_ramp:
+                    self.layout.template_color_ramp(context.texture, 'color_ramp', expand=True)
+
+                    # The first element has a default alpha of 0, which makes no sense for LuxRender - set it to 1
+                    first_color = context.texture.color_ramp.elements[0].color
+                    if first_color[3] < 1:
+                        first_color[3] = 1
+
+_register_elm(bl_ui.properties_texture.TEXTURE_PT_context_texture.append(lux_texture_chooser))
+
 for blender_texture_ui in blender_texture_ui_list:
     _register_elm(blender_texture_ui)
     blender_texture_ui.poll = blender_texture_poll
@@ -357,6 +386,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     def view_update(self, context):
         if UseLuxCore():
             self.luxcore_view_update(context)
+        else:
+            self.update_stats('ERROR: Viewport rendering is only available when LuxCore API is selected!', '')
 
     def view_draw(self, context):
         if UseLuxCore():
@@ -564,15 +595,18 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 if hasattr(preview_context, 'blenderCombinedDepthBuffers'):
                     # use fast buffers
                     pb, zb = preview_context.blenderCombinedDepthBuffers()
-                    result.layers.foreach_set("rect", pb)
+                    result.layers.foreach_set("rect", pb) if bpy.app.version < (2, 74, 4 ) \
+                        else result.layers[0].passes.foreach_set("rect", pb)
                 else:
-                    lay = result.layers[0]
+                    lay = result.layers[0] if bpy.app.version < (2, 74, 4 ) else result.layers[0].passes[0]
                     lay.rect = preview_context.blenderCombinedDepthRects()[0]
 
                 # Cycles tiles adaption
                 self.end_result(result, 0) if bpy.app.version > (2, 63, 17 ) else self.end_result(result)
         except Exception as exc:
             LuxLog('Preview aborted: %s' % exc)
+            import traceback
+            traceback.print_exc()
 
         preview_context.exit()
         preview_context.wait()
@@ -920,88 +954,283 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     #
     ############################################################################
 
-    def PrintStats(self, lcConfig, stats):
-        lc_engine = lcConfig.GetProperties().Get('renderengine.type').GetString()
+    def set_export_path_luxcore(self, scene):
+        # replace /tmp/ with the real %temp% folder on Windows
+        # OSX also has a special temp location that we should use
+        fp = scene.render.filepath
+        output_path_split = list(os.path.split(fp))
 
-        if lc_engine == 'BIASPATHCPU' or lc_engine == 'BIASPATHOCL':
+        if sys.platform in ('win32', 'darwin') and output_path_split[0] == '/tmp':
+            output_path_split[0] = efutil.temp_directory()
+            fp = '/'.join(output_path_split)
+
+        scene_path = efutil.filesystem_path(fp)
+
+        if os.path.isdir(scene_path):
+            self.output_dir = scene_path
+        else:
+            self.output_dir = os.path.dirname(scene_path)
+
+        if self.output_dir[-1] not in ('/', '\\'):
+            self.output_dir += '/'
+
+        efutil.export_path = self.output_dir
+
+    mem_peak = 0
+
+    def CreateBlenderStats(self, lcConfig, stats, scene, realtime_preview=False, time_until_update=-1.0, export_errors=False):
+        """
+        Returns: string of formatted statistics
+        """
+        rendering_controls = scene.luxcore_rendering_controls
+
+        engine = lcConfig.GetProperties().Get('renderengine.type').GetString()
+        engine_dict = {
+            'PATHCPU' : 'Path',
+            'PATHOCL' : 'Path OpenCL',
+            'BIASPATHCPU' : 'Biased Path',
+            'BIASPATHOCL' : 'Biased Path OpenCL',
+            'BIDIRCPU' : 'Bidir',
+            'BIDIRVMCPU' : 'BidirVCM',
+            'RTPATHOCL': 'RT Path OpenCL',
+            'RTBIASPATHOCL': 'RT Biased Path OpenCL',
+        }
+        
+        sampler = lcConfig.GetProperties().Get('sampler.type').GetString()
+        sampler_dict = {
+            'RANDOM' : 'Random',
+            'SOBOL' : 'Sobol',
+            'METROPOLIS' : 'Metropolis'
+        }
+
+        settings = scene.luxcore_enginesettings
+        halt_samples = settings.halt_samples_preview if realtime_preview else settings.halt_samples
+        halt_time = settings.halt_time_preview if realtime_preview else settings.halt_time
+        halt_noise = settings.halt_noise
+
+        # Progress
+        progress_time = 0.0
+        progress_samples = 0.0
+        progress_tiles = 0.0
+
+        stats_list = []
+
+        # Time stats
+        time_running = stats.Get('stats.renderengine.time').GetFloat()
+        # Add time stats for realtime preview because Blender doesn't display it there
+        # For final renderings, only display time if it is set as halt condition
+        if (not realtime_preview and settings.use_halt_time) or (realtime_preview and settings.use_halt_time_preview):
+            stats_list.append('Time: %.1fs/%ds' % (time_running, halt_time))
+            if not realtime_preview:
+                progress_time = time_running / halt_time
+
+        # Samples/Passes stats
+        if rendering_controls.stats_samples:
+            samples_count = stats.Get('stats.renderengine.pass').GetInt()
+            samples_term = 'Pass' if engine in ['BIASPATHCPU', 'BIASPATHOCL'] else 'Samples'
+            if (not realtime_preview and settings.use_halt_samples) or (realtime_preview and settings.use_halt_samples_preview):
+                stats_list.append('%s: %d/%d' % (samples_term, samples_count, halt_samples))
+                if not realtime_preview:
+                    progress_samples = samples_count / halt_samples
+            else:
+                stats_list.append('%s: %d' % (samples_term, samples_count))
+
+        # Tile stats
+        if engine in ['BIASPATHCPU', 'BIASPATHOCL'] and rendering_controls.stats_tiles:
             converged = stats.Get('stats.biaspath.tiles.converged.count').GetInt()
             notconverged = stats.Get('stats.biaspath.tiles.notconverged.count').GetInt()
             pending = stats.Get('stats.biaspath.tiles.pending.count').GetInt()
 
-            LuxLog('[Elapsed time: %3d][Pass %4d][Convergence %d/%d][Avg. samples/sec % 3.2fM on %.1fK tris]' % (
-                stats.Get('stats.renderengine.time').GetFloat(),
-                stats.Get('stats.renderengine.pass').GetInt(),
-                converged, converged + notconverged + pending,
-                (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000.0),
-                (stats.Get('stats.dataset.trianglecount').GetFloat() / 1000.0)))
+            tiles_amount = converged + notconverged + pending
+            stats_list.append('Tiles: %d/%d Converged' % (converged, tiles_amount))
+            progress_tiles = converged / tiles_amount
+
+        # Samples per second
+        if rendering_controls.stats_samples_per_sec:
+            samples_per_sec = stats.Get('stats.renderengine.total.samplesec').GetFloat()
+
+            if samples_per_sec > 10**6 - 1:
+                # Use megasamples as unit
+                stats_list.append('Samples/Sec %.3f M' % (samples_per_sec / 10**6))
+            else:
+                # Use kilosamples as unit
+                stats_list.append('Samples/Sec %d k' % (samples_per_sec / 10**3))
+
+        if rendering_controls.stats_rays_per_sample:
+            samplesec = stats.Get("stats.renderengine.total.samplesec").GetFloat()
+
+            if samplesec > 0:
+                rays_per_sample = (
+                    stats.Get("stats.renderengine.performance.total").GetFloat()
+                    / samplesec
+                )
+            else:
+                rays_per_sample = 0
+
+            stats_list.append('Rays/Sample %.1f' % rays_per_sample)
+
+        # Convergence stats
+        if rendering_controls.stats_convergence:
+            convergence = stats.Get('stats.renderengine.convergence').GetFloat()
+            # Flip convergence so 1.0 is not converged and 0.0 is fully converged, to be consistent with noise settings
+            # in the UI (e.g. target noise level = 0.04)
+            convergence = 1.0 - convergence
+
+            if settings.use_halt_noise:
+                stats_list.append('Noise Level: %f/%f' % (convergence, halt_noise))
+            else:
+                stats_list.append('Noise Level: %f' % convergence)
+
+        # Memory usage (only available for OpenCL engines)
+        if str.endswith(engine, 'OCL') and rendering_controls.stats_memory:
+            device_stats = stats.Get("stats.renderengine.devices")
+
+            max_memory = float('inf')
+            used_memory = 0
+
+            for i in range(device_stats.GetSize()):
+                device_name = device_stats.GetString(i)
+
+                # Max memory available is limited by the device with least amount of memory
+                device_max_memory = stats.Get("stats.renderengine.devices." + device_name + ".memory.total").GetFloat()
+                device_max_memory = int(device_max_memory / (1024 * 1024))
+                if device_max_memory < max_memory:
+                    max_memory = device_max_memory
+
+                device_used_memory = stats.Get("stats.renderengine.devices." + device_name + ".memory.used").GetFloat()
+                device_used_memory = int(device_used_memory / (1024 * 1024))
+                if device_used_memory > used_memory:
+                    used_memory = device_used_memory
+
+            if used_memory > self.mem_peak:
+                self.mem_peak = used_memory
+
+            stats_list.append('Memory: %d MB/%d MB' % (used_memory, max_memory))
+
+        # Show triangle count (formatted with commas, like so: 5,123,001 Tris)
+        if rendering_controls.stats_tris:
+            triangle_count = int(stats.Get("stats.dataset.trianglecount").GetFloat())
+            stats_list.append('{:,} Tris'.format(triangle_count))
+
+        # Engine and sampler info
+        if rendering_controls.stats_engine_info:
+            try:
+                engine_info = engine_dict[engine]
+                if not 'BIASPATH' in engine:
+                    engine_info += ' + ' + sampler_dict[sampler]
+            except KeyError:
+                engine_info = 'Unkown engine or sampler'
+
+            stats_list.append(engine_info)
+
+        # Show remaining time until next film update (final render only)
+        if not realtime_preview and time_until_update > 0.0:
+            stats_list.append('Next update in %ds' % math.ceil(time_until_update))
+        elif time_until_update != -1:
+            stats_list.append('Updating preview...')
+
+        # Inform the user when errors happened during export (e.g. failed to export a particle system)
+        if export_errors:
+            stats_list.append('Errors happened during export, open system console for details')
+                
+        # Update progressbar (final render only)
+        if not realtime_preview:
+            progress = max([progress_time, progress_samples, progress_tiles])
+            self.update_progress(progress)
+
+        # Pass memory usage information to Blender (only available when using OpenCL engines)
+        if str.endswith(engine, 'OCL') and rendering_controls.stats_memory:
+            self.update_memory_stats(used_memory, self.mem_peak)
+
+        return ' | '.join(stats_list)
+
+    def haltConditionMet(self, scene, stats, realtime_preview=False):
+        """
+        Checks if any halt conditions are met
+        """
+        settings = scene.luxcore_enginesettings
+
+        use_halt_samples = settings.use_halt_samples_preview if realtime_preview else settings.use_halt_samples
+        use_halt_time = settings.use_halt_time_preview if realtime_preview else settings.use_halt_time
+
+        halt_samples = settings.halt_samples_preview if realtime_preview else settings.halt_samples
+        halt_time = settings.halt_time_preview if realtime_preview else settings.halt_time
+        halt_noise = settings.halt_noise
+        
+        rendered_samples = stats.Get('stats.renderengine.pass').GetInt()
+        rendered_time = stats.Get('stats.renderengine.time').GetFloat()
+        rendered_noise = stats.Get('stats.renderengine.convergence').GetFloat()
+
+        halt_samples_met = use_halt_samples and rendered_samples >= halt_samples
+        halt_time_met = use_halt_time and rendered_time >= halt_time
+
+        if settings.use_halt_noise:
+            halt_noise_met = rendered_noise > (1.0 - halt_noise)
         else:
-            LuxLog('[Elapsed time: %3d][Samples %4d][Avg. samples/sec % 3.2fM on %.1fK tris]' % (
-                stats.Get('stats.renderengine.time').GetFloat(),
-                stats.Get('stats.renderengine.pass').GetInt(),
-                (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000.0),
-                (stats.Get('stats.dataset.trianglecount').GetFloat() / 1000.0)))
+            halt_noise_met = rendered_noise == 1.0
 
-        return stats.Get('stats.renderengine.convergence').GetFloat() == 1.0
+        # Samples and time make no sense as halt conditions when BIASPATH is used
+        if not realtime_preview and settings.renderengine_type == 'BIASPATH':
+            return halt_noise_met
 
-    def CreateBlenderStats(self, lcConfig, stats):
-        lc_engine = lcConfig.GetProperties().Get('renderengine.type').GetString()
+        return halt_samples_met or halt_time_met or halt_noise_met
 
-        output = ''
-
-        if lc_engine == 'BIASPATHCPU' or lc_engine == 'BIASPATHOCL':
-            converged = stats.Get('stats.biaspath.tiles.converged.count').GetInt()
-            notconverged = stats.Get('stats.biaspath.tiles.notconverged.count').GetInt()
-            pending = stats.Get('stats.biaspath.tiles.pending.count').GetInt()
-
-            output = ('Pass ' + str(stats.Get('stats.renderengine.pass').GetInt()) + '| Convergence ' + str(converged) + '/') + (
-                        str(converged + notconverged + pending) + ' | Avg. samples/sec ') + (
-                        ('%3.2f' % (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000.0))) + (
-                        'M on ' + ('%.1f' % (stats.Get('stats.dataset.trianglecount').GetFloat() / 1000.0))) + (
-                        'K tris')
-        else:
-            output = ('Pass ' + str(stats.Get('stats.renderengine.pass').GetInt()) + ' | Avg. samples/sec ') + (
-                        ('%3.2f' % (stats.Get('stats.renderengine.total.samplesec').GetFloat() / 1000000.0))) + (
-                        'M on ' + ('%.1f' % (stats.Get('stats.dataset.trianglecount').GetFloat() / 1000.0)) + 'K tris' )
-
-        return output
-
-    def normalizeChannel(self, channel_buffer):
-        isInf = math.isinf
-
-        # find max value
-        maxValue = 0.0
-        for elem in channel_buffer:
-            if elem > maxValue and not isInf(elem):
-                maxValue = elem
-
-        if maxValue > 0.0:
-            for i in range(0, len(channel_buffer)):
-                channel_buffer[i] = channel_buffer[i] / maxValue
-
-    def convertChannelToImage(self, lcSession, filmWidth, filmHeight, channelName, useHDR, outputType, arrayType,
-                              arrayInitValue, arrayDepth, normalize, saveToDisk, buffer_id=-1):
+    def convertChannelToImage(self, lcSession, scene, passes, filmWidth, filmHeight, channelType, saveToDisk,
+                              normalize = False, buffer_id = -1):
         """
         Convert AOVs to Blender images
-
-        Example arguments:
-        channelName:        RGB
-        useHDR:             False
-        outputType:         pyluxcore.FilmOutputType.RGB
-        arrayType:         'f'
-        arrayInitValue:     0.0
-        arrayDepth:         3
-        normalize:          False
-        saveToDisk:         False
-
-        buffer_id is used only for obtaining the right MATERIAL_ID_MASK and BY_MATERIAL_ID buffer
         """
         from ..outputs.luxcore_api import pyluxcore
+
+        # Structure: {channelType: [pyluxcoreType, is HDR, arrayDepth, optional matching Blender pass]}
+        attributes = {
+                'RGB': [pyluxcore.FilmOutputType.RGB, True, 3],
+                'RGBA': [pyluxcore.FilmOutputType.RGBA, True, 4],
+                'RGB_TONEMAPPED': [pyluxcore.FilmOutputType.RGB_TONEMAPPED, False, 3],
+                'RGBA_TONEMAPPED': [pyluxcore.FilmOutputType.RGBA_TONEMAPPED, False, 4],
+                'ALPHA': [pyluxcore.FilmOutputType.ALPHA, False, 1],
+                'DEPTH': [pyluxcore.FilmOutputType.DEPTH, True, 1, 'Z'],
+                'POSITION': [pyluxcore.FilmOutputType.POSITION, True, 3],
+                'GEOMETRY_NORMAL': [pyluxcore.FilmOutputType.GEOMETRY_NORMAL, True, 3],
+                'SHADING_NORMAL': [pyluxcore.FilmOutputType.SHADING_NORMAL, True, 3, 'NORMAL'],
+                'MATERIAL_ID': [pyluxcore.FilmOutputType.MATERIAL_ID, False, 1],
+                'DIRECT_DIFFUSE': [pyluxcore.FilmOutputType.DIRECT_DIFFUSE, True, 3, 'DIFFUSE_DIRECT'],
+                'DIRECT_GLOSSY': [pyluxcore.FilmOutputType.DIRECT_GLOSSY, True, 3, 'GLOSSY_DIRECT'],
+                'EMISSION': [pyluxcore.FilmOutputType.EMISSION, True, 3, 'EMIT'],
+                'INDIRECT_DIFFUSE': [pyluxcore.FilmOutputType.INDIRECT_DIFFUSE, True, 3, 'DIFFUSE_INDIRECT'],
+                'INDIRECT_GLOSSY': [pyluxcore.FilmOutputType.INDIRECT_GLOSSY, True, 3, 'GLOSSY_INDIRECT'],
+                'INDIRECT_SPECULAR': [pyluxcore.FilmOutputType.INDIRECT_SPECULAR, True, 3, 'TRANSMISSION_INDIRECT'],
+                'DIRECT_SHADOW_MASK': [pyluxcore.FilmOutputType.DIRECT_SHADOW_MASK, False, 1],
+                'INDIRECT_SHADOW_MASK': [pyluxcore.FilmOutputType.INDIRECT_SHADOW_MASK, False, 1],
+                'UV': [pyluxcore.FilmOutputType.UV, True, 2],
+                'RAYCOUNT': [pyluxcore.FilmOutputType.RAYCOUNT, True, 1],
+                'IRRADIANCE': [pyluxcore.FilmOutputType.IRRADIANCE, True, 3],
+                'MATERIAL_ID_MASK': [pyluxcore.FilmOutputType.MATERIAL_ID_MASK, False, 1],
+                'BY_MATERIAL_ID': [pyluxcore.FilmOutputType.BY_MATERIAL_ID, True, 3],
+                'RADIANCE_GROUP': [pyluxcore.FilmOutputType.RADIANCE_GROUP, True, 3]
+        }
+
+        outputType = attributes[channelType][0]
+        use_hdr = attributes[channelType][1]
+        arrayType = 'I' if channelType == 'MATERIAL_ID' else 'f'
+        arrayInitValue = 0 if channelType == 'MATERIAL_ID' else 0.0
+        arrayDepth = attributes[channelType][2]
+        pass_type = attributes[channelType][3] if len(attributes[channelType]) == 4 else None
+
+        # show info about imported passes
+        message = 'Pass: ' + channelType
+        if buffer_id != -1:
+            message += ' ID: ' + str(buffer_id)
+        self.update_stats('Importing AOV passes into Blender...', message)
+        LuxLog('Importing AOV ' + message)
+
         # raw channel buffer
         channel_buffer = array.array(arrayType, [arrayInitValue] * (filmWidth * filmHeight * arrayDepth))
+
         # buffer for converted array (to RGBA)
         channel_buffer_converted = []
 
-        if channelName == 'MATERIAL_ID':
+        if channelType == 'MATERIAL_ID':
             # MATERIAL_ID needs special treatment
             channel_buffer_converted = [None] * (filmWidth * filmHeight * 4)
             lcSession.GetFilm().GetOutputUInt(outputType, channel_buffer)
@@ -1009,105 +1238,187 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             mask_red = 0xff0000
             mask_green = 0xff00
             mask_blue = 0xff
-
+            
             k = 0
             for i in range(0, len(channel_buffer)):
-                red = float((channel_buffer[i] & mask_red) >> 16) / 255.0
-                green = float((channel_buffer[i] & mask_green) >> 8) / 255.0
-                blue = float(channel_buffer[i] & mask_blue) / 255.0
-
-                channel_buffer_converted[k] = red
-                channel_buffer_converted[k + 1] = green
-                channel_buffer_converted[k + 2] = blue
-                channel_buffer_converted[k + 3] = 1.0
+                rgba_raw = channel_buffer[i]
+                
+                rgba_converted = [
+                    float((rgba_raw & mask_red) >> 16) / 255.0,
+                    float((rgba_raw & mask_green) >> 8) / 255.0,
+                    float(rgba_raw & mask_blue) / 255.0,
+                    1.0
+                ]
+                
+                channel_buffer_converted[k:k + 4] = rgba_converted
                 k += 4
-
         else:
-            if channelName in ['MATERIAL_ID_MASK', 'BY_MATERIAL_ID'] and buffer_id != -1:
+            if channelType in ['MATERIAL_ID_MASK', 'BY_MATERIAL_ID', 'RADIANCE_GROUP'] and buffer_id != -1:
                 lcSession.GetFilm().GetOutputFloat(outputType, channel_buffer, buffer_id)
             else:
                 lcSession.GetFilm().GetOutputFloat(outputType, channel_buffer)
 
-            # spread value to RGBA format
+            # Import into Blender passes
+            if pass_type is not None and scene.luxrender_channels.import_compatible:
+                nested_list = [channel_buffer[i:i+arrayDepth] for i in range(0, len(channel_buffer), arrayDepth)]
 
-            if arrayDepth == 1:
-                if getattr(pyluxcore, "ConvertFilmChannelOutput_1xFloat_To_4xFloatList", None) is not None:
+                for renderpass in passes:
+                    if renderpass.type == pass_type:
+                        renderpass.rect = nested_list
+                        break
+            else:
+                # Pass is not compatible with Blender passes, import as Blender image
+                # spread value to RGBA format
+                if arrayDepth == 1:
                     channel_buffer_converted = pyluxcore.ConvertFilmChannelOutput_1xFloat_To_4xFloatList(filmWidth,
                                                                                                          filmHeight,
                                                                                                          channel_buffer,
                                                                                                          normalize)
-                else:
-                    # normalize channel_buffer values (map to 0..1 range)
-                    if normalize:
-                        self.normalizeChannel(channel_buffer)
-                    for elem in channel_buffer:
-                        channel_buffer_converted.extend([elem, elem, elem, 1.0])
-
-            # UV channel, just add 0.0 for B and 1.0 for A components
-            elif arrayDepth == 2:
-                if getattr(pyluxcore, "ConvertFilmChannelOutput_2xFloat_To_4xFloatList", None) is not None:
+                # UV channel, just add 0.0 for B and 1.0 for A components
+                elif arrayDepth == 2:
                     channel_buffer_converted = pyluxcore.ConvertFilmChannelOutput_2xFloat_To_4xFloatList(filmWidth,
                                                                                                          filmHeight,
                                                                                                          channel_buffer,
                                                                                                          normalize)
-                else:
-                    # normalize channel_buffer values (map to 0..1 range)
-                    if normalize:
-                        self.normalizeChannel(channel_buffer)
-                    i = 0
-                    while i < len(channel_buffer):
-                        channel_buffer_converted.extend([channel_buffer[i], channel_buffer[i + 1], 0.0, 1.0])
-                        i += 2
-
-            # RGB channels: just add 1.0 as alpha component
-            elif arrayDepth == 3:
-                if getattr(pyluxcore, "ConvertFilmChannelOutput_3xFloat_To_4xFloatList", None) is not None:
+                # RGB channels: just add 1.0 as alpha component
+                elif arrayDepth == 3:
                     channel_buffer_converted = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_4xFloatList(filmWidth,
                                                                                                          filmHeight,
                                                                                                          channel_buffer,
                                                                                                          normalize)
+                # RGBA channels: just use the original list
                 else:
-                    # normalize channel_buffer values (map to 0..1 range)
-                    if normalize:
-                        self.normalizeChannel(channel_buffer)
-                    i = 0
-                    while i < len(channel_buffer):
-                        channel_buffer_converted.extend(
-                            [channel_buffer[i], channel_buffer[i + 1], channel_buffer[i + 2], 1.0])
-                        i += 3
+                    channel_buffer_converted = channel_buffer
 
-            # RGBA channels: just copy the list
+        if pass_type is None or not scene.luxrender_channels.import_compatible:
+            # Pass is incompatible with Blender passes or import of compatible passes was disabled
+
+            imageName = 'pass_' + str(channelType)
+            if buffer_id != -1:
+                imageName += '_' + str(buffer_id)
+
+            if normalize:
+                imageName += '_normalized'
+
+            # remove pass image from Blender if it already exists (to prevent duplicates)
+            for bl_image in bpy.data.images:
+                if bl_image.name == imageName:
+                    bl_image.user_clear()
+                    if not bl_image.users:
+                        bpy.data.images.remove(bl_image)
+
+            if scene.render.use_border and not scene.render.use_crop_to_border:
+                # border rendering without cropping: fit the rendered area into a blank image
+                imageWidth, imageHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
+
+                # construct an empty Blender image
+                blenderImage = bpy.data.images.new(imageName, alpha = True,
+                                                    width = imageWidth, height = imageHeight, float_buffer = use_hdr)
+
+                # copy the buffer content to the right position in the Blender image
+                offsetFromLeft = int(imageWidth * scene.render.border_min_x) * 4
+                offsetFromTop = int(imageHeight * scene.render.border_min_y)
+
+                # we use an intermediate temp image because blenderImage.pixels doesn't support list slicing
+                tempImage = [0.0] * (imageWidth * imageHeight * 4)
+
+                for y in range(offsetFromTop, offsetFromTop + filmHeight):
+                    imageSliceStart = y * imageWidth * 4 + offsetFromLeft
+                    imageSliceEnd = imageSliceStart + filmWidth * 4
+                    bufferSliceStart = (y - offsetFromTop) * filmWidth * 4
+                    bufferSliceEnd = bufferSliceStart + filmWidth * 4
+
+                    tempImage[imageSliceStart:imageSliceEnd] = channel_buffer_converted[bufferSliceStart:bufferSliceEnd]
+
+                blenderImage.pixels = tempImage
             else:
-                channel_buffer_converted = channel_buffer
+                # no border rendering or border rendering with cropping: just copy the buffer to a Blender image
+                blenderImage = bpy.data.images.new(imageName, alpha = False,
+                                                    width = filmWidth, height = filmHeight, float_buffer = use_hdr)
+                blenderImage.pixels = channel_buffer_converted
 
-        imageName = 'pass_' + str(channelName)
-        if buffer_id != -1:
-            imageName += '_' + str(buffer_id)
+            # write image to file
+            suffix = '.png'
+            image_format = 'PNG'
+            if use_hdr and not normalize:
+                suffix = '.exr'
+                image_format = 'OPEN_EXR'
 
-        # remove channel from Blender if it already exists and has no users (to prevent duplicates)
-        for bl_image in bpy.data.images:
-            if bl_image.name == imageName and not bl_image.users:
-                bpy.data.images.remove(bl_image)
+            imageName = get_output_filename(scene) + '_' + imageName + suffix
+            blenderImage.filepath_raw = self.output_dir + imageName
+            blenderImage.file_format = image_format
 
-        # write converted buffer with RGBA values to Blender image
-        blenderImage = bpy.data.images.new(imageName, alpha=False, width=filmWidth, height=filmHeight,
-                                           float_buffer=useHDR)
-        blenderImage.pixels = channel_buffer_converted
+            #if saveToDisk: # TODO: remove, this is done via LuxCore now
+            #    blenderImage.save()
 
-        # write image to file
-        suffix = '.png'
-        image_format = 'PNG'
-        if useHDR:
-            suffix = '.exr'
-            image_format = 'OPEN_EXR'
-
-        blenderImage.filepath_raw = '//' + imageName + suffix
-        blenderImage.file_format = image_format
-        if saveToDisk:
-            blenderImage.save()
+    def draw_tiles(self, scene, stats, imageBuffer, filmWidth, filmHeight):
+        """
+        draws tile outlines directly into the imageBuffer
+        
+        scene: Blender scene object
+        stats: LuxCore stats (from LuxCore session)
+        imageBuffer: list of tuples of floats, e.g. [(r, g, b, a), ...], must be sliceable!
+        """
+        tile_size = scene.luxcore_enginesettings.tile_size
+        show_converged = scene.luxcore_tile_highlighting.show_converged
+        show_unconverged = scene.luxcore_tile_highlighting.show_unconverged
+        show_pending = scene.luxcore_tile_highlighting.show_pending
+        
+        def draw_tile_type(count, coords, color):
+            """
+        	draws all tiles at the given coordinates with given color
+        	"""
+            for i in range(count):
+                offset_x = coords[i * 2]
+                offset_y = coords[i * 2 + 1]
+                width = min(tile_size + 1, filmWidth - offset_x)
+                height = min(tile_size + 1, filmHeight - offset_y)
+                
+                draw_tile_outline(offset_x, offset_y, width, height, color)
+        
+        def draw_tile_outline(offset_x, offset_y, width, height, color):
+            """
+        	draws the outline of one tile
+        	"""
+            for y in range(offset_y, offset_y + height):
+                sliceStart = y * filmWidth + offset_x
+                sliceEnd = sliceStart + width
+                
+                if y == offset_y or y == offset_y + height - 1:
+                    # bottom and top lines
+                    imageBuffer[sliceStart:sliceEnd] = [color] * width
+                else:
+                    # left and right sides
+                    imageBuffer[sliceStart] = color
+                    try:
+                        imageBuffer[sliceEnd - 1] = color
+                    except IndexError:
+                        # catch this so render does not crash when we try to draw outside the imageBuffer
+                        # (should not be possible anymore, but leave it in in case there's an unknown bug)
+                        pass
+        
+        # collect stats
+        count_converged = stats.Get('stats.biaspath.tiles.converged.count').GetInt()
+        count_notconverged = stats.Get('stats.biaspath.tiles.notconverged.count').GetInt()
+        count_pending = stats.Get('stats.biaspath.tiles.pending.count').GetInt()
+        
+        if count_converged > 0 and show_converged:
+            coords_converged = stats.Get('stats.biaspath.tiles.converged.coords').GetInts()
+            color_green = (0.0, 1.0, 0.0, 1.0)
+            draw_tile_type(count_converged, coords_converged, color_green)
+            
+        if count_notconverged > 0 and show_unconverged:
+            coords_notconverged = stats.Get('stats.biaspath.tiles.notconverged.coords').GetInts()
+            color_red = (1.0, 0.0, 0.0, 1.0)
+            draw_tile_type(count_notconverged, coords_notconverged, color_red)
+            
+        if count_pending > 0 and show_pending:
+            coords_pending = stats.Get('stats.biaspath.tiles.pending.coords').GetInts()
+            color_yellow = (1.0, 1.0, 0.0, 1.0)
+            draw_tile_type(count_pending, coords_pending, color_yellow)
 
     def luxcore_render(self, scene):
-        if scene.name == 'preview':
+        if self.is_preview:
             self.luxcore_render_preview(scene)
             return
 
@@ -1117,169 +1428,315 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             self.report({'ERROR'}, 'LuxCore rendering requires pyluxcore')
             return
         from ..outputs.luxcore_api import pyluxcore
-        from ..export.luxcore_scene import BlenderSceneConverter
 
         try:
-            # convert the Blender scene
-            lcConfig = BlenderSceneConverter(scene).Convert()
+            if self.is_animation:
+                # Check if a halt condition is set, cancel the rendering and warn the user otherwise
+                settings = scene.luxcore_enginesettings
 
-            lcSession = pyluxcore.RenderSession(lcConfig)
+                if settings.renderengine_type == 'BIASPATH':
+                    halt_enabled = not settings.tile_multipass_enable or not settings.tile_multipass_use_threshold_reduction
+                else:
+                    halt_enabled = settings.use_halt_samples or settings.use_halt_noise or settings.use_halt_time
 
-            filmWidth, filmHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
+                if not halt_enabled:
+                    raise Exception('You need to set a halt condition for animations, otherwise the rendering of the '
+                                    'first frame will never stop!')
+
+            self.set_export_path_luxcore(scene)
+
+            filmWidth, filmHeight = self.get_film_size(scene)
+
+            luxcore_exporter = LuxCoreExporter(scene, self)
+            luxcore_config = luxcore_exporter.convert(filmWidth, filmHeight)
+
+            export_errors = luxcore_exporter.errors
+
+            # Maybe export was cancelled by user, don't start the rendering with an incomplete scene then
+            if self.test_break() or luxcore_config is None:
+                return
+
+            luxcore_session = pyluxcore.RenderSession(luxcore_config)
+            # Start the rendering
+            LuxLog('Starting the rendering process...')
+            luxcore_session.Start()
+
+            # Immediately end the rendering if 'FILESAVER' engine is used
+            if scene.luxcore_translatorsettings.use_filesaver:
+                luxcore_session.Stop()
+                return
+
             imageBufferFloat = array.array('f', [0.0] * (filmWidth * filmHeight * 3))
 
-            # Start the rendering
-            lcSession.Start()
-
+            imagepipeline_settings = scene.camera.data.luxrender_camera.luxcore_imagepipeline_settings
             startTime = time.time()
-            lastRefreshTime = startTime
+            lastImageDisplay = startTime
             done = False
+
+            if self.is_animation or not imagepipeline_settings.fast_initial_preview:
+                # Use normal display interval from the beginning in animations to speed up the rendering
+                display_interval = imagepipeline_settings.displayinterval
+            else:
+                # Magic formula to compute optimal display interval (found through testing)
+                display_interval = float(filmWidth * filmHeight) / 852272.0 * 1.1
+                LuxLog('Recommended minimum display interval: %.1fs' % display_interval)
+
+            # TODO: activate this once LuxCore supports pause/resume without samples loss
+            #paused = False
+
             while not self.test_break() and not done:
                 time.sleep(0.2)
 
+                # TODO: activate this once LuxCore supports pause/resume without samples loss
+                '''
+                if scene.luxcore_rendering_controls.pause_render:
+                    if not paused:
+                        paused = True
+                        luxcore_session. <pause render>
+                    continue
+                else:
+                    if paused:
+                        paused = False
+                        luxcore_session. <resume render>
+                '''
+
                 now = time.time()
-                elapsedTimeSinceLastRefresh = now - lastRefreshTime
+                timeSinceDisplay = now - lastImageDisplay
                 elapsedTimeSinceStart = now - startTime
 
-                if elapsedTimeSinceStart < 5.0 or elapsedTimeSinceLastRefresh > \
-                        scene.camera.data.luxrender_camera.luxrender_film.displayinterval:
-                    # Print some information about the rendering progress
+                # Use user-definde display interval after the first 15 seconds
+                if elapsedTimeSinceStart > 15.0:
+                    display_interval = imagepipeline_settings.displayinterval
 
-                    # Update statistics
-                    lcSession.UpdateStats()
+                # Update statistics
+                luxcore_session.UpdateStats()
+                stats = luxcore_session.GetStats()
+                time_until_update = display_interval - timeSinceDisplay
+                blender_stats = self.CreateBlenderStats(luxcore_config, stats, scene, False, time_until_update, export_errors)
+                self.update_stats('Rendering...', blender_stats)
 
-                    stats = lcSession.GetStats()
-                    done = self.PrintStats(lcConfig, stats)
+                # check if any halt conditions are met
+                done = self.haltConditionMet(scene, stats)
 
-                    blender_stats = self.CreateBlenderStats(lcConfig, stats)
-                    self.update_stats('Rendering...', blender_stats)
-
+                if timeSinceDisplay > display_interval:
                     # Update the image
-                    lcSession.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, imageBufferFloat)
+                    luxcore_session.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, imageBufferFloat)
 
                     # Here we write the pixel values to the RenderResult
                     result = self.begin_result(0, 0, filmWidth, filmHeight)
-                    layer = result.layers[0]
-                    layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight,
-                                                                                           imageBufferFloat)
+                    layer = result.layers[0] if bpy.app.version < (2, 74, 4) else result.layers[0].passes[0]
+
+                    if (scene.luxcore_enginesettings.renderengine_type == 'BIASPATH' and
+                            scene.luxcore_tile_highlighting.use_tile_highlighting):
+                        # Use a temp image because layer.rect does not support list slicing
+                        tempImage = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth,
+                                                                                              filmHeight,
+                                                                                              imageBufferFloat)
+                        # Draw tile outlines
+                        self.draw_tiles(scene, stats, tempImage, filmWidth, filmHeight)
+                        layer.rect = tempImage
+                    else:
+                        layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth,
+                                                                                               filmHeight,
+                                                                                               imageBufferFloat)
                     self.end_result(result)
+                    lastImageDisplay = now
 
-                    lastRefreshTime = now
+            LuxLog('Ending the rendering process...')
+            luxcore_session.Stop()
 
-            channelCalcStartTime = time.time()
-            LuxLog('Importing AOV channels into Blender...')
-            self.update_stats('Importing AOV channels into Blender...', '')
+            # Update the image
+            luxcore_session.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, imageBufferFloat)
+            # write final render result
+            result = self.begin_result(0, 0, filmWidth, filmHeight)
+            layer = result.layers[0] if bpy.app.version < (2, 74, 4) else result.layers[0].passes[0]
+            layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight,
+                                                                                   imageBufferFloat)
 
-            channels = scene.luxrender_channels
+            if scene.luxrender_channels.enable_aovs:
+                if scene.luxrender_channels.saveToDisk:
+                    output_path = efutil.filesystem_path(scene.render.filepath)
+                    self.update_stats('Saving AOV passes to disk', 'Output path: ' + str(output_path))
+                    LuxLog('Saving AOV passes to disk, output path: ' + str(output_path))
+                    luxcore_session.GetFilm().Save()
 
-            if channels.RGB:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RGB', True, pyluxcore.FilmOutputType.RGB,
-                                           'f', 0.0, 3, False, channels.saveToDisk)
-            if channels.RGBA:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RGBA', True,
-                                           pyluxcore.FilmOutputType.RGBA, 'f', 0.0, 4, False, channels.saveToDisk)
-            if channels.RGB_TONEMAPPED:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RGB_TONEMAPPED', False,
-                                           pyluxcore.FilmOutputType.RGB_TONEMAPPED, 'f', 0.0, 3, False,
-                                           channels.saveToDisk)
-            if channels.RGBA_TONEMAPPED:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RGBA_TONEMAPPED', False,
-                                           pyluxcore.FilmOutputType.RGBA_TONEMAPPED, 'f', 0.0, 4, False,
-                                           channels.saveToDisk)
-            if channels.ALPHA:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'ALPHA', False,
-                                           pyluxcore.FilmOutputType.ALPHA, 'f', 0.0, 1, False, channels.saveToDisk)
-            if channels.DEPTH:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'DEPTH', True,
-                                           pyluxcore.FilmOutputType.DEPTH, 'f', 0.0, 1, channels.normalize_DEPTH,
-                                           channels.saveToDisk)
-            if channels.POSITION:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'POSITION', True,
-                                           pyluxcore.FilmOutputType.POSITION, 'f', 0.0, 3, False, channels.saveToDisk)
-            if channels.GEOMETRY_NORMAL:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'GEOMETRY_NORMAL', True,
-                                           pyluxcore.FilmOutputType.GEOMETRY_NORMAL, 'f', 0.0, 3, False,
-                                           channels.saveToDisk)
-            if channels.SHADING_NORMAL:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'SHADING_NORMAL', True,
-                                           pyluxcore.FilmOutputType.SHADING_NORMAL, 'f', 0.0, 3, False,
-                                           channels.saveToDisk)
-            if channels.MATERIAL_ID:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'MATERIAL_ID', False,
-                                           pyluxcore.FilmOutputType.MATERIAL_ID, 'I', 0, 1, False, channels.saveToDisk)
-            if channels.DIRECT_DIFFUSE:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'DIRECT_DIFFUSE', True,
-                                           pyluxcore.FilmOutputType.DIRECT_DIFFUSE, 'f', 0.0, 3,
-                                           channels.normalize_DIRECT_DIFFUSE, channels.saveToDisk)
-            if channels.DIRECT_GLOSSY:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'DIRECT_GLOSSY', True,
-                                           pyluxcore.FilmOutputType.DIRECT_GLOSSY, 'f', 0.0, 3,
-                                           channels.normalize_DIRECT_GLOSSY, channels.saveToDisk)
-            if channels.EMISSION:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'EMISSION', True,
-                                           pyluxcore.FilmOutputType.EMISSION, 'f', 0.0, 3, False, channels.saveToDisk)
-            if channels.INDIRECT_DIFFUSE:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'INDIRECT_DIFFUSE', True,
-                                           pyluxcore.FilmOutputType.INDIRECT_DIFFUSE, 'f', 0.0, 3,
-                                           channels.normalize_INDIRECT_DIFFUSE, channels.saveToDisk)
-            if channels.INDIRECT_GLOSSY:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'INDIRECT_GLOSSY', True,
-                                           pyluxcore.FilmOutputType.INDIRECT_GLOSSY, 'f', 0.0, 3,
-                                           channels.normalize_INDIRECT_GLOSSY, channels.saveToDisk)
-            if channels.INDIRECT_SPECULAR:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'INDIRECT_SPECULAR', True,
-                                           pyluxcore.FilmOutputType.INDIRECT_SPECULAR, 'f', 0.0, 3,
-                                           channels.normalize_INDIRECT_SPECULAR, channels.saveToDisk)
-            if channels.DIRECT_SHADOW_MASK:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'DIRECT_SHADOW_MASK', False,
-                                           pyluxcore.FilmOutputType.DIRECT_SHADOW_MASK, 'f', 0.0, 1, False,
-                                           channels.saveToDisk)
-            if channels.INDIRECT_SHADOW_MASK:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'INDIRECT_SHADOW_MASK', False,
-                                           pyluxcore.FilmOutputType.INDIRECT_SHADOW_MASK, 'f', 0.0, 1, False,
-                                           channels.saveToDisk)
-            if channels.UV:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'UV', True, pyluxcore.FilmOutputType.UV,
-                                           'f', 0.0, 2, False, channels.saveToDisk)
-            if channels.RAYCOUNT:
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'RAYCOUNT', True,
-                                           pyluxcore.FilmOutputType.RAYCOUNT, 'f', 0.0, 1, channels.normalize_RAYCOUNT,
-                                           channels.saveToDisk)
+                if scene.luxrender_channels.import_into_blender:
+                    self.import_aov_channels(scene, luxcore_session, filmWidth, filmHeight, result.layers[0].passes)
 
-            props = lcSession.GetRenderConfig().GetProperties()
-            # Convert all MATERIAL_ID_MASK channels
-            mask_ids = set()
-            for i in props.GetAllUniqueSubNames("film.outputs"):
-                if props.Get(i + ".type").GetString() == "MATERIAL_ID_MASK":
-                    mask_ids.add(props.Get(i + ".id").GetInt())
-
-            for i in range(len(mask_ids)):
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'MATERIAL_ID_MASK', False,
-                                           pyluxcore.FilmOutputType.MATERIAL_ID_MASK, 'f', 0.0, 1, False,
-                                           channels.saveToDisk, i)
-
-            # Convert all BY_MATERIAL_ID channels
-            ids = set()
-            for i in props.GetAllUniqueSubNames("film.outputs"):
-                if props.Get(i + ".type").GetString() == "BY_MATERIAL_ID":
-                    ids.add(props.Get(i + ".id").GetInt())
-
-            for i in range(len(ids)):
-                self.convertChannelToImage(lcSession, filmWidth, filmHeight, 'BY_MATERIAL_ID', True,
-                                           pyluxcore.FilmOutputType.BY_MATERIAL_ID, 'f', 0.0, 3, False,
-                                           channels.saveToDisk, i)
-
-            channelCalcTime = time.time() - channelCalcStartTime
-            LuxLog('AOV conversion took %i seconds' % channelCalcTime)
-
-            lcSession.Stop()
-
-            LuxLog('Done.')
+            self.end_result(result)
+            LuxLog('Done.\n')
         except Exception as exc:
             LuxLog('Rendering aborted: %s' % exc)
+            self.report({'ERROR'}, str(exc))
             import traceback
 
             traceback.print_exc()
+
+    def get_film_size(self, scene):
+        filmWidth, filmHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
+
+        if scene.render.use_border:
+            x_min, x_max, y_min, y_max = [
+                scene.render.border_min_x, scene.render.border_max_x,
+                scene.render.border_min_y, scene.render.border_max_y
+            ]
+
+            filmWidth = int(filmWidth * x_max - filmWidth * x_min)
+            filmHeight = int(filmHeight * y_max - filmHeight * y_min)
+
+        return filmWidth, filmHeight
+
+    def import_aov_channels(self, scene, lcSession, filmWidth, filmHeight, passes):
+        channelCalcStartTime = time.time()
+        channels = scene.luxrender_channels
+
+        if channels.RGB:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'RGB', channels.saveToDisk)
+        if channels.RGBA:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'RGBA', channels.saveToDisk)
+        if channels.RGB_TONEMAPPED:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'RGB_TONEMAPPED', channels.saveToDisk)
+        if channels.RGBA_TONEMAPPED:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'RGBA_TONEMAPPED', channels.saveToDisk)
+        if channels.ALPHA:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'ALPHA', channels.saveToDisk)
+        if channels.DEPTH:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'DEPTH', channels.saveToDisk,
+                                       normalize = channels.normalize_DEPTH)
+        if channels.POSITION:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'POSITION', channels.saveToDisk)
+        if channels.GEOMETRY_NORMAL:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'GEOMETRY_NORMAL', channels.saveToDisk)
+        if channels.SHADING_NORMAL:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'SHADING_NORMAL', channels.saveToDisk)
+        if channels.MATERIAL_ID:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'MATERIAL_ID', channels.saveToDisk)
+        if channels.DIRECT_DIFFUSE:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'DIRECT_DIFFUSE', channels.saveToDisk,
+                                       normalize = channels.normalize_DIRECT_DIFFUSE)
+        if channels.DIRECT_GLOSSY:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'DIRECT_GLOSSY', channels.saveToDisk,
+                                       normalize = channels.normalize_DIRECT_GLOSSY)
+        if channels.EMISSION:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'EMISSION', channels.saveToDisk)
+        if channels.INDIRECT_DIFFUSE:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'INDIRECT_DIFFUSE', channels.saveToDisk,
+                                       normalize = channels.normalize_INDIRECT_DIFFUSE)
+        if channels.INDIRECT_GLOSSY:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'INDIRECT_GLOSSY', channels.saveToDisk,
+                                       normalize = channels.normalize_INDIRECT_GLOSSY)
+        if channels.INDIRECT_SPECULAR:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'INDIRECT_SPECULAR', channels.saveToDisk,
+                                       normalize = channels.normalize_INDIRECT_SPECULAR)
+        if channels.DIRECT_SHADOW_MASK:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'DIRECT_SHADOW_MASK', channels.saveToDisk)
+        if channels.INDIRECT_SHADOW_MASK:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'INDIRECT_SHADOW_MASK', channels.saveToDisk)
+        if channels.UV:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'UV', channels.saveToDisk)
+        if channels.RAYCOUNT:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'RAYCOUNT', channels.saveToDisk,
+                                       normalize = channels.normalize_RAYCOUNT)
+        if channels.IRRADIANCE:
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'IRRADIANCE', channels.saveToDisk)
+
+        props = lcSession.GetRenderConfig().GetProperties()
+        # Convert all MATERIAL_ID_MASK channels
+        mask_ids = set()
+        for i in props.GetAllUniqueSubNames('film.outputs'):
+            if props.Get(i + '.type').GetString() == 'MATERIAL_ID_MASK':
+                mask_ids.add(props.Get(i + '.id').GetInt())
+
+        for i in range(len(mask_ids)):
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'MATERIAL_ID_MASK', channels.saveToDisk, buffer_id = i)
+
+        # Convert all BY_MATERIAL_ID channels
+        ids = set()
+        for i in props.GetAllUniqueSubNames('film.outputs'):
+            if props.Get(i + '.type').GetString() == 'BY_MATERIAL_ID':
+                ids.add(props.Get(i + '.id').GetInt())
+
+        for i in range(len(ids)):
+            self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                       'BY_MATERIAL_ID', channels.saveToDisk, buffer_id = i)
+
+        # Convert all RADIANCE_GROUP channels
+        lightgroup_count = lcSession.GetFilm().GetRadianceGroupCount()
+
+        # don't import the standard lightgroup that contains all lights even if no groups are set
+        if lightgroup_count > 1:
+            for i in range(lightgroup_count):
+                self.convertChannelToImage(lcSession, scene, passes, filmWidth, filmHeight,
+                                           'RADIANCE_GROUP', channels.saveToDisk, buffer_id = i)
+
+        channelCalcTime = time.time() - channelCalcStartTime
+        if channelCalcTime > 0.1:
+            LuxLog('AOV import took %.1f seconds' % channelCalcTime)
+
+    cached_preview_properties = ''
+
+    def determine_preview_settings(self, scene):
+        # Find out what exactly we have to do for material preview, if it's actually texture preview etc.
+        from ..export import materials as export_materials
+
+        # Iterate through the preview scene, finding objects with materials attached
+        objects_mats = {}
+        for obj in [ob for ob in scene.objects if ob.is_visible(scene) and not ob.hide_render]:
+            for mat in export_materials.get_instance_materials(obj):
+                if mat is not None:
+                    if not obj.name in objects_mats.keys():
+                        objects_mats[obj] = []
+                    objects_mats[obj].append(mat)
+
+        preview_type = None  # 'MATERIAL' or 'TEXTURE'
+
+        # find objects that are likely to be the preview objects
+        preview_objects = [o for o in objects_mats.keys() if o.name.startswith('preview')]
+        if len(preview_objects) > 0:
+            preview_type = 'MATERIAL'
+        else:
+            preview_objects = [o for o in objects_mats.keys() if o.name.startswith('texture')]
+            if len(preview_objects) > 0:
+                preview_type = 'TEXTURE'
+
+        if preview_type is None:
+            return
+
+        # Find the materials attached to the likely preview object
+        likely_materials = objects_mats[preview_objects[0]]
+        if len(likely_materials) < 1:
+            print('no preview materials')
+            return
+
+        preview_material = likely_materials[0]
+        preview_texture = None
+
+        if preview_type == 'TEXTURE':
+            preview_texture = preview_material.active_texture
+
+        return preview_type, preview_material, preview_texture, preview_objects[0]
 
     def luxcore_render_preview(self, scene):
         # LuxCore libs
@@ -1287,55 +1744,77 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             LuxLog('ERROR: LuxCore preview rendering requires pyluxcore')
             return
         from ..outputs.luxcore_api import pyluxcore
-        from ..export.luxcore_scene import BlenderSceneConverter
+        from ..export.luxcore.materialpreview import MaterialPreviewExporter
 
         try:
-            xres, yres = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
-
-            # Don't render the tiny images
-            if xres <= 96:
-                raise Exception('Skipping material thumbnail update, image too small (%ix%i)' % (xres, yres))
-
-            # Convert the Blender scene
-            lcConfig = BlenderSceneConverter(scene).Convert()
-            LuxLog('RenderConfig Properties:')
-            LuxLog(str(lcConfig.GetProperties()))
-            LuxLog('Scene Properties:')
-            LuxLog(str(lcConfig.GetScene().GetProperties()))
-
-            lcSession = pyluxcore.RenderSession(lcConfig)
-
-            filmWidth, filmHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
-            imageBufferFloat = array.array('f', [0.0] * (filmWidth * filmHeight * 3))
-
-            # Start the rendering
-            lcSession.Start()
-
-            startTime = time.time()
-            while not self.test_break() and time.time() - startTime < 10.0:
-                time.sleep(0.2)
-
-                # Print some information about the rendering progress
-
-                # Update statistics
-                lcSession.UpdateStats()
-
-                stats = lcSession.GetStats()
-                self.PrintStats(lcConfig, stats)
-
+            def update_result(luxcore_session, imageBufferFloat, filmWidth, filmHeight):
                 # Update the image
-                lcSession.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, imageBufferFloat)
+                luxcore_session.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED, imageBufferFloat)
 
                 # Here we write the pixel values to the RenderResult
                 result = self.begin_result(0, 0, filmWidth, filmHeight)
-                layer = result.layers[0]
+                layer = result.layers[0] if bpy.app.version < (2, 74, 4) else result.layers[0].passes[0]
+
                 layer.rect = pyluxcore.ConvertFilmChannelOutput_3xFloat_To_3xFloatList(filmWidth, filmHeight,
-                                                                                       imageBufferFloat)
+                                                                                   imageBufferFloat)
                 self.end_result(result)
 
-            lcSession.Stop()
+            filmWidth, filmHeight = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
+            is_thumbnail = filmWidth <= 96
 
-            LuxLog('Done.')
+            # don't render thumbnails
+            if is_thumbnail:
+                return
+
+            preview_type, preview_material, preview_texture, preview_object = self.determine_preview_settings(scene)
+
+            if preview_type is None:
+                return
+
+            exporter = MaterialPreviewExporter(scene, self, is_thumbnail, preview_type, preview_material,
+                                               preview_texture, preview_object)
+            luxcore_config = exporter.convert(filmWidth, filmHeight)
+
+            if luxcore_config is None:
+                return
+
+            # Create preview rendersession
+            luxcore_session = pyluxcore.RenderSession(luxcore_config)
+
+            buffer_depth = 4 if is_thumbnail else 3
+            imageBufferFloat = array.array('f', [0.0] * (filmWidth * filmHeight * buffer_depth))
+
+            # Start the rendering
+            thumbnail_info = '(thumbnail)' if is_thumbnail else ''
+            LuxLog('Starting', preview_type, 'preview render', thumbnail_info)
+            startTime = time.time()
+            luxcore_session.Start()
+
+            done = False
+
+            if is_thumbnail or preview_type == 'TEXTURE':
+                while not self.test_break() and not done:
+                    time.sleep(0.02)
+                    luxcore_session.UpdateStats()
+                    stats = luxcore_session.GetStats()
+                    done = (stats.Get('stats.renderengine.convergence').GetFloat() == 1.0 or
+                            stats.Get('stats.renderengine.pass').GetInt() > 10)
+            else:
+                stopTime = 6.0
+
+                while not self.test_break() and time.time() - startTime < stopTime and not done:
+                    time.sleep(0.1)
+                    update_result(luxcore_session, imageBufferFloat, filmWidth, filmHeight)
+
+                    # Update statistics
+                    luxcore_session.UpdateStats()
+                    stats = luxcore_session.GetStats()
+                    done = stats.Get('stats.renderengine.convergence').GetFloat() == 1.0
+
+            update_result(luxcore_session, imageBufferFloat, filmWidth, filmHeight)
+
+            luxcore_session.Stop()
+            LuxLog('Preview render done (%.2fs)' % (time.time() - startTime))
         except Exception as exc:
             LuxLog('Rendering aborted: %s' % exc)
             import traceback
@@ -1346,351 +1825,587 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     # Viewport render
     ############################################################################
 
-    lcConfig = None
-    viewSession = None
-    viewSessionRunning = False
-    viewSessionStartTime = 0.0
+    luxcore_exporter = None
+    viewport_render_active = False
+    viewport_render_paused = False
+    luxcore_session = None
+    critical_errors = False
+
     viewFilmWidth = -1
     viewFilmHeight = -1
     viewImageBufferFloat = None
-    viewMatrix = []
-    viewLens = -1
-    viewCameraZoom = -1
-    viewCameraOffset = []
-    viewCameraShiftX = -1
-    viewCameraShiftY = -1
-    # store renderengine configuration and material definitions of last update
+    # store renderengine configuration of last update
     lastRenderSettings = ''
-    lastMaterialSettings = ''
+    lastVolumeSettings = ''
+    lastHaltTime = -1
+    lastHaltSamples = -1
+    lastCameraSettings = ''
+    lastVisibilitySettings = None
+    update_counter = 0
 
-    def build_viewport_camera(self, lcConfig, context, pyluxcore):
-        view_persp = context.region_data.view_perspective
-        self.viewMatrix = mathutils.Matrix(context.region_data.view_matrix)
-        self.viewLens = context.space_data.lens
-        self.viewCameraZoom = context.region_data.view_camera_zoom
-        self.viewCameraOffset = list(context.region_data.view_camera_offset)
-        self.viewCameraShiftX = context.scene.camera.data.shift_x
-        self.viewCameraShiftY = context.scene.camera.data.shift_y
+    @staticmethod
+    def begin_scene_edit():
+        if RENDERENGINE_luxrender.viewport_render_active:
+            if not RENDERENGINE_luxrender.viewport_render_paused:
+                print('Pausing viewport render')
+                RENDERENGINE_luxrender.viewport_render_paused = True
+                RENDERENGINE_luxrender.luxcore_session.BeginSceneEdit()
 
-        if view_persp != 'ORTHO':
-            zoom = 1.0
-            dx = 0.0
-            dy = 0.0
-            xaspect = 1.0
-            yaspect = 1.0
-            cam_rotation = context.region_data.view_rotation
-            cam_trans = mathutils.Vector((self.viewMatrix[0][3], self.viewMatrix[1][3], self.viewMatrix[2][3]))
-            cam_lookat = list(context.region_data.view_location)
+    @staticmethod
+    def end_scene_edit():
+        if RENDERENGINE_luxrender.viewport_render_active:
+            if RENDERENGINE_luxrender.viewport_render_paused:
+                print('Resuming viewport render')
+                RENDERENGINE_luxrender.viewport_render_paused = False
+                RENDERENGINE_luxrender.luxcore_session.EndSceneEdit()
 
-            rot = mathutils.Matrix(((-self.viewMatrix[0][0], -self.viewMatrix[1][0], -self.viewMatrix[2][0]),
-                                    (-self.viewMatrix[0][1], -self.viewMatrix[1][1], -self.viewMatrix[2][1]),
-                                    (-self.viewMatrix[0][2], -self.viewMatrix[1][2], -self.viewMatrix[2][2])))
+    @staticmethod
+    def start_luxcore_session():
+        if not RENDERENGINE_luxrender.viewport_render_active:
+            print('Starting viewport render')
+            RENDERENGINE_luxrender.luxcore_session.Start()
+            RENDERENGINE_luxrender.viewport_render_active = True
 
-            cam_origin = list(rot * cam_trans)
-            cam_fov = 2 * math.atan(0.5 * 32.0 / self.viewLens)
-            cam_up = list(rot * mathutils.Vector((0, -1, 0)))
+    @staticmethod
+    def stop_luxcore_session():
+        if RENDERENGINE_luxrender.viewport_render_active:
+            print('Stopping viewport render')
+            RENDERENGINE_luxrender.end_scene_edit()
+            RENDERENGINE_luxrender.viewport_render_active = False
 
-            if self.viewFilmWidth > self.viewFilmHeight:
-                xaspect = 1.0
-                yaspect = self.viewFilmHeight / self.viewFilmWidth
-            else:
-                xaspect = self.viewFilmWidth / self.viewFilmHeight
-                yaspect = 1.0
+            RENDERENGINE_luxrender.luxcore_session.Stop()
+            RENDERENGINE_luxrender.luxcore_session = None
 
-            if view_persp == 'CAMERA':
-                blcamera = context.scene.camera
-                #magic zoom formula for camera viewport zoom from blender source
-                zoom = self.viewCameraZoom
-                zoom = (1.41421 + zoom / 50.0)
-                zoom *= zoom
-                zoom = 2.0 / zoom
-
-                #camera plane offset in camera viewport
-                dx = 2.0 * (self.viewCameraShiftX + self.viewCameraOffset[0] * xaspect * 2.0)
-                dy = 2.0 * (self.viewCameraShiftY + self.viewCameraOffset[1] * yaspect * 2.0)
-
-                cam_fov = blcamera.data.angle
-                luxCamera = context.scene.camera.data.luxrender_camera
-
-                lookat = luxCamera.lookAt(blcamera)
-                cam_origin = list(lookat[0:3])
-                cam_lookat = list(lookat[3:6])
-                cam_up = list(lookat[6:9])
-
-            zoom *= 2.0
-
-            scr_left = -xaspect * zoom
-            scr_right = xaspect * zoom
-            scr_bottom = -yaspect * zoom
-            scr_top = yaspect * zoom
-
-            screenwindow = [scr_left + dx, scr_right + dx, scr_bottom + dy, scr_top + dy]
-
-            scene = lcConfig.GetScene()
-            scene.Parse(pyluxcore.Properties().
-                        Set(pyluxcore.Property('scene.camera.lookat.target', cam_lookat)).
-                        Set(pyluxcore.Property('scene.camera.lookat.orig', cam_origin)).
-                        Set(pyluxcore.Property('scene.camera.up', cam_up)).
-                        Set(pyluxcore.Property('scene.camera.screenwindow', screenwindow)).
-                        Set(pyluxcore.Property('scene.camera.fieldofview', math.degrees(cam_fov)))
-            )
-	
-    def luxcore_view_update(self, context, updateCamera=False):
-        # LuxCore libs
-        if not PYLUXCORE_AVAILABLE:
-            LuxLog('ERROR: LuxCore real-time rendering requires pyluxcore')
-            return
-            
-        if context.scene.luxrender_engine.preview_stop:
-            return
-            
-        # get update starttime in milliseconds
-        view_update_startTime = int(round(time.time() * 1000))
-        
-        from ..outputs.luxcore_api import pyluxcore
-        from ..export.luxcore_scene import BlenderSceneConverter
-        
-        if (self.viewFilmWidth == -1) or (self.viewFilmHeight == -1):
-            self.viewFilmWidth = context.region.width
-            self.viewFilmHeight = context.region.height
-            self.viewImageBufferFloat = array.array('f', [0.0] * (self.viewFilmWidth * self.viewFilmHeight * 3))
-        
-        # check for config
-        if self.lcConfig is None:
-            LuxManager.SetCurrentScene(context.scene)
-
-            # Convert the Blender scene
-            self.lcConfig = BlenderSceneConverter(context.scene).Convert(
-                imageWidth=self.viewFilmWidth,
-                imageHeight=self.viewFilmHeight)
-                
-        # check for session
-        if self.viewSession is None:
-            self.build_viewport_camera(self.lcConfig, context, pyluxcore)
     
-            self.viewSession = pyluxcore.RenderSession(self.lcConfig)
-            
-            try:
-                self.viewSession.Start()
-            except Exception as exc:
-                LuxLog('View update aborted: %s' % exc)
-                
-                self.lcConfig = None
-                self.viewSession = None
-                
-                import traceback
-                traceback.print_exc()
-                
-            self.viewSessionStartTime = time.time()
-            self.viewSessionRunning = True
-        
-        ########################################################################
-        # Dynamic updates
-        ########################################################################
-        
-        update_everything = True
-        
-        # only preview region size or camera position has changed
-        if updateCamera:
-            LuxLog("Dynamic updates: updating preview camera")
-        
-            self.viewFilmWidth = context.region.width
-            self.viewFilmHeight = context.region.height
-            self.viewImageBufferFloat = array.array('f', [0.0] * (self.viewFilmWidth * self.viewFilmHeight * 3))
-            
-            # Stop the rendering
-            if self.viewSessionRunning:
-                self.viewSession.Stop()
-                self.viewSessionRunning = False
-            self.viewSession = None
-
-            # Set the new size
-            self.lcConfig.Parse(pyluxcore.Properties().
-	            Set(pyluxcore.Property("film.width", [self.viewFilmWidth])).
-	            Set(pyluxcore.Property("film.height", [self.viewFilmHeight])))
-
-            # adjust the camera
-            self.build_viewport_camera(self.lcConfig, context, pyluxcore)
-            
-            # Re-start the rendering
-            self.viewSession = pyluxcore.RenderSession(self.lcConfig)
-            self.viewSession.Start()
-            self.viewSessionStartTime = time.time()
-            self.viewSessionRunning = True
-            
-            # when the preview region size is changed, nothing else can change
-            # report time it took to update
-            view_update_time = int(round(time.time() * 1000)) - view_update_startTime
-            LuxLog("Dynamic updates: update took %dms" % view_update_time)
-            return
-        
-        # check objects for updates
-        if bpy.data.objects.is_updated:
-            for ob in bpy.data.objects:
-                if ob == None:
-                    continue
-                    
-                if ob.is_updated_data:
-                    LuxLog("Dynamic updates: updating data of object %s" % ob.name)
-                    # missing
-                    # note: currently one of the few cases triggering the fallback
-                    # (by leaving update_everything set to True)
-                    
-                if ob.is_updated:
-                    update_everything = False
-                    
-                    if ob.name == context.scene.camera.name:
-                        LuxLog('Dynamic updates: updating camera: %s' % ob.name)
-                        self.viewSession.BeginSceneEdit()
-                        self.build_viewport_camera(self.lcConfig, context, pyluxcore)
-                        self.viewSession.EndSceneEdit()
-                    else:
-                        LuxLog("Dynamic updates: updating object: %s" % ob.name)
-                        
-                        self.viewSession.BeginSceneEdit()
-                        converter = BlenderSceneConverter(context.scene, self.viewSession)
-                        converter.ConvertObject(ob)
-                        
-                        lcScene = self.lcConfig.GetScene()
-                        lcScene.Parse(converter.scnProps)
-                        
-                        self.viewSession.EndSceneEdit()
-        else:
-            LuxLog('Dynamic updates: no objects changed, checking materials and config')
-            
-            # check for changes in materials
-            # for now, just update all materials
-            matConverter = BlenderSceneConverter(context.scene)
-            
-            for material in bpy.data.materials:
-                matConverter.ConvertMaterial(material, bpy.data.materials)
-            
-            # prevent triggering a useless material update on startup
-            if self.lastMaterialSettings == '':
-                self.lastMaterialSettings = str(matConverter.scnProps)
-            elif self.lastMaterialSettings != str(matConverter.scnProps):
-                # material settings have changed, update them
-                LuxLog("Dynamic updates: updating all materials")
-                
-                self.viewSession.BeginSceneEdit()
-                scene = self.lcConfig.GetScene()
-                scene.Parse(pyluxcore.Properties().Set(matConverter.scnProps))
-                self.viewSession.EndSceneEdit()
-                
-                # save settings to compare with next update
-                self.lastMaterialSettings = str(matConverter.scnProps)
-                update_everything = False
-            BlenderSceneConverter.clear()
-                
-            # check for changes in renderengine configuration
-            # for now, just update whole renderengine configuration
-            engineConverter = BlenderSceneConverter(context.scene)
-            engineConverter.ConvertConfig()
-            
-            # prevent triggering a useless renderconfig update on startup
-            if self.lastRenderSettings == '':
-                self.lastRenderSettings = str(engineConverter.cfgProps)
-            elif self.lastRenderSettings != str(engineConverter.cfgProps):
-                # renderengine config has changed, update it
-                LuxLog("Dynamic updates: updating renderengine configuration")
-                
-                # Stop the rendering
-                if self.viewSessionRunning:
-                    self.viewSession.Stop()
-                    self.viewSessionRunning = False
-                self.viewSession = None
-    
-                # Set the new renderengine configuration
-                self.lcConfig.Parse(pyluxcore.Properties().Set(engineConverter.cfgProps))
-            
-                # Re-start the rendering
-                self.viewSession = pyluxcore.RenderSession(self.lcConfig)
-                
-                try:
-                    self.viewSession.Start()
-                except Exception as exc:
-                    LuxLog('View update aborted: %s' % exc)
-                
-                    self.lcConfig = None
-                    self.viewSession = None
-                
-                    import traceback
-                    traceback.print_exc()
-                
-                self.viewSessionStartTime = time.time()
-                self.viewSessionRunning = True
-                
-                # save settings to compare with next update
-                self.lastRenderSettings = str(engineConverter.cfgProps)
-                update_everything = False
-            
-            #if context.active_object.name == context.scene.camera.name:
-            #    update_everything = False
-                        
-        ########################################################################
-        # Fallback: if scene modification is unknown, update whole scene
-        ########################################################################
-        
-        if update_everything:
-            LuxLog('Dynamic updates: fallback, re-exporting whole scene')
-            LuxManager.SetCurrentScene(context.scene)
-
-            # Convert the Blender scene
-            self.lcConfig = BlenderSceneConverter(context.scene).Convert(
-                imageWidth=self.viewFilmWidth,
-                imageHeight=self.viewFilmHeight)
-                
-            if self.viewSessionRunning:
-                self.viewSession.Stop()
-                self.viewSessionRunning = False
-            self.viewSession = None
-            
-            self.build_viewport_camera(self.lcConfig, context, pyluxcore)
-        
-            self.viewSession = pyluxcore.RenderSession(self.lcConfig)
-            self.viewSession.Start()
-            self.viewSessionStartTime = time.time()
-            self.viewSessionRunning = True
-            
-        # report time it took to update
-        view_update_time = int(round(time.time() * 1000)) - view_update_startTime
-        LuxLog("Dynamic updates: update took %dms" % view_update_time)
-
     def luxcore_view_draw(self, context):
+        if self.critical_errors:
+            return
+
         # LuxCore libs
         if not PYLUXCORE_AVAILABLE:
             LuxLog('ERROR: LuxCore real-time rendering requires pyluxcore')
             return
-        from ..outputs.luxcore_api import pyluxcore
+
+        stop_redraw = False
 
         # Check if the size of the window is changed
-        if (self.viewFilmWidth != context.region.width) or (self.viewFilmHeight != context.region.height) or (
-            self.viewMatrix != context.region_data.view_matrix) or (self.viewLens != context.space_data.lens) or (
-            self.viewCameraOffset[0] != context.region_data.view_camera_offset[0]) or (
-            self.viewCameraOffset[1] != context.region_data.view_camera_offset[1]) or (
-            self.viewCameraZoom != context.region_data.view_camera_zoom):
-            self.luxcore_view_update(context, updateCamera=True)
+        if (self.viewFilmWidth != context.region.width) or (
+                self.viewFilmHeight != context.region.height):
+            update_changes = UpdateChanges()
+            update_changes.set_cause(config = True)
+            self.luxcore_view_update(context, update_changes)
+
+        # check if camera settings have changed
+        self.luxcore_exporter.convert_camera()
+        newCameraSettings = str(self.luxcore_exporter.camera_exporter.properties)
+
+        if self.lastCameraSettings == '':
+            self.lastCameraSettings = newCameraSettings
+        elif self.lastCameraSettings != newCameraSettings:
+            update_changes = UpdateChanges()
+            update_changes.set_cause(camera = True)
+            self.lastCameraSettings = newCameraSettings
+            self.luxcore_view_update(context, update_changes)
 
         # Update statistics
-        if self.viewSessionRunning:
-            self.viewSession.UpdateStats()
+        if RENDERENGINE_luxrender.viewport_render_active:
+            RENDERENGINE_luxrender.luxcore_session.UpdateStats()
+            stats = RENDERENGINE_luxrender.luxcore_session.GetStats()
 
-            stats = self.viewSession.GetStats()
-            #self.PrintStats(self.viewSession.GetRenderConfig(), stats)
-                    
-            blender_stats = self.CreateBlenderStats(self.lcConfig, stats)
-            self.update_stats('Rendering...', blender_stats)
+            stop_redraw = (context.scene.luxrender_engine.preview_stop or
+                    self.haltConditionMet(context.scene, stats, realtime_preview = True))
+
+            # update statistic display in Blender
+            luxcore_config = RENDERENGINE_luxrender.luxcore_session.GetRenderConfig()
+            blender_stats = self.CreateBlenderStats(luxcore_config,
+                                                    stats,
+                                                    context.scene,
+                                                    realtime_preview = True)
+            if stop_redraw:
+                self.update_stats('Paused', blender_stats)
+            else:
+                self.update_stats('Rendering', blender_stats)
 
             # Update the image buffer
-            self.viewSession.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED,
+            RENDERENGINE_luxrender.luxcore_session.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED,
                                                       self.viewImageBufferFloat)
 
         # Update the screen
-        glBuffer = bgl.Buffer(bgl.GL_FLOAT, [self.viewFilmWidth * self.viewFilmHeight * 3], self.viewImageBufferFloat)
+        bufferSize = self.viewFilmWidth * self.viewFilmHeight * 3
+        glBuffer = bgl.Buffer(bgl.GL_FLOAT, [bufferSize], self.viewImageBufferFloat)
         bgl.glRasterPos2i(0, 0)
         bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, bgl.GL_RGB, bgl.GL_FLOAT, glBuffer)
 
-        if not context.scene.luxrender_engine.preview_stop:
+        if stop_redraw:
+            # Pause rendering
+            RENDERENGINE_luxrender.begin_scene_edit()
+        else:
             # Trigger another update
-            nextRefreshTime = 0.2 if time.time() - self.viewSessionStartTime < 5.0 else 2.0
-            threading.Timer(nextRefreshTime, self.tag_redraw).start()
+            self.tag_redraw()
+
+    def find_update_changes(self, context):
+        """
+        Find out what triggered the update (default: unknown)
+        """
+        update_changes = UpdateChanges()
+
+        try:
+            # check if visibility of objects was changed
+            if self.lastVisibilitySettings is None:
+                self.lastVisibilitySettings = set(context.visible_objects)
+            else:
+                objectsToAdd = set(context.visible_objects) - self.lastVisibilitySettings
+                objectsToRemove = self.lastVisibilitySettings - set(context.visible_objects)
+
+                if len(objectsToAdd) > 0:
+                    update_changes.set_cause(mesh = True)
+                    update_changes.changed_objects_mesh.update(objectsToAdd)
+
+                if len(objectsToRemove) > 0:
+                    update_changes.set_cause(objectsRemoved = True)
+                    update_changes.removed_objects.update(objectsToRemove)
+
+            self.lastVisibilitySettings = set(context.visible_objects)
+
+            if (not RENDERENGINE_luxrender.viewport_render_active or
+                    RENDERENGINE_luxrender.luxcore_session is None or
+                    self.luxcore_exporter is None):
+                update_changes.set_cause(startViewportRender = True)
+
+                # LuxCoreExporter instance for viewport rendering is only created here
+                self.luxcore_exporter = LuxCoreExporter(context.scene, self, True, context)
+
+            # check if filmsize has changed
+            if (self.viewFilmWidth == -1) or (self.viewFilmHeight == -1) or (
+                    self.viewFilmWidth != context.region.width) or (
+                    self.viewFilmHeight != context.region.height):
+                update_changes.set_cause(config = True)
+
+            if bpy.data.objects.is_updated:
+                # check objects for updates
+                for ob in bpy.data.objects:
+                    if ob == None:
+                        continue
+
+                    if ob.is_updated_data:
+                        if ob.type in ['MESH', 'CURVE', 'SURFACE', 'META', 'FONT']:
+                            update_changes.set_cause(mesh = True)
+                            update_changes.changed_objects_mesh.add(ob)
+                        elif ob.type in ['LAMP']:
+                            update_changes.set_cause(light = True)
+                            update_changes.changed_objects_transform.add(ob)
+                        elif ob.type in ['CAMERA'] and ob.name == context.scene.camera.name:
+                            update_changes.set_cause(camera = True, config = True)
+
+                    if ob.is_updated:
+                        if ob.type in ['MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'EMPTY']:
+                            # check if a new material was assigned
+                            if ob.data is not None and ob.data.is_updated:
+                                update_changes.set_cause(mesh = True)
+                                update_changes.changed_objects_mesh.add(ob)
+                            else:
+                                update_changes.set_cause(objectTransform = True)
+                                update_changes.changed_objects_transform.add(ob)
+                        elif ob.type in ['LAMP']:
+                            update_changes.set_cause(light = True)
+                            update_changes.changed_objects_transform.add(ob)
+                        elif ob.type in ['CAMERA'] and ob.name == context.scene.camera.name:
+                            update_changes.set_cause(camera = True)
+
+            if bpy.data.materials.is_updated:
+                for mat in bpy.data.materials:
+                    if mat.is_updated:
+                        # only update this material
+                        update_changes.changed_materials.add(mat)
+                        update_changes.set_cause(materials = True)
+
+            if bpy.data.textures.is_updated:
+                for tex in bpy.data.textures:
+                    if tex.is_updated:
+                        for mat in tex.users_material:
+                            update_changes.changed_materials.add(mat)
+                            update_changes.set_cause(materials = True)
+
+            self.luxcore_exporter.convert_camera()
+            newCameraSettings = str(self.luxcore_exporter.pop_updated_scene_properties())
+
+            if self.lastCameraSettings == '':
+                self.lastCameraSettings = newCameraSettings
+            elif self.lastCameraSettings != newCameraSettings:
+                update_changes.set_cause(camera = True)
+                self.lastCameraSettings = newCameraSettings
+
+            # check for changes in volume configuration
+            for volume in context.scene.luxrender_volumes.volumes:
+                self.luxcore_exporter.convert_volume(volume)
+
+            newVolumeSettings = str(self.luxcore_exporter.pop_updated_scene_properties())
+
+            if self.lastVolumeSettings == '':
+                self.lastVolumeSettings = newVolumeSettings
+            elif self.lastVolumeSettings != newVolumeSettings:
+                update_changes.set_cause(volumes = True)
+                self.lastVolumeSettings = newVolumeSettings
+
+            # check for changes in halt conditions
+            newHaltTime = context.scene.luxcore_enginesettings.halt_time_preview
+            newHaltSamples = context.scene.luxcore_enginesettings.halt_samples_preview
+
+            if self.lastHaltTime != -1 and self.lastHaltSamples != -1:
+                if newHaltTime > self.lastHaltTime or newHaltSamples > self.lastHaltSamples:
+                    update_changes.set_cause(haltconditions = True)
+
+            self.lastHaltTime = newHaltTime
+            self.lastHaltSamples = newHaltSamples
+
+            self.luxcore_exporter.convert_config(self.viewFilmWidth, self.viewFilmHeight)
+            newRenderSettings = str(self.luxcore_exporter.config_exporter.properties)
+
+            if self.lastRenderSettings == '':
+                self.lastRenderSettings = newRenderSettings
+            elif self.lastRenderSettings != newRenderSettings:
+                # renderengine config has changed
+                update_changes.set_cause(config = True)
+                # save settings to compare with next update
+                self.lastRenderSettings = newRenderSettings
+        except Exception as exc:
+            LuxLog('Update check failed: %s' % exc)
+            self.report({'ERROR'}, str(exc))
+            import traceback
+            traceback.print_exc()
+
+        return update_changes
+    
+    def luxcore_view_update(self, context, update_changes = None):
+        # LuxCore libs
+        if not PYLUXCORE_AVAILABLE:
+            LuxLog('ERROR: LuxCore real-time rendering requires pyluxcore')
+            return
+
+        if self.test_break() or context.scene.luxrender_engine.preview_stop:
+            print("stopping view update")
+            return
+
+        print('\n###########################################################')
+
+        # get update starttime in milliseconds
+        view_update_startTime = int(round(time.time() * 1000))
+        # debug
+        self.update_counter += 1
+        print('Viewport Update', self.update_counter)
+
+        ##########################################################################
+        #                        Dynamic Updates
+        ##########################################################################
+
+        # check which changes took place
+        if update_changes is None:
+            update_changes = self.find_update_changes(context)
+
+        update_changes.print_updates()
+
+        if update_changes.cause_unknown:
+            print('Update cause unknown, skipping update', self.update_counter)
+
+        elif update_changes.cause_haltconditions:
+            pass
+
+        elif update_changes.cause_startViewportRender:
+            try:
+                RENDERENGINE_luxrender.stop_luxcore_session()
+
+                self.lastRenderSettings = ''
+                self.lastVolumeSettings = ''
+                self.lastHaltTime = -1
+                self.lastHaltSamples = -1
+                self.lastCameraSettings = ''
+                self.lastVisibilitySettings = None
+                self.update_counter = 0
+
+                LuxManager.SetCurrentScene(context.scene)
+
+                self.viewFilmWidth = context.region.width
+                self.viewFilmHeight = context.region.height
+                self.viewImageBufferFloat = array.array('f', [0.0] * (self.viewFilmWidth * self.viewFilmHeight * 3))
+
+                # Export the Blender scene
+                luxcore_config = self.luxcore_exporter.convert(self.viewFilmWidth, self.viewFilmHeight)
+                if luxcore_config is None:
+                    LuxLog('ERROR: not a valid luxcore config')
+                    return
+
+                RENDERENGINE_luxrender.luxcore_session = pyluxcore.RenderSession(luxcore_config)
+                RENDERENGINE_luxrender.start_luxcore_session()
+                self.critical_errors = False
+            except Exception as exc:
+                # This flag is used to prevent the luxcore_draw() function from crashing Blender
+                self.critical_errors = True
+
+                LuxLog('View update aborted: %s' % exc)
+
+                message = str(exc)
+                if message == 'An empty DataSet can not be preprocessed':
+                    # more user-friendly error message
+                    message = 'The scene does not contain any meshes'
+
+                # Show error message to user in the viewport UI
+                self.update_stats('Error: ', message)
+
+                import traceback
+                traceback.print_exc()
+        else:
+            # config update
+            if update_changes.cause_config:
+                LuxLog('Configuration update')
+
+                self.viewFilmWidth = context.region.width
+                self.viewFilmHeight = context.region.height
+                self.viewImageBufferFloat = array.array('f', [0.0] * (self.viewFilmWidth * self.viewFilmHeight * 3))
+
+                luxcore_config = RENDERENGINE_luxrender.luxcore_session.GetRenderConfig()
+                RENDERENGINE_luxrender.stop_luxcore_session()
+
+                self.luxcore_exporter.convert_config(self.viewFilmWidth, self.viewFilmHeight)
+
+                # change config
+                luxcore_config.Parse(self.luxcore_exporter.config_properties)
+                if luxcore_config is None:
+                    LuxLog('ERROR: not a valid luxcore config')
+                    return
+
+                RENDERENGINE_luxrender.luxcore_session = pyluxcore.RenderSession(luxcore_config)
+                RENDERENGINE_luxrender.start_luxcore_session()
+
+            # begin sceneEdit
+            luxcore_scene = RENDERENGINE_luxrender.luxcore_session.GetRenderConfig().GetScene()
+            RENDERENGINE_luxrender.begin_scene_edit()
+
+            if update_changes.cause_camera:
+                LuxLog('Camera update')
+                self.luxcore_exporter.convert_camera()
+
+            if update_changes.cause_materials:
+                LuxLog('Materials update')
+                for material in update_changes.changed_materials:
+                    self.luxcore_exporter.convert_material(material)
+
+            if update_changes.cause_mesh:
+                for ob in update_changes.changed_objects_mesh:
+                    LuxLog('Mesh update: ' + ob.name)
+                    self.luxcore_exporter.convert_object(ob, luxcore_scene, update_mesh=True, update_material=False)
+
+            if update_changes.cause_light or update_changes.cause_objectTransform:
+                for ob in update_changes.changed_objects_transform:
+                    LuxLog('Transformation update: ' + ob.name)
+
+                    self.luxcore_exporter.convert_object(ob, luxcore_scene, update_mesh=False, update_material=False)
+
+            if update_changes.cause_objectsRemoved:
+                from ..export.luxcore.utils import get_elem_key
+
+                for ob in update_changes.removed_objects:
+                    key = get_elem_key(ob)
+
+                    if ob.type == 'LAMP':
+                        if key in self.luxcore_exporter.light_cache:
+                            # In case of sunsky there might be multiple light sources, loop through them
+                            for exported_light in self.luxcore_exporter.light_cache[key].exported_lights:
+                                luxcore_name = exported_light.luxcore_name
+
+                                if exported_light.type == 'AREA':
+                                    # Area lights are meshlights and treated like objects with glowing materials
+                                    luxcore_scene.DeleteObject(luxcore_name)
+                                else:
+                                    luxcore_scene.DeleteLight(luxcore_name)
+                    else:
+                        if key in self.luxcore_exporter.object_cache:
+                            # loop through object components (split by materials)
+                            for exported_object in self.luxcore_exporter.object_cache[key].exported_objects:
+                                luxcore_name = exported_object.luxcore_object_name
+                                luxcore_scene.DeleteObject(luxcore_name)
+
+                '''
+                def remove_object(ob, exported_object):
+                    # loop through object components (split by materials)
+                    for exported_object_data in exported_object.luxcore_data:
+                        luxcore_name = exported_object_data.lcObjName
+                        light_type = exported_object_data.lightType
+
+                        if ob.type == 'LAMP' and light_type != 'AREA':
+                            print('removing light %s (luxcore name: %s)' % (ob.name, luxcore_name))
+                            luxcore_scene.DeleteLight(luxcore_name)
+                        else:
+                            print('removing object %s (luxcore name: %s)' % (ob.name, luxcore_name))
+                            luxcore_scene.DeleteObject(luxcore_name)
+
+                cache = converter.get_export_cache()
+
+                for ob in update_changes.removed_objects:
+                    if cache.has(ob):
+                        exported_object = cache.get_exported_object(ob)
+                        remove_object(ob, exported_object)
+
+                # Remove particles/duplis
+                for ob in update_changes.removed_objects:
+                    # Dupliverts/frames/groups etc.
+                    if ob.is_duplicator and len(ob.particle_systems) == 0:
+                        ob.dupli_list_create(context.scene, settings = 'VIEWPORT')
+
+                        for dupli_ob in ob.dupli_list:
+                            dupli_key = (dupli_ob.object, ob)
+
+                            if cache.has(dupli_key):
+                                exported_object = cache.get_exported_object(dupli_key)
+                                remove_object(ob, exported_object)
+
+                        ob.dupli_list_clear()
+
+                    # Particle systems
+                    elif len(ob.particle_systems) > 0:
+                        for psys in ob.particle_systems:
+                            ob.dupli_list_create(context.scene, settings = 'VIEWPORT')
+
+                            if len(ob.dupli_list) > 0:
+                                dupli_ob = ob.dupli_list[0]
+                                dupli_key = (dupli_ob.object, psys)
+
+                                if cache.has(dupli_key):
+                                    exported_object_list = cache.get_exported_object(dupli_key)
+
+                                    for exported_object in exported_object_list:
+                                        remove_object(ob, exported_object)
+
+                            ob.dupli_list_clear()
+                '''
+
+            if update_changes.cause_volumes:
+                for volume in context.scene.luxrender_volumes.volumes:
+                    self.luxcore_exporter.convert_volume(volume)
+
+            updated_properties = self.luxcore_exporter.pop_updated_scene_properties()
+
+            # Debug output
+            print('Updated scene properties:')
+            print(updated_properties, '\n')
+
+            # parse scene changes and end sceneEdit
+            luxcore_scene.Parse(updated_properties)
+
+            RENDERENGINE_luxrender.end_scene_edit()
+
+        # report time it took to update
+        view_update_time = int(round(time.time() * 1000)) - view_update_startTime
+        LuxLog('Dynamic updates: update took %dms' % view_update_time)
+            
+class UpdateChanges(object):
+    def __init__(self):
+        self.changed_objects_transform = set()
+        self.changed_objects_mesh = set()
+        self.changed_materials = set()
+        self.removed_objects = set()
+        
+        self.cause_unknown = True
+        self.cause_startViewportRender = False
+        self.cause_mesh = False
+        self.cause_light = False
+        self.cause_camera = False
+        self.cause_objectTransform = False
+        self.cause_layers = False
+        self.cause_materials = False
+        self.cause_config = False
+        self.cause_objectsRemoved = False
+        self.cause_volumes = False
+        self.cause_haltconditions = False
+        
+    def set_cause(self,
+                  startViewportRender = None, 
+                  mesh = None, 
+                  light = None, 
+                  camera = None, 
+                  objectTransform = None, 
+                  layers = None,
+                  materials = None, 
+                  config = None,
+                  objectsRemoved = None,
+                  volumes = None,
+                  haltconditions = None):
+        # automatically switch off unkown
+        self.cause_unknown = False
+        
+        if startViewportRender is not None:
+            self.cause_startViewportRender = startViewportRender 
+        if mesh is not None:
+            self.cause_mesh = mesh 
+        if light is not None:
+            self.cause_light = light 
+        if camera is not None:
+            self.cause_camera = camera 
+        if objectTransform is not None:
+            self.cause_objectTransform = objectTransform 
+        if layers is not None:
+            self.cause_layers = layers
+        if materials is not None:
+            self.cause_materials = materials 
+        if config is not None:
+            self.cause_config = config 
+        if objectsRemoved is not None:
+            self.cause_objectsRemoved = objectsRemoved
+        if volumes is not None:
+            self.cause_volumes = volumes
+        if haltconditions is not None:
+            self.cause_haltconditions = haltconditions
+            
+    def print_updates(self):
+        print('===== Realtime update information: =====')
+
+        if self.cause_unknown:
+            print('cause unknown')
+        if self.cause_startViewportRender:
+            print('realtime preview was started')
+        if self.cause_mesh:
+            print('object meshes were updated:')
+            for obj in self.changed_objects_mesh:
+                print('    ' + obj.name)
+        if self.cause_light:
+            print('light update')
+        if self.cause_camera:
+            print('camera update')
+        if self.cause_objectTransform:
+            print('objects where transformed:')
+            for obj in self.changed_objects_transform:
+                print('    ' + obj.name)
+        if self.cause_layers:
+            print('layer visibility was changed')
+        if self.cause_materials:
+            print('materials where changed:')
+            for mat in self.changed_materials:
+                print('    ' + mat.name)
+        if self.cause_config:
+            print('configuration was changed')
+        if self.cause_objectsRemoved:
+            print('objects where removed:')
+            for obj in self.removed_objects:
+                print('    ' + obj.name)
+        if self.cause_volumes:
+            print('volumes changed')
+        if self.cause_haltconditions:
+            print('halt conditions changed')
+
+        print('========================================')
+
+
+@persistent
+def stop_viewport_render(context):
+    # Check if there should be an active viewport rendering session
+    if bpy.context.screen:
+        for area in bpy.context.screen.areas:
+            if area.type == 'VIEW_3D':
+                for space in area.spaces:
+                    if space.type == 'VIEW_3D' and space.viewport_shade == 'RENDERED':
+                        return
+
+    # No viewport in "RENDERED" mode found, stop running rendersessions
+    RENDERENGINE_luxrender.stop_luxcore_session()
+
+
+bpy.app.handlers.scene_update_post.append(stop_viewport_render)
