@@ -1845,6 +1845,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     lastVisibilitySettings = None
     update_counter = 0
 
+    timer = None
+
     @staticmethod
     def begin_scene_edit():
         if RENDERENGINE_luxrender.viewport_render_active:
@@ -1990,6 +1992,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             print('draw took %.3fs' % (time.time() - start))
 
         if stop_redraw:
+            self.timer.join()
             # Pause rendering
             RENDERENGINE_luxrender.begin_scene_edit()
         else:
@@ -1998,9 +2001,14 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 # Redraw immediately
                 self.tag_redraw()
             else:
+                # Join the old timer to prevent Blender crash
+                if self.timer:
+                    self.timer.join()
+
                 # Use a longer refresh interval so the Blender interface stays fluid
                 next_refresh_time = 2
-                threading.Timer(next_refresh_time, self.tag_redraw).start()
+                self.timer = threading.Timer(next_refresh_time, self.tag_redraw)
+                self.timer.start()
 
     def find_update_changes(self, context):
         """
