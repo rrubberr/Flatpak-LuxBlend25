@@ -1832,7 +1832,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     critical_errors = False
 
     reduced_filmsize_start_time = -1
-    reduced_filmsize_enabled = True
+    reduced_filmsize_enabled = False
     viewFilmWidth = -1
     viewFilmHeight = -1
     viewImageBufferFloat = None
@@ -1882,7 +1882,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
 
     def is_reduced_filmsize(self, orig_width, orig_height):
-        return (time.time() - self.reduced_filmsize_start_time < 1.0) and (max(orig_width, orig_height) > 400)
+        return (time.time() - self.reduced_filmsize_start_time < 1.0) and (max(orig_width, orig_height) > 600)
 
     def calc_viewport_filmsize(self, context):
         if self.is_reduced_filmsize(context.region.width, context.region.height):
@@ -1982,22 +1982,21 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             else:
                 self.update_stats('Rendering', blender_stats)
 
-            start = time.time()
             # Update the image buffer
             RENDERENGINE_luxrender.luxcore_session.GetFilm().GetOutputFloat(pyluxcore.FilmOutputType.RGB_TONEMAPPED,
                                                       self.viewImageBufferFloat)
-
             # Update the screen
             self.draw_screen(context)
-            print('draw took %.3fs' % (time.time() - start))
 
         if stop_redraw:
-            self.timer.join()
+            if self.timer:
+                self.timer.join()
             # Pause rendering
             RENDERENGINE_luxrender.begin_scene_edit()
         else:
             # Trigger another update
-            if self.reduced_filmsize_enabled:
+            # TODO: disable "True"
+            if True or self.reduced_filmsize_enabled or (time.time() - self.reduced_filmsize_start_time < 1):
                 # Redraw immediately
                 self.tag_redraw()
             else:
@@ -2006,7 +2005,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     self.timer.join()
 
                 # Use a longer refresh interval so the Blender interface stays fluid
-                next_refresh_time = 2
+                next_refresh_time = 2 # TODO: debug why this hangs Blender sometimes
                 self.timer = threading.Timer(next_refresh_time, self.tag_redraw)
                 self.timer.start()
 
@@ -2311,7 +2310,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         LuxLog('Dynamic updates: update took %dms' % view_update_time)
 
         self.reduced_filmsize_start_time = time.time()
-        self.reduced_filmsize_enabled = True
+        if self.is_reduced_filmsize(context.region.width, context.region.height):
+            self.reduced_filmsize_enabled = True
             
 class UpdateChanges(object):
     def __init__(self):
