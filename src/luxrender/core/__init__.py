@@ -1845,7 +1845,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     lastVisibilitySettings = None
     update_counter = 0
 
-    timer = None
+    #timer = None # TODO: remove?
 
     @staticmethod
     def begin_scene_edit():
@@ -1922,7 +1922,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             luxcore_config = RENDERENGINE_luxrender.luxcore_session.GetRenderConfig()
             RENDERENGINE_luxrender.stop_luxcore_session()
 
-            # change config
+            # change config to use the original filmsize
             luxcore_config.Parse(pyluxcore.Properties().
                 Set(pyluxcore.Property('film.width', new_width)).
                 Set(pyluxcore.Property('film.height', new_height)))
@@ -1932,7 +1932,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
             self.reduced_filmsize_enabled = False
 
-            # Update the screen # TODO: remove?
+            # Update the screen
             self.draw_screen(context)
 
             self.viewFilmWidth = new_width
@@ -1989,14 +1989,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             self.draw_screen(context)
 
         if stop_redraw:
-            if self.timer:
-                self.timer.join()
+            #if self.timer: # TODO: more timer stuff
+            #    self.timer.join()
             # Pause rendering
             RENDERENGINE_luxrender.begin_scene_edit()
         else:
             # Trigger another update
-            # TODO: disable "True"
-            if True or self.reduced_filmsize_enabled or (time.time() - self.reduced_filmsize_start_time < 1):
+            self.tag_redraw()
+
+            # TODO: debug this so it doesn't randomly crash Blender anymore or ditch it
+            '''
+            if self.reduced_filmsize_enabled or (time.time() - self.reduced_filmsize_start_time < 1):
                 # Redraw immediately
                 self.tag_redraw()
             else:
@@ -2005,9 +2008,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     self.timer.join()
 
                 # Use a longer refresh interval so the Blender interface stays fluid
-                next_refresh_time = 2 # TODO: debug why this hangs Blender sometimes
+                next_refresh_time = 2
                 self.timer = threading.Timer(next_refresh_time, self.tag_redraw)
                 self.timer.start()
+            '''
 
     def find_update_changes(self, context):
         """
