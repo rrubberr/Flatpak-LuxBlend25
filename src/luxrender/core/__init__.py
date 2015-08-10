@@ -60,7 +60,7 @@ from ..properties import (
     accelerator, camera, engine, filter, integrator, ior_data, lamp, lampspectrum_data,
     material, node_material, node_inputs, node_texture, node_fresnel, node_converter,
     mesh, object as prop_object, particles, rendermode, sampler, texture, world,
-    luxcore_engine, luxcore_scene, luxcore_material, luxcore_lamp,
+    luxcore_engine, luxcore_scene, luxcore_material, luxcore_lamp, luxcore_viewport,
     luxcore_tile_highlighting, luxcore_imagepipeline, luxcore_translator, luxcore_rendering_controls
 )
 
@@ -1004,8 +1004,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         }
 
         settings = scene.luxcore_enginesettings
-        halt_samples = settings.halt_samples_preview if realtime_preview else settings.halt_samples
-        halt_time = settings.halt_time_preview if realtime_preview else settings.halt_time
+        halt_samples = settings.halt_samples
+        halt_time = scene.luxcore_viewportsettings.duration_total if realtime_preview else settings.halt_time
         halt_noise = settings.halt_noise
 
         # Progress
@@ -1019,8 +1019,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         time_running = stats.Get('stats.renderengine.time').GetFloat()
         # Add time stats for realtime preview because Blender doesn't display it there
         # For final renderings, only display time if it is set as halt condition
-        if (not realtime_preview and settings.use_halt_time) or (realtime_preview and settings.use_halt_time_preview):
-            stats_list.append('Time: %.1fs/%ds' % (time_running, halt_time))
+        if realtime_preview or settings.use_halt_time:
+            stats_list.append('Time: %.1fs/%.1fs' % (time_running, halt_time))
             if not realtime_preview:
                 progress_time = time_running / halt_time
 
@@ -1028,10 +1028,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         if rendering_controls.stats_samples:
             samples_count = stats.Get('stats.renderengine.pass').GetInt()
             samples_term = 'Pass' if engine in ['BIASPATHCPU', 'BIASPATHOCL'] else 'Samples'
-            if (not realtime_preview and settings.use_halt_samples) or (realtime_preview and settings.use_halt_samples_preview):
+            if not realtime_preview and settings.use_halt_samples:
                 stats_list.append('%s: %d/%d' % (samples_term, samples_count, halt_samples))
-                if not realtime_preview:
-                    progress_samples = samples_count / halt_samples
+                progress_samples = samples_count / halt_samples
             else:
                 stats_list.append('%s: %d' % (samples_term, samples_count))
 
@@ -1144,17 +1143,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         return ' | '.join(stats_list)
 
-    def haltConditionMet(self, scene, stats, realtime_preview=False):
+    def haltConditionMet(self, scene, stats):
         """
         Checks if any halt conditions are met
         """
         settings = scene.luxcore_enginesettings
 
-        use_halt_samples = settings.use_halt_samples_preview if realtime_preview else settings.use_halt_samples
-        use_halt_time = settings.use_halt_time_preview if realtime_preview else settings.use_halt_time
+        use_halt_samples = settings.use_halt_samples
+        use_halt_time = settings.use_halt_time
 
-        halt_samples = settings.halt_samples_preview if realtime_preview else settings.halt_samples
-        halt_time = settings.halt_time_preview if realtime_preview else settings.halt_time
+        halt_samples = settings.halt_samples
+        halt_time = settings.halt_time
         halt_noise = settings.halt_noise
         
         rendered_samples = stats.Get('stats.renderengine.pass').GetInt()
@@ -1170,7 +1169,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             halt_noise_met = rendered_noise == 1.0
 
         # Samples and time make no sense as halt conditions when BIASPATH is used
-        if not realtime_preview and settings.renderengine_type == 'BIASPATH':
+        if settings.renderengine_type == 'BIASPATH':
             return halt_noise_met
 
         return halt_samples_met or halt_time_met or halt_noise_met
@@ -1845,8 +1844,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     lastVisibilitySettings = None
     update_counter = 0
 
-    #timer = None # TODO: remove?
-
     @staticmethod
     def begin_scene_edit():
         if RENDERENGINE_luxrender.viewport_render_active:
@@ -1881,11 +1878,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             RENDERENGINE_luxrender.luxcore_session = None
 
 
-    def is_reduced_filmsize(self, orig_width, orig_height):
-        return (time.time() - self.reduced_filmsize_start_time < 1.0) and (max(orig_width, orig_height) > 600)
+    def is_reduced_filmsize(self, context):
+        if not context.scene.luxcore_viewportsettings.use_reduced_resolution:
+            return False
+
+        orig_width = context.region.width
+        orig_height = context.region.height
+        target_time = context.scene.luxcore_viewportsettings.duration_reduced_resolution
+        return (time.time() - self.reduced_filmsize_start_time < target_time) and (max(orig_width, orig_height) > 600)
 
     def calc_viewport_filmsize(self, context):
-        if self.is_reduced_filmsize(context.region.width, context.region.height):
+        if self.is_reduced_filmsize(context):
             return context.region.width // 2, context.region.height // 2
         else:
             return context.region.width, context.region.height
@@ -1914,7 +1917,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         stop_redraw = False
 
         # Check if reduced filmsize was active and should be disabled
-        if self.reduced_filmsize_enabled and not self.is_reduced_filmsize(context.region.width, context.region.height):
+        if self.reduced_filmsize_enabled and not self.is_reduced_filmsize(context):
             print('Disabling reduced filmsize')
 
             new_width, new_height = self.calc_viewport_filmsize(context)
@@ -1968,8 +1971,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             RENDERENGINE_luxrender.luxcore_session.UpdateStats()
             stats = RENDERENGINE_luxrender.luxcore_session.GetStats()
 
+            rendered_time = stats.Get('stats.renderengine.time').GetFloat()
             stop_redraw = (context.scene.luxrender_engine.preview_stop or
-                    self.haltConditionMet(context.scene, stats, realtime_preview = True))
+                           context.scene.luxcore_viewportsettings.duration_total < rendered_time)
 
             # update statistic display in Blender
             luxcore_config = RENDERENGINE_luxrender.luxcore_session.GetRenderConfig()
@@ -1989,29 +1993,11 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             self.draw_screen(context)
 
         if stop_redraw:
-            #if self.timer: # TODO: more timer stuff
-            #    self.timer.join()
             # Pause rendering
             RENDERENGINE_luxrender.begin_scene_edit()
         else:
             # Trigger another update
             self.tag_redraw()
-
-            # TODO: debug this so it doesn't randomly crash Blender anymore or ditch it
-            '''
-            if self.reduced_filmsize_enabled or (time.time() - self.reduced_filmsize_start_time < 1):
-                # Redraw immediately
-                self.tag_redraw()
-            else:
-                # Join the old timer to prevent Blender crash
-                if self.timer:
-                    self.timer.join()
-
-                # Use a longer refresh interval so the Blender interface stays fluid
-                next_refresh_time = 2
-                self.timer = threading.Timer(next_refresh_time, self.tag_redraw)
-                self.timer.start()
-            '''
 
     def find_update_changes(self, context):
         """
@@ -2314,7 +2300,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         LuxLog('Dynamic updates: update took %dms' % view_update_time)
 
         self.reduced_filmsize_start_time = time.time()
-        if self.is_reduced_filmsize(context.region.width, context.region.height):
+        if self.is_reduced_filmsize(context):
             self.reduced_filmsize_enabled = True
             
 class UpdateChanges(object):

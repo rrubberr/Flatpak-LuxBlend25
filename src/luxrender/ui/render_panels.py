@@ -103,23 +103,6 @@ class render_settings(render_panel):
                 sub.enabled = False
                 sub.prop(engine_settings, 'device_cpu_only', expand=True)
 
-            split = layout.split()
-
-            row = split.row()
-            sub = row.row()
-            sub.label(text='Preview Device:')
-
-            row = split.row()
-            sub = row.row()
-
-            if engine_settings.renderengine_type in ['PATH', 'BIASPATH']:
-                # These engines have OpenCL versions
-                sub.prop(engine_settings, 'device_preview', expand=True)
-            else:
-                # Face device enum, always disabled, to show that BIDIR and BIDIRVM only have CPU support
-                sub.enabled = False
-                sub.prop(engine_settings, 'device_cpu_only', expand=True)
-
             if engine_settings.renderengine_type == 'BIASPATH':
                 split = layout.split()
 
@@ -177,6 +160,7 @@ class render_settings(render_panel):
                     layout.label(text='Total on diffuse surfaces: %d' %
                                       (maxDiffuseSamplesCount + diffuseSamplesCount * max(0, maxDiffusePathDepth - 1)))
 
+                    # TODO:
                     '''
                     // Total samples for a pixel with hit on diffuse surfaces
                     SLG_LOG("[BiasPathCPURenderEngine] Total samples for a pixel with hit on diffuse surfaces: " <<
@@ -190,6 +174,45 @@ class render_settings(render_panel):
 
 
         # Draw property groups
+        super().draw(context)
+
+
+@LuxRenderAddon.addon_register_class
+class viewport_settings(render_panel):
+    """
+    Viewport render settings UI Panel
+    """
+
+    bl_label = 'LuxRender Viewport Render Settings'
+
+    display_property_groups = [
+        ( ('scene',), 'luxcore_viewportsettings', lambda: UseLuxCore() ),
+    ]
+
+    def draw(self, context):
+        if not UseLuxCore():
+            self.layout.label("Classic API does not support viewport rendering")
+            return
+
+        engine_settings = context.scene.luxcore_enginesettings
+
+        split = self.layout.split()
+
+        row = split.row()
+        sub = row.row()
+        sub.label(text='Preview Device:')
+
+        row = split.row()
+        sub = row.row()
+
+        if engine_settings.renderengine_type in ['PATH', 'BIASPATH']:
+            # These engines have OpenCL versions
+            sub.prop(engine_settings, 'device_preview', expand=True)
+        else:
+            # Fake device enum, always disabled, to show that BIDIR and BIDIRVM only have CPU support
+            sub.enabled = False
+            sub.prop(engine_settings, 'device_cpu_only', expand=True)
+
         super().draw(context)
 
 
@@ -267,7 +290,6 @@ class translator(render_panel):
             row = self.layout.row(align=True)
             rd = context.scene.render
         else:
-            #self.layout.label("Note: not yet supported by LuxCore")
             super().draw(context)
 
 @LuxRenderAddon.addon_register_class

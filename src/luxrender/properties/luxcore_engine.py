@@ -112,17 +112,13 @@ class luxcore_enginesettings(declarative_property_group):
         # Custom properties
         'label_custom_properties',
         'custom_properties',
-        # BIASPATH specific halt condition
-        ['spacer_halt_conditions', 'show_halt_conditions'],
-        #'label_halt_conditions',
+        # Halt conditions
+        'label_halt_conditions',
         ['tile_multipass_enable', 'tile_multipass_convergencetest_threshold'],
         ['tile_multipass_use_threshold_reduction', 'tile_multipass_convergencetest_threshold_reduction'],
         ['use_halt_samples', 'halt_samples'],
         ['use_halt_time', 'halt_time'],
         ['use_halt_noise', 'halt_noise'],
-        'label_halt_conditions_preview',
-        ['use_halt_samples_preview', 'halt_samples_preview'],
-        ['use_halt_time_preview', 'halt_time_preview'],
     ]
 
     visibility = {
@@ -194,22 +190,17 @@ class luxcore_enginesettings(declarative_property_group):
         'label_kernelcache': A([{'advanced': True}, {'renderengine_type': O(['PATH', 'BIASPATH'])}, {'device': 'OCL'}]),
         'kernelcache': A([{'advanced': True}, {'renderengine_type': O(['PATH', 'BIASPATH'])}, {'device': 'OCL'}]),
         # Halt conditions
-        'use_halt_samples': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
-        'halt_samples': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
-        'use_halt_time': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
-        'halt_time': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
-        'use_halt_noise': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
-        'halt_noise': {'show_halt_conditions': True, 'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
-        'label_halt_conditions_preview': {'show_halt_conditions': True},
-        'use_halt_samples_preview': {'show_halt_conditions': True},
-        'halt_samples_preview': {'show_halt_conditions': True},
-        'use_halt_time_preview': {'show_halt_conditions': True},
-        'halt_time_preview': {'show_halt_conditions': True},
+        'use_halt_samples': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'halt_samples': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'use_halt_time': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'halt_time': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'use_halt_noise': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
+        'halt_noise': {'renderengine_type': O(['PATH', 'BIDIR', 'BIDIRVM'])},
         # BIASPATH noise controls
-        'tile_multipass_enable': {'show_halt_conditions': True, 'renderengine_type': 'BIASPATH'},
-        'tile_multipass_convergencetest_threshold': {'show_halt_conditions': True, 'renderengine_type': 'BIASPATH'},
-        'tile_multipass_use_threshold_reduction': {'show_halt_conditions': True, 'renderengine_type': 'BIASPATH'},
-        'tile_multipass_convergencetest_threshold_reduction': {'show_halt_conditions': True, 'renderengine_type': 'BIASPATH'},
+        'tile_multipass_enable': {'renderengine_type': 'BIASPATH'},
+        'tile_multipass_convergencetest_threshold': {'renderengine_type': 'BIASPATH'},
+        'tile_multipass_use_threshold_reduction': {'renderengine_type': 'BIASPATH'},
+        'tile_multipass_convergencetest_threshold_reduction': {'renderengine_type': 'BIASPATH'},
     }
 
     alert = {}
@@ -222,8 +213,6 @@ class luxcore_enginesettings(declarative_property_group):
         'halt_samples': {'use_halt_samples': True},
         'halt_time': {'use_halt_time': True},
         'halt_noise': {'use_halt_noise': True},
-        'halt_samples_preview': {'use_halt_samples_preview': True},
-        'halt_time_preview': {'use_halt_time_preview': True},
         # BIASPATH noise multiplier
         'tile_multipass_convergencetest_threshold': {'tile_multipass_enable': True},
         'tile_multipass_use_threshold_reduction': {'tile_multipass_enable': True},
@@ -284,7 +273,7 @@ class luxcore_enginesettings(declarative_property_group):
             'type': 'enum',
             'attr': 'device_cpu_only',
             'name': 'Final Device',
-            'description': 'Device',
+            'description': 'Device (Bidir and BidirVM only support CPU rendering)',
             'default': 'CPU',
             'items': [
                 ('CPU', 'CPU', 'Use CPU only rendering'),
@@ -834,26 +823,8 @@ Not supported for OpenCL engines')
         # Halt condition settings (halt time and halt spp)
         {
             'type': 'text',
-            'name': '',
-            'attr': 'spacer_halt_conditions',
-        },
-        {
-            'type': 'bool',
-            'attr': 'show_halt_conditions',
-            'name': 'Halt Conditions',
-            'description': 'Show/hide halt conditions (settings will still be used even when hidden)',
-            'default': False,
-            'toggle': True
-        },
-        {
-            'type': 'text',
             'name': 'Halt Conditions:',
             'attr': 'label_halt_conditions',
-        },
-        {
-            'type': 'text',
-            'name': 'Preview Halt Conditions:',
-            'attr': 'label_halt_conditions_preview',
         },
         {
             'type': 'bool',
@@ -876,25 +847,6 @@ Not supported for OpenCL engines')
         },
         {
             'type': 'bool',
-            'attr': 'use_halt_samples_preview',
-            'name': 'Samples',
-            'description': 'Rendering process will stop at specified amount of samples',
-            'default': True,
-            'save_in_preset': True
-        },
-        {
-            'type': 'int',
-            'attr': 'halt_samples_preview',
-            'name': '',
-            'description': 'Viewport rendering process will stop at specified amount of samples',
-            'default': 20,
-            'min': 1,
-            'soft_min': 5,
-            'soft_max': 2000,
-            'save_in_preset': True
-        },
-        {
-            'type': 'bool',
             'attr': 'use_halt_time',
             'name': 'Time',
             'description': 'Rendering process will stop after specified amount of seconds',
@@ -910,24 +862,6 @@ Not supported for OpenCL engines')
             'min': 1,
             'soft_min': 5,
             'soft_max': 3600,
-            'save_in_preset': True
-        },
-        {
-            'type': 'bool',
-            'attr': 'use_halt_time_preview',
-            'name': 'Time',
-            'description': 'Viewport rendering process will stop after specified amount of seconds',
-            'default': True,
-            'save_in_preset': True
-        },
-        {
-            'type': 'int',
-            'attr': 'halt_time_preview',
-            'name': '',
-            'description': 'Viewport rendering process will stop after specified amount of seconds',
-            'default': 10,
-            'min': 1,
-            'soft_max': 120,
             'save_in_preset': True
         },
         {
