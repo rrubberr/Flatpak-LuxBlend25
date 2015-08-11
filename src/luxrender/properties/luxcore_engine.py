@@ -546,7 +546,6 @@ rendering with the reduced noise level',
             'name': 'Clamp Brightness',
             'description': '',
             'default': False,
-            'save_in_preset': True
         },
         {
             'type': 'float',
@@ -556,7 +555,6 @@ rendering with the reduced noise level',
             'default': 0.0,
             'min': 0.0,
             'max': 999999.0,
-            'save_in_preset': True
         },
         {
             'type': 'text',
@@ -570,8 +568,9 @@ rendering with the reduced noise level',
             'description': 'Max acceptable PDF (0.0 = disabled)',
             'default': 0.0,
             'min': 0.0,
-            'max': 999.0,
-            'save_in_preset': True
+            'soft_max': 0.1,
+            'max': 1.0,
+            'precision': 2,
         },
         {
             'type': 'text',
