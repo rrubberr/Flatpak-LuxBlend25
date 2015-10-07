@@ -89,6 +89,18 @@ triple_variant_items = [
     ('fresnel', 'Fresnel', 'This node outputs an optical dataset')
 ]
 
+# LuxCore only
+image_map_channels = [
+    ('default', 'Default', ''),
+    ('red', 'Red', ''),
+    ('green', 'Green', ''),
+    ('blue', 'Blue', ''),
+    ('alpha', 'Alpha', ''),
+    ('mean', 'Mean', ''),
+    ('colored_mean', 'Colored Mean', ''),
+    ('rgb', 'RGB', '')
+]
+
 
 @LuxRenderAddon.addon_register_class
 class luxrender_texture_type_node_blender_blend(luxrender_texture_node):
@@ -716,20 +728,10 @@ class luxrender_texture_type_node_blender_image_map(luxrender_texture_node):
 
         return blender_images
 
+    # TODO: handle case where nodemat was appended/linked and the selected enum index is "wrong"
+    # TODO: maybe create extra property to save the selected name and display warning if the image does not exist in the blender scene?
     blender_image = bpy.props.EnumProperty(items=get_images, name='')
-
-    channel_items = [
-        ('default', 'Default', ''),
-        ('red', 'Red', ''),
-        ('green', 'Green', ''),
-        ('blue', 'Blue', ''),
-        ('alpha', 'Alpha', ''),
-        ('mean', 'Mean', ''),
-        ('colored_mean', 'Colored Mean', ''),
-        ('rgb', 'RGB', '')
-    ]
-    channel = bpy.props.EnumProperty(name='Channel', items=channel_items, default='default')
-
+    channel = bpy.props.EnumProperty(name='Channel', items=image_map_channels, default='default')
     gain = bpy.props.FloatProperty(name='Gain', default=1.0, min=0.0, max=10.0, description='Brightness multiplier')
     gamma = bpy.props.FloatProperty(name='Gamma', default=2.2, min=0.0, max=5.0, description='Gamma correction to apply')
     is_normal_map = bpy.props.BoolProperty(name='Normalmap', default=False, description='Enable if this is a normalmap,'
