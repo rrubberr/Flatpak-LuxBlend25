@@ -57,6 +57,8 @@ class LUXRENDER_OT_convert_cycles_scene(bpy.types.Operator):
 
         # Convert world background settings
         create_sky = False
+        sky_turbidity = 2.2
+
         create_background_hemi = False
         hemi_color = None
         hemi_hdri_path = None
@@ -77,7 +79,16 @@ class LUXRENDER_OT_convert_cycles_scene(bpy.types.Operator):
                     socket_strength = background_node.inputs['Strength']
 
                     if socket_color.is_linked:
-                        pass # TODO: detect sky/HDRI
+                        color_node = get_linked_node(socket_color)
+
+                        if color_node.type == 'TEX_SKY':
+                            create_sky = True
+                            sky_turbidity = color_node.turbidity
+                        elif color_node.type == 'TEX_ENVIRONMENT':
+                            create_background_hemi = True
+
+                            if color_node.image:
+                                hemi_hdri_path = color_node.image.filepath
                     else:
                         if (socket_strength.default_value > 0 or socket_strength.is_linked):
                             converted_color = convert_rgba_to_rgb(socket_color.default_value)
@@ -111,8 +122,11 @@ class LUXRENDER_OT_convert_cycles_scene(bpy.types.Operator):
             sky_object = bpy.data.objects.new(name=sky_name, object_data=sky_data)
             context.scene.objects.link(sky_object)
 
+            lux_sky = sky_data.luxrender_lamp.luxrender_lamp_sun
+
             # Set it to be sky only
-            sky_data.luxrender_lamp.luxrender_lamp_sun.sunsky_type = 'sky'
+            lux_sky.sunsky_type = 'sky'
+            lux_sky.turbidity = sky_turbidity
 
         return {'FINISHED'}
 
