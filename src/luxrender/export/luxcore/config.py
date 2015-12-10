@@ -61,6 +61,7 @@ class ConfigExporter(object):
         self.__convert_film_size(film_width, film_height)
         self.__convert_accelerator()
         self.__convert_all_channels()
+        self.__convert_epsilon()
         self.__convert_custom_props()
 
         return self.properties
@@ -325,6 +326,11 @@ class ConfigExporter(object):
 
                 kernelcache = engine_settings.kernelcache
                 self.properties.Set(pyluxcore.Property('opencl.kernelcache', kernelcache))
+
+
+    def __convert_epsilon(self):
+        # Lux(Core) default is 10^-9, which causes dark specks in the world center
+        self.properties.Set(pyluxcore.Property('scene.epsilon.min', 10**-5))
 
     
     def __convert_custom_props(self):
