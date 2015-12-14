@@ -30,7 +30,7 @@ from  math import pi
 from ...outputs.luxcore_api import pyluxcore
 from ...outputs.luxcore_api import ToValidLuxCoreName
 from ...export.materials import get_texture_from_scene
-
+from ...export import get_worldscale
 
 def get_elem_key(elem):
         # Construct unique key for the object (respecting objects from libraries etc.)
@@ -73,6 +73,11 @@ def convert_texture_channel(luxcore_exporter, properties, element_name, textured
 
             if is_multiplied:
                 scale_tex_name = element_name + channel + type + texture_exporter.luxcore_name
+                if channel == 'bumpmap':
+                    # we must multiply bump with worldscale
+                    ws = get_worldscale(as_scalematrix=False)
+                    value =  [x * ws for x in value]
+
                 create_scale_texture(properties, texture_exporter.luxcore_name, scale_tex_name, value)
                 return scale_tex_name
             else:
