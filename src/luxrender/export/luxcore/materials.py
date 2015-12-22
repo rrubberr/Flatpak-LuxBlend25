@@ -95,6 +95,7 @@ class MaterialExporter(object):
                     self.luxcore_exporter.config_exporter.convert_channel('BY_MATERIAL_ID', lc_mat.id)
         except Exception as err:
             print('Node material export failed, skipping material: %s\n%s' % (self.material.name, err))
+            self.luxcore_exporter.errors = True
             import traceback
             traceback.print_exc()
             self.__convert_default_matte()
@@ -344,6 +345,7 @@ class MaterialExporter(object):
                         self.properties.Set(pyluxcore.Property(prefix + '.base', [luxcore_base_name]))
                     except Exception as err:
                         print('WARNING: unable to convert base material %s\n%s' % (material.name, err))
+                        self.luxcore_exporter.errors = True
 
                 if material.luxrender_material.luxrender_mat_glossycoating.useior:
                     self.properties.Set(
@@ -548,8 +550,8 @@ class MaterialExporter(object):
                         self.properties.Set(pyluxcore.Property(prefix + '.amount', convert_texture_channel(self.luxcore_exporter, self.properties, self.luxcore_name, lux_mat, 'amount', 'float')))
                     except Exception as err:
                         print('WARNING: unable to convert mix material %s\n%s' % (material.name, err))
+                        self.luxcore_exporter.errors = True
                         import traceback
-
                         traceback.print_exc()
                         self.__convert_default_matte()
                         return
@@ -756,8 +758,7 @@ class MaterialExporter(object):
                     self.__set_material_volumes(prefix, interior, exterior)
         except Exception as err:
             print('Material export failed, skipping material: %s\n%s' % (self.material.name, err))
+            self.luxcore_exporter.errors = True
             import traceback
-
             traceback.print_exc()
-
             self.__convert_default_matte()

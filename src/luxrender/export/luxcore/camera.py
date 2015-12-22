@@ -275,14 +275,14 @@ class CameraExporter(object):
                 normal_vector = obj.rotation_euler.to_matrix() * mathutils.Vector((0.0, 0.0, 1.0))
                 normal = [normal_vector.x, normal_vector.y, normal_vector.z]
 
-                self.properties.Set(pyluxcore.Property('scene.camera.clippingplane.enable', [True]))
+                self.properties.Set(pyluxcore.Property('scene.camera.clippingplane.enable', True))
                 self.properties.Set(pyluxcore.Property('scene.camera.clippingplane.center', position))
                 self.properties.Set(pyluxcore.Property('scene.camera.clippingplane.normal', normal))
             except KeyError:
                 # No valid clipping plane object selected
-                self.properties.Set(pyluxcore.Property('scene.camera.clippingplane.enable', [False]))
+                self.properties.Set(pyluxcore.Property('scene.camera.clippingplane.enable', False))
         else:
-            self.properties.Set(pyluxcore.Property('scene.camera.clippingplane.enable', [False]))
+            self.properties.Set(pyluxcore.Property('scene.camera.clippingplane.enable', False))
 
 
     def __convert_shutter(self, lux_camera_settings):

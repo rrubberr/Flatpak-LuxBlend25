@@ -68,6 +68,7 @@ class VolumeExporter(object):
             self.luxcore_name = output_node.export_luxcore(self.volume, self.properties, self.blender_scene)
         except Exception as err:
             print('Node volume export failed, skipping volume: %s\n%s' % (self.volume.name, err))
+            self.luxcore_exporter.errors = True
             import traceback
             traceback.print_exc()
             self.__export_fallback_volume()
@@ -115,7 +116,7 @@ class VolumeExporter(object):
 
                 if volume.absorption_scale != 1.0:
                     scale_name = self.luxcore_name + '_absorptionscaling'
-                    self.properties.Set(pyluxcore.Property('scene.textures.' + scale_name + '.type', ['scale']))
+                    self.properties.Set(pyluxcore.Property('scene.textures.' + scale_name + '.type', 'scale'))
                     self.properties.Set(pyluxcore.Property('scene.textures.' + scale_name + '.texture1', volume.absorption_scale))
                     self.properties.Set(pyluxcore.Property('scene.textures.' + scale_name + '.texture2', abs_col))
                     abs_col = scale_name
@@ -124,7 +125,7 @@ class VolumeExporter(object):
                 absorption_at_depth_scaled(abs_col)
 
             self.properties.Set(pyluxcore.Property(prefix + '.absorption', abs_col))
-            self.properties.Set(pyluxcore.Property(prefix + '.type', [volume.type]))
+            self.properties.Set(pyluxcore.Property(prefix + '.type', volume.type))
             self.properties.Set(pyluxcore.Property(prefix + '.ior', ior_val))
             self.properties.Set(pyluxcore.Property(prefix + '.priority', volume.priority))
 
@@ -136,7 +137,7 @@ class VolumeExporter(object):
                     if volume.gain != 1.0:
                         # Use a scale texture to multiple the textured emission with the gain
                         scale_name = self.luxcore_name + '_emissionscale'
-                        self.properties.Set(pyluxcore.Property('scene.textures.' + scale_name + '.type', ['scale']))
+                        self.properties.Set(pyluxcore.Property('scene.textures.' + scale_name + '.type', 'scale'))
                         self.properties.Set(pyluxcore.Property('scene.textures.' + scale_name + '.texture1', emission_color))
                         self.properties.Set(pyluxcore.Property('scene.textures.' + scale_name + '.texture2', volume.gain))
                         emission_color = scale_name
@@ -152,7 +153,7 @@ class VolumeExporter(object):
                     scattering_col = convert_texture_channel(self.luxcore_exporter, self.properties, self.luxcore_name, volume, 'sigma_s', 'color')
     
                     if volume.scattering_scale != 1.0:
-                        self.properties.Set(pyluxcore.Property('scene.textures.' + self.luxcore_name + '_scatterscaling.type', ['scale']))
+                        self.properties.Set(pyluxcore.Property('scene.textures.' + self.luxcore_name + '_scatterscaling.type', 'scale'))
                         self.properties.Set(pyluxcore.Property('scene.textures.' + self.luxcore_name + '_scatterscaling.texture1',
                                                              volume.scattering_scale))
                         self.properties.Set(pyluxcore.Property('scene.textures.' + self.luxcore_name + '_scatterscaling.texture2', scattering_col))
@@ -172,9 +173,8 @@ class VolumeExporter(object):
                 self.properties.Set(pyluxcore.Property(prefix + '.steps.size', volume.stepsize))
         except Exception as err:
             print('Volume export failed, skipping volume: %s\n%s' % (volume.name, err))
+            self.luxcore_exporter.errors = True
             import traceback
-    
             traceback.print_exc()
-    
             # define a clear volume instead of actual volume so LuxCore will still start to render
-            self.properties.Set(pyluxcore.Property(prefix + '.type', ['clear']))
+            self.properties.Set(pyluxcore.Property(prefix + '.type', 'clear'))
