@@ -369,6 +369,27 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
     render_lock = threading.Lock()
 
+    def __init__(self):
+        # Properties for LuxCore viewport rendering
+        self.luxcore_exporter = None
+        self.space = None # The VIEW_3D space this viewport render is running in
+        self.critical_errors = False
+
+        self.viewFilmWidth = -1
+        self.viewFilmHeight = -1
+        self.viewImageBufferFloat = None
+        self.last_update_time = 0
+        # store renderengine configuration of last update
+        self.lastRenderSettings = ''
+        self.lastVolumeSettings = ''
+        self.lastSessionSettings = ''
+        self.lastHaltTime = -1
+        self.lastHaltSamples = -1
+        self.lastCameraSettings = ''
+        self.lastVisibilitySettings = None
+        self.lastNodeMatSettings = ''
+        self.update_counter = 0
+
     def render(self, scene):
         """
         scene:  bpy.types.Scene
@@ -1889,26 +1910,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     ############################################################################
     # Viewport render
     ############################################################################
-
-    # TODO: maybe put this in constructor for windows?
-    luxcore_exporter = None
-    space = None # The VIEW_3D space this viewport render is running in
-    critical_errors = False
-
-    viewFilmWidth = -1
-    viewFilmHeight = -1
-    viewImageBufferFloat = None
-    last_update_time = 0
-    # store renderengine configuration of last update
-    lastRenderSettings = ''
-    lastVolumeSettings = ''
-    lastSessionSettings = ''
-    lastHaltTime = -1
-    lastHaltSamples = -1
-    lastCameraSettings = ''
-    lastVisibilitySettings = None
-    lastNodeMatSettings = ''
-    update_counter = 0
+    # Note: all viewport-render related properties were moved to the __init__() function because otherwise
+    # you can't open multiple rendersessions on Windows OS
 
     def luxcore_view_draw(self, context):
         def draw_framebuffer():
