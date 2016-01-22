@@ -338,6 +338,7 @@ class luxcore_imagepipeline_settings(declarative_property_group):
             'description': '',
             'default': 0.25,
             'min': 0.0001,
+            'max': 1.0,
         },
         # Camera/Film response function (crf)
         {
