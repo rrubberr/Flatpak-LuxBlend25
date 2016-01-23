@@ -1889,7 +1889,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     # Viewport render
     ############################################################################
 
-    # TODO: maybe put this in constructor for windows?
     luxcore_exporter = None
     space = None # The VIEW_3D space this viewport render is running in
     critical_errors = False
