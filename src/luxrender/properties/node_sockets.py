@@ -2971,10 +2971,16 @@ class luxrender_float_socket(bpy.types.NodeSocket):
     default_value = bpy.props.FloatProperty(name='Opacity', default=1.0, min=0.0, max=1.0)
 
     def draw(self, context, layout, node, text):
+        override = True if 'Mix Material' in node.name and (self.default_value != 1.0 or \
+                                    (self.is_linked and not get_linked_node(self).float == 1.0)) else False
+
+        column = layout.column()
         if self.is_linked:
-            layout.label(text=self.name)
+            column.label(text=self.name)
         else:
-            layout.prop(self, 'default_value', text=self.name, slider=True)
+            column.prop(self, 'default_value', text=self.name, slider=True)
+        if override:
+            column.label('No SubMat Opacity !', icon='INFO')
 
     def draw_color(self, context, node):
         return float_socket_color
