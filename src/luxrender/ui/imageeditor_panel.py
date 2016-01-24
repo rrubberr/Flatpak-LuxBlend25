@@ -142,7 +142,7 @@ class halt_conditions_panel(imageeditor_panel):
             row = layout.row()
             row.prop(settings, bool_name)
             sub = row.split()
-            sub.enabled = getattr(settings, bool_name)
+            sub.active = getattr(settings, bool_name)
             sub.prop(settings, halt_conditon)
 
         if settings.renderengine_type == 'BIASPATH':
