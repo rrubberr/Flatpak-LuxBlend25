@@ -354,3 +354,16 @@ class LUXRENDER_OT_update_luxblend(bpy.types.Operator):
         print('-' * 20)
         self.report({'WARNING'}, 'Restart Blender!')
         return {'FINISHED'}
+
+
+@LuxRenderAddon.addon_register_class
+class LUXRENDER_OT_open_daily_builds_webpage(bpy.types.Operator):
+    """Open the "daily builds" webpage"""
+    bl_idname = 'luxrender.open_daily_builds_webpage'
+    bl_label = 'Update LuxRender'
+
+    def execute(self, context):
+        import webbrowser
+        webbrowser.open('http://www.luxrender.net/forum/viewtopic.php?f=30&t=12147')
+
+        return {'FINISHED'}

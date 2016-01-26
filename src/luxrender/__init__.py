@@ -133,6 +133,11 @@ else:
                         icon='INFO')
             split.operator("luxrender.update_luxblend", icon='RECOVER_AUTO')
 
+            split = layout.split(percentage=0.78)
+            split.template_reports_banner()
+            split.label(text="Updating LuxBlend only updates the addon, not the LuxRender binaries. Use this instead:")
+            split.operator("luxrender.open_daily_builds_webpage", icon='URL')
+
             layout.prop(self, "install_path")
 
     LuxRenderAddon = Addon(bl_info)
