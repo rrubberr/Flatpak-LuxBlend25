@@ -311,7 +311,7 @@ class luxcore_enginesettings(declarative_property_group):
             # Device that is used for viewport rendering
             'type': 'enum',
             'attr': 'device_preview',
-            'name': 'Preview Device',
+            'name': 'Viewport Device',
             'description': 'CPU rendering has lower latency, GPU rendering is faster',
             'default': 'CPU',
             'items': [
@@ -860,7 +860,7 @@ may mute lamps and caustics',
         },
         {
             'type': 'text',
-            'name': 'Preview Halt Conditions:',
+            'name': 'Viewport Halt Conditions:',
             'attr': 'label_halt_conditions_preview',
         },
         {
