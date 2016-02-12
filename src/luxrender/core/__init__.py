@@ -62,7 +62,7 @@ from ..properties import (
     material, node_material, node_inputs, node_texture, node_fresnel, node_converter, node_volume,
     mesh, object as prop_object, particles, rendermode, sampler, texture, world,
     luxcore_engine, luxcore_scene, luxcore_material, luxcore_lamp,
-    luxcore_tile_highlighting, luxcore_imagepipeline, luxcore_translator, luxcore_rendering_controls
+    luxcore_tile_highlighting, luxcore_imagepipeline, luxcore_translator, luxcore_rendering_controls, luxcore_global
 )
 
 # Exporter Interface Panels need to be imported to ensure initialisation
@@ -269,7 +269,11 @@ def render_start_options(self, context):
                 row.prop(context.scene.luxrender_engine, "integratedimaging", text="Integrated Imaging")
 
         col.separator()
-        col.operator("luxrender.convert_cycles_scene", icon='EXPORT')
+        row = col.row()
+        split = row.split(percentage=0.9, align=True)
+        split.operator("luxrender.convert_cycles_scene", icon='EXPORT')
+        # Usability design is crap, but it has to do for now
+        split.prop(context.scene.luxcore_global, 'cycles_converter_fallback_color', text='')
 
 
 _register_elm(bl_ui.properties_render.RENDER_PT_render.append(render_start_options))
@@ -357,7 +361,7 @@ _register_elm(bpy.types.VIEW3D_HT_header.append(DrawButtonPause))
 
 def draw_button_show_imagemap_previews(self, context):
     if context.scene.render.engine == "LUXRENDER_RENDER" and UseLuxCore():
-        self.layout.prop(context.scene.luxcore_enginesettings, 'nodeeditor_show_imagemap_previews',
+        self.layout.prop(context.scene.luxcore_global, 'nodeeditor_show_imagemap_previews',
                          toggle=True,
                          icon='IMAGE_COL')
 
