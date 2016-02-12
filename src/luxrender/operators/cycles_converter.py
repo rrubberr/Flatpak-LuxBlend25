@@ -64,20 +64,21 @@ class LUXRENDER_OT_convert_cycles_scene(bpy.types.Operator):
                 lux_area = light.data.luxrender_lamp.luxrender_lamp_area
                 output = None
 
-                for node in light.data.node_tree.nodes:
-                    if node.type == 'OUTPUT_LAMP' and node.is_active_output:
-                        output = node
-                        break
+                if light.data.node_tree:
+                    for node in light.data.node_tree.nodes:
+                        if node.type == 'OUTPUT_LAMP' and node.is_active_output:
+                            output = node
+                            break
 
-                if output:
-                    emission_node = get_linked_node(output.inputs['Surface'])
+                    if output:
+                        emission_node = get_linked_node(output.inputs['Surface'])
 
-                    if emission_node and emission_node.type == 'EMISSION':
-                        socket_color = emission_node.inputs['Color']
-                        socket_strength = emission_node.inputs['Strength']
+                        if emission_node and emission_node.type == 'EMISSION':
+                            socket_color = emission_node.inputs['Color']
+                            socket_strength = emission_node.inputs['Strength']
 
-                        lux_area.L_color = convert_rgba_to_rgb(socket_color.default_value)
-                        lux_area.power = socket_strength.default_value
+                            lux_area.L_color = convert_rgba_to_rgb(socket_color.default_value)
+                            lux_area.power = socket_strength.default_value
 
         # Convert world background settings
         print('Converting world background')
@@ -174,7 +175,7 @@ class LUXRENDER_OT_convert_all_cycles_materials(bpy.types.Operator):
                     # No Lux nodetree yet, convert the Cycles material
                     total += 1
 
-                    result = cycles_material_converter(blender_mat)
+                    result = cycles_material_converter(blender_mat, context)
 
                     if 'FINISHED' in result:
                         success += 1
@@ -200,7 +201,7 @@ class LUXRENDER_OT_convert_cycles_material(bpy.types.Operator):
 
         if blender_mat.node_tree:
             # Cycles nodetree present
-            result = cycles_material_converter(blender_mat)
+            result = cycles_material_converter(blender_mat, context)
 
             if 'FINISHED' in result:
                 self.report({'INFO'}, 'Successfully converted material "%s"' % blender_mat.name)
@@ -210,7 +211,7 @@ class LUXRENDER_OT_convert_cycles_material(bpy.types.Operator):
         return {'FINISHED'}
 
 
-def cycles_material_converter(blender_mat):
+def cycles_material_converter(blender_mat, context):
     try:
         print('Converting material %s' % blender_mat.name)
 
@@ -244,13 +245,15 @@ def cycles_material_converter(blender_mat):
         else:
             # Backup material in case nothing could be converted
             backup_matte_node = lux_nodetree.nodes.new('luxrender_material_matte_node')
-            backup_matte_node.location = lux_output.location.x - 300, lux_output.location.y # move to left
+            backup_matte_node.location = lux_output.location.x - 300, lux_output.location.y
             lux_nodetree.links.new(backup_matte_node.outputs[0], lux_output.inputs[0])
+
+            backup_matte_node.inputs[0].default_value = context.scene.luxcore_global.cycles_converter_fallback_color
 
             # If nothing at all could be converted, try at least to find an image texture
             if first_image_node:
                 backup_image_node = lux_nodetree.nodes.new('luxrender_texture_blender_image_map_node')
-                backup_image_node.location = backup_matte_node.location.x - 300, backup_matte_node.location.y # move to left
+                backup_image_node.location = backup_matte_node.location.x - 300, backup_matte_node.location.y
                 lux_nodetree.links.new(backup_image_node.outputs[0], backup_matte_node.inputs[0])
 
                 backup_image_node.image_name = first_image_node.image.name

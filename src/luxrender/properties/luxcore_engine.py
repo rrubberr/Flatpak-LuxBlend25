@@ -1014,12 +1014,4 @@ may mute lamps and caustics',
             'icon': 'TIME',
             'toggle': True,
         },
-        # Global node editor properties (they are here because I didn't find a better place)
-        {
-            'type': 'bool',
-            'attr': 'nodeeditor_show_imagemap_previews',
-            'name': 'Thumbnails',
-            'description': 'Show preview images in imagemap nodes',
-            'default': True,
-        },
     ]

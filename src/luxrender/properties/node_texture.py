@@ -856,7 +856,7 @@ class luxrender_texture_type_node_blender_image_map(luxrender_texture_node):
                 valid_image = False
                 is_packed = False
 
-            show_previews = context.scene.luxcore_enginesettings.nodeeditor_show_imagemap_previews
+            show_previews = context.scene.luxcore_global.nodeeditor_show_imagemap_previews
 
             # "Show Preview" button
             split = layout.split(percentage=0.1)
