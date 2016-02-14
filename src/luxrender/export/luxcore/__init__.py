@@ -217,11 +217,6 @@ class LuxCoreExporter(object):
         index = 0
         prefix = 'film.imagepipeline.'
 
-        # Premultiply Alpha
-        if imagepipeline_settings.premul_alpha_film:
-            temp_properties.Set(pyluxcore.Property(prefix + str(index) + '.type', 'PREMULTIPLY_ALPHA'))
-            index += 1
-
         # Output switcher
         if imagepipeline_settings.output_switcher_pass != 'disabled':
             channel = imagepipeline_settings.output_switcher_pass
@@ -257,6 +252,11 @@ class LuxCoreExporter(object):
             temp_properties.Set(pyluxcore.Property(prefix + str(index) + '.exposure', exposure))
             temp_properties.Set(pyluxcore.Property(prefix + str(index) + '.fstop', fstop))
         index += 1
+
+        # Premultiply Alpha
+        if imagepipeline_settings.transparent_film and imagepipeline_settings.premul_alpha_film:
+            temp_properties.Set(pyluxcore.Property(prefix + str(index) + '.type', 'PREMULTIPLY_ALPHA'))
+            index += 1
 
         # Background image
         if imagepipeline_settings.use_background_image:
