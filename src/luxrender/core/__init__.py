@@ -381,6 +381,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
     render_lock = threading.Lock()
 
+
+
     def render(self, scene):
         """
         scene:  bpy.types.Scene
@@ -390,6 +392,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         Returns None
         """
+
+        for elem in dir(self):
+            print(elem)
 
         with RENDERENGINE_luxrender.render_lock:  # just render one thing at a time
             if scene is None:
@@ -1091,10 +1096,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             samplesec = stats.Get("stats.renderengine.total.samplesec").GetFloat()
 
             if samplesec > 0:
-                rays_per_sample = (
-                    stats.Get("stats.renderengine.performance.total").GetFloat()
-                    / samplesec
-                )
+                rays_per_sample = stats.Get("stats.renderengine.performance.total").GetFloat() / samplesec
             else:
                 rays_per_sample = 0
 
