@@ -42,10 +42,11 @@ class luxcore_material(declarative_property_group):
     ef_attach_to = ['Material']
 
     controls = [
+        'materialgroup_chooser',
         'is_shadow_catcher',
-        'id',
-        'create_MATERIAL_ID_MASK',
-        'create_BY_MATERIAL_ID',
+        #'id',
+        #'create_MATERIAL_ID_MASK',
+        #'create_BY_MATERIAL_ID',
         'label_biaspath_only_settings',
         ['samples', 'emission_samples'],
         'label_material_visibility',
@@ -75,6 +76,23 @@ class luxcore_material(declarative_property_group):
 
     properties = [
         {
+            'attr': 'materialgroup',
+            'type': 'string',
+            'name': 'Materialgroup',
+            'description': 'Materialgroup; leave blank to use default',
+        },
+        {
+            'type': 'prop_search',
+            'attr': 'materialgroup_chooser',
+            'src': lambda s, c: s.scene.luxrender_materialgroups,
+            'src_attr': 'materialgroups',
+            'trg': lambda s, material: material.luxcore_material,
+            'trg_attr': 'materialgroup',
+            'name': 'Material Group',
+            'icon': 'IMASEL' # TODO
+        },
+        ##########
+        {
             'type': 'bool',
             'attr': 'is_shadow_catcher',
             'name': 'Shadow Catcher',
@@ -86,15 +104,6 @@ class luxcore_material(declarative_property_group):
             'attr': 'id',
             'name': 'Material ID',
             'description': 'Material ID (-1 = auto), used for AOVs',
-            'default': -1,
-            'min': -1,
-            'max': 65536,
-        },
-        {
-            'type': 'int',
-            'attr': 'emission_id',
-            'name': 'Emission ID',
-            'description': 'Material emission ID (-1 = automatic), used for AOVs',
             'default': -1,
             'min': -1,
             'max': 65536,

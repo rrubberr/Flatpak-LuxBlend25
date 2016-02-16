@@ -806,7 +806,7 @@ class luxrender_lightgroups(declarative_property_group):
     ef_attach_to = ['Scene']
 
     controls = [
-        # Drawn manually in ui/render_panels.py
+        # Drawn manually in ui/render_layers.py
     ]
 
     properties = [
@@ -902,6 +902,121 @@ class luxrender_lightgroups(declarative_property_group):
             return self.lightgroups[name].lg_enabled
 
         return True
+
+
+@LuxRenderAddon.addon_register_class
+class luxrender_materialgroup_data(declarative_property_group):
+    """
+    Storage class for LuxRender material group settings. The
+    luxrender_materialgroups object will store 1 or more of
+    these in its CollectionProperty 'materialgroups'.
+    """
+
+    def update_id(self, context):
+        """
+        Convert the 3x8bit ID to 3xfloat color
+        """
+        self['color'] = [
+            ((self.id & 0xff0000) >> 16) / 255,
+            ((self.id & 0xff00) >> 8) / 255,
+            (self.id & 0xff) / 255
+        ]
+
+    def update_color(self, context):
+        """
+        Convert 3xfloat color to 3x8bit ID
+        """
+        r = int(self.color[0] * 255)
+        g = int(self.color[1] * 255)
+        b = int(self.color[2] * 255)
+
+        self['id'] = (r << 16) + (g << 8) + b
+
+    ef_attach_to = []  # not attached
+
+    controls = [
+        # Drawn manually in the UI class
+    ]
+
+    properties = [
+        # TODO: material override for whole group?
+        {
+            'type': 'bool',
+            'attr': 'show_settings',
+            'name': '',
+            'description': 'Show settings',
+            'default': True
+        },
+        {
+            'type': 'int',
+            'attr': 'id',
+            'name': 'ID',
+            'description': '', # TODO
+            'min': 0,
+            'max': 0xffffff,
+            'default': 0,
+            'update': update_id,
+        },
+        {
+            'type': 'float_vector',
+            'attr': 'color',
+            'name': '',
+            'description': 'RGB gain',
+            'default': (0, 0, 0),
+            'min': 0,
+            'max': 1,
+            'subtype': 'COLOR',
+            'update': update_color,
+        },
+        {
+            'type': 'bool',
+            'attr': 'create_MATERIAL_ID_MASK',
+            'name': 'B/W mask pass',
+            'description': 'Create a black/white mask for this material (additional renderpass)',
+            'default': False,
+        },
+        {
+            'type': 'bool',
+            'attr': 'create_BY_MATERIAL_ID',
+            'name': 'Masked RGB pass',
+            'description': 'Create a pass where objects with this material ID are visible, while the rest of the image '
+                           'is black (additional renderpass)',
+            'default': False,
+        },
+    ]
+
+
+@LuxRenderAddon.addon_register_class
+class luxrender_materialgroups(declarative_property_group):
+    """
+    Storage class for LuxRender Material Groups.
+    """
+
+    ef_attach_to = ['Scene']
+
+    controls = [
+        # Drawn manually in ui/render_panels.py
+    ]
+
+    properties = [
+        {
+            'type': 'collection',
+            'ptype': luxrender_materialgroup_data,
+            'name': 'materialgroups',
+            'attr': 'materialgroups',
+            'items': []
+        },
+        {
+            'type': 'int',
+            'name': 'materialgroups_index',
+            'attr': 'materialgroups_index',
+        },
+        {
+            'type': 'operator',
+            'attr': 'op_lg_add',
+            'operator': 'luxrender.materialgroup_add',
+        },
+    ]
 
 
 @LuxRenderAddon.addon_register_class

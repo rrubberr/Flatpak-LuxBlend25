@@ -1738,16 +1738,11 @@ class luxrender_material_output_node(luxrender_node):
 
     interior_volume = bpy.props.StringProperty(description='Volume inside of the object with this material')
     exterior_volume = bpy.props.StringProperty(description='Volume outside of the object with this material')
+    materialgroup = bpy.props.StringProperty(description='Materialgroup for Material ID pass; leave blank to use default')
     is_shadow_catcher = bpy.props.BoolProperty(name='Shadow Catcher', default=False, description=
         'Make material transparent where hit by light and opaque where shadowed (alpha transparency)')
     advanced = bpy.props.BoolProperty(name='Advanced Options', default=False, description=
         'Show advanced material settings')
-    id = bpy.props.IntProperty(name='Material ID', default=-1, min=-1, max=65536, description=
-        'Material ID (-1 = auto), used for AOVs')
-    create_MATERIAL_ID_MASK = bpy.props.BoolProperty(name='MATERIAL_ID_MASK pass', default=False, description=
-        'Create a mask for this material (AOV channel)')
-    create_BY_MATERIAL_ID = bpy.props.BoolProperty(name='BY_MATERIAL_ID pass', default=False, description=
-        'Create a pass containing only objects with this material ID (AOV channel)')
     samples = bpy.props.IntProperty(name='Samples', default=-1, min=-1, soft_max=16, max=256, description=
         'Material samples count (-1 = global default, size x size)')
     visibility_indirect_diffuse_enable = bpy.props.BoolProperty(name='Diffuse', default=True, description=
@@ -1780,14 +1775,12 @@ class luxrender_material_output_node(luxrender_node):
 
         if UseLuxCore():
             layout.prop(self, 'is_shadow_catcher')
+            layout.prop_search(self, 'materialgroup', context.scene.luxrender_materialgroups, 'materialgroups',
+                               'MGroup', icon='IMASEL')
 
             layout.prop(self, 'advanced', toggle=True)
 
             if self.advanced:
-                layout.prop(self, 'id')
-                layout.prop(self, 'create_MATERIAL_ID_MASK')
-                layout.prop(self, 'create_BY_MATERIAL_ID')
-
                 layout.label('Biased Path Settings:')
                 column = layout.column()
                 column.enabled = context.scene.luxcore_enginesettings.renderengine_type == 'BIASPATH'
@@ -1811,8 +1804,19 @@ class luxrender_material_output_node(luxrender_node):
         # Export emission node if attached to this node
         export_emission_luxcore(properties, self.inputs['Emission'], luxcore_name)
 
+        # Material group
+        materialgroup_name = self.materialgroup
+        if materialgroup_name in blender_scene.luxrender_materialgroups.materialgroups:
+            group = blender_scene.luxrender_materialgroups.materialgroups[materialgroup_name]
+
+            set_prop_mat(properties, luxcore_name, 'id', group.id)
+
+            if group.create_MATERIAL_ID_MASK and blender_scene.luxrender_channels.enable_aovs:
+                luxcore_exporter.config_exporter.convert_channel('MATERIAL_ID_MASK', group.id)
+            if group.create_BY_MATERIAL_ID and blender_scene.luxrender_channels.enable_aovs:
+                luxcore_exporter.config_exporter.convert_channel('BY_MATERIAL_ID', group.id)
+
         # Export advanced LuxCore material settings
-        set_prop_mat(properties, luxcore_name, 'id', self.id)
         set_prop_mat(properties, luxcore_name, 'samples', self.samples)
         set_prop_mat(properties, luxcore_name, 'visibility.indirect.diffuse.enable',
                      self.visibility_indirect_diffuse_enable)

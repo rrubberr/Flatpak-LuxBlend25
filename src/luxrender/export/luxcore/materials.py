@@ -623,12 +623,16 @@ class MaterialExporter(object):
 
             self.properties.Set(pyluxcore.Property(prefix + '.shadowcatcher.enable', lc_mat.is_shadow_catcher))
 
-            if lc_mat.id != -1 and not self.luxcore_exporter.is_viewport_render:
-                self.properties.Set(pyluxcore.Property(prefix + '.id', [lc_mat.id]))
-                if lc_mat.create_MATERIAL_ID_MASK and self.blender_scene.luxrender_channels.enable_aovs:
-                    self.luxcore_exporter.config_exporter.convert_channel('MATERIAL_ID_MASK', lc_mat.id)
-                if lc_mat.create_BY_MATERIAL_ID and self.blender_scene.luxrender_channels.enable_aovs:
-                    self.luxcore_exporter.config_exporter.convert_channel('BY_MATERIAL_ID', lc_mat.id)
+            # Material group
+            materialgroup_name = lc_mat.materialgroup
+            if materialgroup_name in self.blender_scene.luxrender_materialgroups.materialgroups:
+                mg = self.blender_scene.luxrender_materialgroups.materialgroups[materialgroup_name]
+
+                self.properties.Set(pyluxcore.Property(prefix + '.id', mg.id))
+                if mg.create_MATERIAL_ID_MASK and self.blender_scene.luxrender_channels.enable_aovs:
+                    self.luxcore_exporter.config_exporter.convert_channel('MATERIAL_ID_MASK', mg.id)
+                if mg.create_BY_MATERIAL_ID and self.blender_scene.luxrender_channels.enable_aovs:
+                    self.luxcore_exporter.config_exporter.convert_channel('BY_MATERIAL_ID', mg.id)
 
             self.properties.Set(pyluxcore.Property(prefix + '.samples', [lc_mat.samples]))
 
@@ -664,8 +668,6 @@ class MaterialExporter(object):
                         self.properties.Set(pyluxcore.Property(prefix + '.emission.gain', [gain] * 3))
 
             # alpha transparency
-            name_mix = self.luxcore_name + '_alpha_mix'
-
             if hasattr(material, 'luxrender_transparency') and material.luxrender_transparency.transparent:
                 use_alpha_transparency = True
 

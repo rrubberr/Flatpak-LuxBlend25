@@ -228,6 +228,44 @@ class LUXRENDER_OT_lightgroup_remove(bpy.types.Operator):
 
 
 @LuxRenderAddon.addon_register_class
+class LUXRENDER_OT_materialgroup_add(bpy.types.Operator):
+    """Add a new light group definition to the scene"""
+
+    bl_idname = "luxrender.materialgroup_add"
+    bl_label = "Add LuxRender Material Group"
+
+    mg_count = 0
+    new_materialgroup_name = bpy.props.StringProperty(default='New Material Group ')
+
+    def invoke(self, context, event):
+        mg = context.scene.luxrender_materialgroups.materialgroups
+        mg.add()
+        new_mg = mg[len(mg) - 1]
+        new_mg.name = self.properties.new_materialgroup_name + str(LUXRENDER_OT_materialgroup_add.mg_count)
+        LUXRENDER_OT_materialgroup_add.mg_count += 1
+        return {'FINISHED'}
+
+
+@LuxRenderAddon.addon_register_class
+class LUXRENDER_OT_materialgroup_remove(bpy.types.Operator):
+    """Remove the selected materialgroup definition"""
+
+    bl_idname = "luxrender.materialgroup_remove"
+    bl_label = "Remove LuxRender Material Group"
+
+    mg_index = bpy.props.IntProperty(default=-1)
+
+    def invoke(self, context, event):
+        w = context.scene.luxrender_materialgroups
+        if self.properties.mg_index == -1:
+            w.materialgroups.remove(w.materialgroups_index)
+        else:
+            w.materialgroups.remove(self.properties.mg_index)
+        w.materialgroups_index = len(w.materialgroups) - 1
+        return {'FINISHED'}
+
+
+@LuxRenderAddon.addon_register_class
 class LUXRENDER_OT_opencl_device_list_update(bpy.types.Operator):
     """Update the OpenCL device list"""
 

@@ -110,6 +110,10 @@ class lightgroups_base(object):
 
     is_imageeditor_panel = False
 
+    def draw_header(self, context):
+        if not self.is_imageeditor_panel:
+            self.layout.label('', icon='OUTLINER_OB_LAMP')
+
     # overridden in order to draw a 'non-standard' panel
     def draw(self, context):
         if UseLuxCore() and not hasattr(pyluxcore.RenderSession, 'Parse'):
@@ -194,10 +198,7 @@ class lightgroups_base(object):
             draw_lightgroup(lg, lg_index)
 
         if not self.is_imageeditor_panel:
-            self.layout.separator()
             self.layout.operator('luxrender.lightgroup_add', text='Add Lightgroup', icon='ZOOMIN')
-
-        self.layout.separator()
 
 
 @LuxRenderAddon.addon_register_class
@@ -216,6 +217,62 @@ class lightgroups_lamps(lightgroups_base, lamps_panel):
     def poll(cls, context):
         return super().poll(context) and context.lamp.luxrender_lamp.lightgroup
 
+
+@LuxRenderAddon.addon_register_class
+class materialgroups(render_layers_panel):
+    """
+    Material Groups Settings
+    """
+
+    bl_label = 'LuxRender Material Groups'
+    bl_context = 'render_layer'
+
+    def draw_header(self, context):
+        self.layout.label('', icon='IMASEL')
+
+    # overridden in order to draw a 'non-standard' panel
+    def draw(self, context):
+        if not UseLuxCore():
+            self.layout.label('Not supported in Classic API mode.')
+            return
+
+        def settings_toggle_icon(enabled):
+            return 'TRIA_DOWN' if enabled else 'TRIA_RIGHT'
+
+        def draw_materialgroup(mg, mg_index=None):
+            split = self.layout.split()
+
+            col = split.column()
+            sub = col.column(align=True)
+
+            # Upper row (enable/disable, name, remove)
+            box = sub.box()
+            row = box.row()
+
+            row.prop(mg, 'show_settings', icon=settings_toggle_icon(mg.show_settings), emboss=False)
+            row.prop(mg, 'name', text='')
+
+            row.operator('luxrender.materialgroup_remove', text='', icon='X', emboss=False).mg_index = mg_index
+
+            if mg.show_settings:
+                box = sub.box()
+
+                row = box.row()
+                split = row.split(percentage=0.7, align=True)
+                split.prop(mg, 'id')
+                split.prop(mg, 'color')
+                row = box.row()
+                row.prop(mg, 'create_MATERIAL_ID_MASK')
+                row.prop(mg, 'create_BY_MATERIAL_ID')
+
+        # Draw all material groups
+        for mg_index in range(len(context.scene.luxrender_materialgroups.materialgroups)):
+            mg = context.scene.luxrender_materialgroups.materialgroups[mg_index]
+            draw_materialgroup(mg, mg_index)
+
+        self.layout.operator('luxrender.materialgroup_add', text='Add Materialgroup', icon='ZOOMIN')
+
+
 @LuxRenderAddon.addon_register_class
 class passes_aov(render_layers_panel):
     """
@@ -229,6 +286,9 @@ class passes_aov(render_layers_panel):
     display_property_groups = [
         ( ('scene',), 'luxrender_lightgroups' )
     ]
+
+    def draw_header(self, context):
+        self.layout.label('', icon='RENDER_RESULT')
 
     def draw(self, context):
         layout = self.layout
