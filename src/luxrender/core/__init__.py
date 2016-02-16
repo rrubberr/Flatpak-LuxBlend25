@@ -67,15 +67,15 @@ from ..properties import (
 
 # Exporter Interface Panels need to be imported to ensure initialisation
 from ..ui import (
-    render_panels, camera, image, lamps, mesh, node_editor, object as ui_object, particles, world,
+    render_panels, render_layers, camera, image, lamps, mesh, node_editor, object as ui_object, particles, world,
     imageeditor_panel
 )
 
 # Legacy material editor panels, node editor UI is initialized above
 from ..ui.materials import (
-    main as mat_main, compositing, carpaint, cloth, glass, glass2, roughglass, glossytranslucent,
+    compositing, carpaint, cloth, glass, glass2, roughglass, glossytranslucent,
     glossycoating, glossy, layered, matte, mattetranslucent, metal, metal2, mirror, mix as mat_mix, null,
-    scatter, shinymetal, velvet
+    scatter, shinymetal, velvet, main as mat_main
 )
 
 #Legacy texture editor panels
@@ -380,6 +380,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     bl_use_texture_preview = True
 
     render_lock = threading.Lock()
+
+
 
     def render(self, scene):
         """
@@ -1091,10 +1093,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             samplesec = stats.Get("stats.renderengine.total.samplesec").GetFloat()
 
             if samplesec > 0:
-                rays_per_sample = (
-                    stats.Get("stats.renderengine.performance.total").GetFloat()
-                    / samplesec
-                )
+                rays_per_sample = stats.Get("stats.renderengine.performance.total").GetFloat() / samplesec
             else:
                 rays_per_sample = 0
 

@@ -39,6 +39,26 @@ class world_panel(bl_ui.properties_world.WorldButtonsPanel, property_group_rende
 
 
 @LuxRenderAddon.addon_register_class
+class world_helper(world_panel):
+    """
+    LuxRender World Help
+    """
+
+    bl_label = 'LuxRender World Helper'
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.label('Background is controlled by hemi and sun lights', icon='INFO')
+
+        row = layout.row(align=True)
+        add_sunsky = row.operator('object.lamp_add', text='Add Sun and Sky', icon='LAMP_SUN')
+        add_sunsky.type = 'SUN'
+        add_hemi = row.operator('object.lamp_add', text='Add Hemi (HDRI)', icon='LAMP_HEMI')
+        add_hemi.type = 'HEMI'
+
+
+@LuxRenderAddon.addon_register_class
 class world(world_panel):
     """
     LuxRender World Settings
