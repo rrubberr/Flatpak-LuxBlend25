@@ -50,7 +50,11 @@ class meshes(bl_ui.properties_data_mesh.MeshButtonsPanel, property_group_rendere
                        'object is used as a render proxy',
                        'and \"Don\'t Render Original\" is set.'
                 ]
+
+                col = self.layout.column()
+                col.scale_y = 0.6
+
                 for t in msg:
-                    self.layout.label(t)
+                    col.label(t)
             else:
                 super().draw(context)
