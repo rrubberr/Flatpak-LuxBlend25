@@ -34,7 +34,7 @@ from ...export import get_worldscale
 from ...export import matrix_to_list
 from ...export import get_expanded_file_name
 
-from .utils import is_lightgroup_opencl_compatible
+from .utils import is_lightgroup_opencl_compatible, convert_texture_channel
 
 
 class ExportedLight(object):
@@ -391,6 +391,14 @@ class LightExporter(object):
 
                 if not self.blender_scene.luxrender_lightgroups.ignore and is_lightgroup_opencl_compatible(self.luxcore_exporter, lightgroup_id):
                     self.properties.Set(pyluxcore.Property('scene.materials.' + mat_name + '.emission.id', [lightgroup_id]))
+
+                # Opacity
+                area = light.luxrender_lamp.luxrender_lamp_area
+                opacity = convert_texture_channel(self.luxcore_exporter, self.properties, mat_name, area, 'opacity', 'float')
+
+                if not (type(opacity) is list and opacity[0] == 1):
+                    # Don't export the property when not necessary (opacity 1 means that the light is fully visible)
+                    self.properties.Set(pyluxcore.Property('scene.materials.' + mat_name + '.transparency', opacity))
     
                 # assign material to object
                 self.properties.Set(pyluxcore.Property('scene.objects.' + luxcore_name + '.material', [mat_name]))

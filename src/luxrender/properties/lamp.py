@@ -33,7 +33,7 @@ from ..extensions_framework.validate import Logic_Operator as LO, Logic_OR as O,
 
 from .. import LuxRenderAddon
 from ..export import ParamSet
-from ..properties.texture import ColorTextureParameter
+from ..properties.texture import ColorTextureParameter, FloatTextureParameter
 from ..util import dict_merge
 from ..outputs.luxcore_api import UseLuxCore
 
@@ -103,7 +103,7 @@ TC_L = LampColorTextureParameter('L', 'Colour', default=(1.0, 1.0, 1.0))
 @LuxRenderAddon.addon_register_class
 class luxrender_lamp(declarative_property_group):
     """
-    Storage class for LuxRender Camera settings.
+    Storage class for LuxRender Lamp settings.
     """
 
     ef_attach_to = ['Lamp']
@@ -572,6 +572,24 @@ class luxrender_lamp_sun(declarative_property_group):
         return params
 
 
+class OpacityFloatTextureParameter(FloatTextureParameter):
+    def texture_slot_set_attr(self):
+        # Looks in a different location than other FloatTextureParameters
+        return lambda s, c: c.luxrender_lamp_area
+
+    def get_properties(self):
+        props = super().get_properties()
+
+        for d in props:
+            if d['attr'].endswith('_floatvalue'):
+                d['slider'] = True
+                d['precision'] = 3
+
+        return props
+
+TF_opacity = OpacityFloatTextureParameter('opacity', 'Opacity', add_float_value=True, default=1.0, min=0.0, max=1.0)
+
+
 @LuxRenderAddon.addon_register_class
 class luxrender_lamp_area(declarative_property_group):
     ef_attach_to = ['luxrender_lamp']
@@ -581,15 +599,14 @@ class luxrender_lamp_area(declarative_property_group):
         'power',
         'efficacy',
         'null_lamp',
-    ]
+    ] + TF_opacity.controls
 
     visibility = dict_merge(
         TC_L.visibility,
         {'null_lamp': lambda: not UseLuxCore()},
         {'nsamples': lambda: not UseLuxCore()},
+        TF_opacity.visibility,
     )
-
-    #visibility = TC_L.visibility
 
     properties = TC_L.properties[:] + [
         {
@@ -631,7 +648,8 @@ class luxrender_lamp_area(declarative_property_group):
 emitting side, as it emits its own light',
             'default': True,
         },
-    ]
+    ] + \
+    TF_opacity.get_properties()
 
     def get_paramset(self, lamp_object):
         params = ParamSet()
