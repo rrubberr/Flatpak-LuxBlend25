@@ -82,9 +82,8 @@ def import_bindings_module(name):
     else:
         try:
             module = _import_bindings_module(lux_path, name)
-        except ImportError:
-            LuxLog('Failed to import {} module '
-                   'from "{}"'.format(name, lux_path))
+        except ImportError as error:
+            LuxLog('Failed to import {} module from "{}" (Error: {})'.format(name, lux_path, error))
             module = _import_bindings_module(luxblend_path, name, True)
         return module
 
