@@ -321,7 +321,7 @@ class luxrender_material_type_node_doubleside(luxrender_material_node):
         def export_submat(socket):
             node = get_linked_node(socket)
 
-            if not check_node_export_material(node):
+            if node is None or not check_node_export_material(node):
                 return None
 
             return node.export_material(make_material, make_texture)
@@ -733,7 +733,7 @@ class luxrender_material_type_node_glossycoating(luxrender_material_node):
         def export_submat(socket):
             node = get_linked_node(socket)
 
-            if not check_node_export_material(node):
+            if node is None or not check_node_export_material(node):
                 return None
 
             return node.export_material(make_material, make_texture)
@@ -1012,7 +1012,7 @@ class luxrender_material_type_node_layered(luxrender_material_node):
         def export_submat(socket):
             node = get_linked_node(socket)
 
-            if not check_node_export_material(node):
+            if node is None or not check_node_export_material(node):
                 return None
 
             return node.export_material(make_material, make_texture)
@@ -1351,7 +1351,7 @@ class luxrender_material_type_node_mix(luxrender_material_node):
         def export_submat(socket):
             node = get_linked_node(socket)
 
-            if not check_node_export_material(node):
+            if node is None or not check_node_export_material(node):
                 return None
 
             return node.export_material(make_material, make_texture)

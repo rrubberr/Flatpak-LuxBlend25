@@ -130,11 +130,25 @@ class luxrender_node_category_material(NodeCategory):
 class Separator(NodeItemCustom):
     # NodeItemCustom is not documented anywhere so this code is a bit of guesswork
     def draw_separator(self, self2, layout, context):
-        layout.separator()
+        col = layout.column()
+        col.scale_y = 0.2
+        col.separator()
+        #col.label("test")
 
     def __init__(self, poll=None, draw=None):
         if draw is None:
             draw = self.draw_separator
+        super().__init__(poll, draw)
+
+
+class NodeItemMultiImageImport(NodeItemCustom):
+    # NodeItemCustom is not documented anywhere so this code is a bit of guesswork
+    def draw_operator(self, self2, layout, context):
+        layout.operator("luxrender.import_multiple_imagenodes")
+
+    def __init__(self, poll=None, draw=None):
+        if draw is None:
+            draw = self.draw_operator
         super().__init__(poll, draw)
 
 
@@ -167,17 +181,15 @@ luxrender_node_categories_material = [
         NodeItem("luxrender_material_type_node_datablock"),
     ]),
 
-    luxrender_node_category_material("LUX_TEXTURE", "Texture", items=[
+    # Often used textures
+    luxrender_node_category_material("LUX_TEXTURE_1", "Texture (1)", items=[
         NodeItem("luxrender_texture_blender_image_map_node", label="Image Map"),
         NodeItem("luxrender_texture_bump_map_node", label="Bump Map"),
         Separator(),
-        NodeItem("luxrender_texture_blender_blend_node", label="Blend"),
-        NodeItem("luxrender_texture_brick_node", label="Brick"),
-        NodeItem("luxrender_texture_checker_node", label="Checkerboard"),
+        NodeItemMultiImageImport(),
+        Separator(),
         NodeItem("luxrender_texture_blender_clouds_node", label="Clouds"),
         NodeItem("luxrender_texture_blender_distortednoise_node", label="Distorted Noise"),
-        NodeItem("luxrender_texture_dots_node", label="Dots"),
-        NodeItem("luxrender_texture_vol_exponential_node", label="Exponential"),
         NodeItem("luxrender_texture_fbm_node", label="FBM"),
         NodeItem("luxrender_texture_blender_marble_node", label="Marble"),
         NodeItem("luxrender_texture_blender_musgrave_node", label="Musgrave"),
@@ -187,6 +199,16 @@ luxrender_node_categories_material = [
         NodeItem("luxrender_texture_blender_wood_node", label="Wood"),
         NodeItem("luxrender_texture_wrinkled_node", label="Wrinkled"),
         NodeItem("luxrender_texture_blender_voronoi_node", label="Voronoi"),
+    ]),
+
+    # Rarely used textures
+    luxrender_node_category_material("LUX_TEXTURE_2", "Texture (2)", items=[
+        NodeItem("luxrender_texture_blender_blend_node", label="Blend"),
+        NodeItem("luxrender_texture_brick_node", label="Brick"),
+        NodeItem("luxrender_texture_checker_node", label="Checkerboard"),
+        NodeItem("luxrender_texture_dots_node", label="Dots"),
+        NodeItem("luxrender_texture_vol_exponential_node", label="Exponential"),
+        NodeItem("luxrender_texture_bilerp_node"),
         NodeItem("luxrender_texture_vol_cloud_node", label="Cloud (Volumetric)"),
         NodeItem("luxrender_texture_uv_node", label="UV Test"),
         NodeItem("luxrender_texture_harlequin_node", label="Harlequin"),
@@ -208,7 +230,6 @@ luxrender_node_categories_material = [
         NodeItem("luxrender_texture_constant_node", label="Value Input", settings={
             "variant": repr("float"),
             }),
-        NodeItem("luxrender_texture_bilerp_node"),
         NodeItem("luxrender_texture_band_node"),
         NodeItem("luxrender_texture_python_node"),
         #NodeItem("luxrender_texture_colorramp_node"), # TODO: activate when ready
