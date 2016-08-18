@@ -41,7 +41,7 @@ from .meshes import MeshExporter
 from .objects import ObjectExporter
 from .textures import TextureExporter
 from .volumes import VolumeExporter
-from .utils import get_elem_key, LightgroupCache, is_lightgroup_opencl_compatible
+from .utils import get_elem_key, LightgroupCache, is_lightgroup_opencl_compatible, ErrorCache
 
 
 class LuxCoreExporter(object):
@@ -90,8 +90,10 @@ class LuxCoreExporter(object):
         self.config_exporter = ConfigExporter(self, self.blender_scene, self.is_viewport_render)
         self.camera_exporter = CameraExporter(self.blender_scene, self.is_viewport_render, self.context)
 
-        # If errors happen during export, this flag is set to True and a message is displayed after export
-        self.errors = False
+        # If errors happen during export they are added to this cache and printed after the export completes.
+        # The summary is printed in core/__init__.py in luxcore_render(), because otherwise it is drowned in a flood
+        # of LuxCore-SDL related messages.
+        self.error_cache = ErrorCache()
 
 
     def pop_updated_scene_properties(self):

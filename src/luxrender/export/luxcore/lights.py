@@ -35,7 +35,7 @@ from ...export import get_worldscale
 from ...export import matrix_to_list
 from ...export import get_expanded_file_name
 
-from .utils import is_lightgroup_opencl_compatible, convert_texture_channel
+from .utils import is_lightgroup_opencl_compatible, convert_texture_channel, log_exception
 
 
 class ExportedLight(object):
@@ -271,8 +271,8 @@ class LightExporter(object):
                     self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.sampleupperhemisphereonly', upper_hemi))
 
                 else:
-                    print('ERROR: Imagemap "%s" of hemilight "%s" not found at path "%s"' % (basename, light.name, infinite_map_path_abs))
-                    self.luxcore_exporter.errors = True
+                    message = 'Imagemap "%s" of hemilight "%s" not found at path "%s"' % (basename, light.name, infinite_map_path_abs)
+                    log_exception(self.luxcore_exporter, message)
                     # Warning color
                     self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.type', 'constantinfinite'))
                     self.properties.Set(pyluxcore.Property('scene.lights.' + luxcore_name + '.color', [1, 0, 1]))

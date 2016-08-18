@@ -187,3 +187,43 @@ class LightgroupCache(object):
 
     def get_lightgroup_id_pairs(self):
         return [(exported_lightgroup.lightgroup, exported_lightgroup.id) for exported_lightgroup in self.cache.values()]
+
+
+def log_exception(luxcore_exporter, message):
+    print(message)
+    import traceback
+    traceback.print_exc()
+    luxcore_exporter.error_cache.add_error(message, traceback.format_exc())
+
+
+class ExportError(object):
+    def __init__(self, message, traceback):
+        self.message = message
+        self.traceback = traceback
+
+
+class ErrorCache(object):
+    def __init__(self):
+        self.cache = []
+
+    def contains_errors(self):
+        return len(self.cache) > 0
+
+    def add_error(self, message, traceback):
+        self.cache.append(ExportError(message, traceback))
+
+    def print_errors(self):
+        if not self.contains_errors():
+            # No errors to report
+            return
+
+        print('=' * 15)
+        print('%d errors during export:' % len(self.cache))
+        print()
+
+        for i, error in enumerate(self.cache):
+            print('Error %d: %s' % (i + 1, error.message))
+            print('Traceback:')
+            print(error.traceback)
+
+        print('=' * 15)

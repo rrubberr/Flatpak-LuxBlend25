@@ -1510,8 +1510,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             luxcore_exporter = LuxCoreExporter(scene, self)
             luxcore_config = luxcore_exporter.convert(filmWidth, filmHeight)
 
-            export_errors = luxcore_exporter.errors
-
             # Maybe export was cancelled by user, don't start the rendering with an incomplete scene then
             if self.test_break() or luxcore_config is None:
                 return
@@ -1520,6 +1518,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             # Start the rendering
             LuxLog('Starting the rendering process...')
             luxcore_session.Start()
+
+            # Print a summary of errors that happened during export, if there are any
+            luxcore_exporter.error_cache.print_errors()
+            export_errors = luxcore_exporter.error_cache.contains_errors()
 
             # Immediately end the rendering if 'FILESAVER' engine is used
             if scene.luxcore_translatorsettings.export_type == 'luxcoreui':

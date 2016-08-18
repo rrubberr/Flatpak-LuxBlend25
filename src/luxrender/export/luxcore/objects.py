@@ -36,7 +36,7 @@ from ...export import object_anim_matrices
 from ...export import matrix_to_list
 from ...properties import find_node
 
-from .utils import calc_shutter, get_elem_key
+from .utils import calc_shutter, get_elem_key, log_exception
 from .meshes import MeshExporter
 
 
@@ -203,8 +203,8 @@ class ObjectExporter(object):
         name = ToValidLuxCoreName(self.blender_object.name + self.dupli_name_suffix)
 
         if not os.path.exists(path) or len(raw_path) == 0:
-            print('ERROR: Invalid path set for proxy "%s"!' % self.blender_object.name)
-            self.luxcore_exporter.errors = True
+            message = 'Invalid path set for proxy "%s"!' % self.blender_object.name
+            log_exception(self.luxcore_exporter, message)
             return
 
         # Convert material

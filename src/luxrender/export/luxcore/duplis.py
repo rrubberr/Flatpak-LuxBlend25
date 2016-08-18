@@ -32,6 +32,7 @@ from ...export import matrix_to_list, is_obj_visible
 
 from .objects import ObjectExporter
 from .lights import LightExporter
+from .utils import log_exception
 
 
 class DupliExporter(object):
@@ -66,10 +67,7 @@ class DupliExporter(object):
                 self.__convert_particles(luxcore_scene)
 
         except Exception:
-            print('Could not convert particle systems of object %s' % self.duplicator.name)
-            self.luxcore_exporter.errors = True
-            import traceback
-            traceback.print_exc()
+            log_exception(self.luxcore_exporter, 'Could not convert particle systems of object %s' % self.duplicator.name)
         finally:
             return self.properties
 

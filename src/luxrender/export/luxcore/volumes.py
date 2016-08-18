@@ -31,7 +31,7 @@ from ...outputs.luxcore_api import pyluxcore
 from pyluxcore import Property
 from ...properties import find_node_in_volume
 
-from .utils import convert_texture_channel, generate_volume_name
+from .utils import convert_texture_channel, generate_volume_name, log_exception
 
 
 class VolumeExporter(object):
@@ -68,10 +68,8 @@ class VolumeExporter(object):
         try:
             self.luxcore_name = output_node.export_luxcore(self.volume, self.properties, self.blender_scene)
         except Exception as err:
-            print('Node volume export failed, skipping volume: %s\n%s' % (self.volume.name, err))
-            self.luxcore_exporter.errors = True
-            import traceback
-            traceback.print_exc()
+            message = 'Node volume export failed, skipping volume: %s\n%s' % (self.volume.name, err)
+            log_exception(self.luxcore_exporter, message)
             self.__export_fallback_volume()
 
 
@@ -173,9 +171,7 @@ class VolumeExporter(object):
             if volume.type == 'heterogeneous':
                 self.properties.Set(pyluxcore.Property(prefix + '.steps.size', volume.stepsize))
         except Exception as err:
-            print('Volume export failed, skipping volume: %s\n%s' % (volume.name, err))
-            self.luxcore_exporter.errors = True
-            import traceback
-            traceback.print_exc()
+            message = 'Volume export failed, skipping volume: %s\n%s' % (volume.name, err)
+            log_exception(self.luxcore_exporter, message)
             # define a clear volume instead of actual volume so LuxCore will still start to render
             self.properties.Set(pyluxcore.Property(prefix + '.type', 'clear'))
