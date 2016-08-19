@@ -307,6 +307,14 @@ def convert_texture(scene, texture, variant_hint=None):
             '%05d' % scene.frame_current
         )
 
+        if texture.image.packed_file:
+            # Store the render output setting
+            orig_render_format = scene.render.image_settings.file_format
+            # Read the fileformat
+            temp_unpack_format = texture.image.file_format
+            # Temporary change the file_format to render packed images in their original format
+            scene.render.image_settings.file_format = temp_unpack_format
+
         if texture.image.source == 'GENERATED':
             tex_image = 'luxblend_baked_image_%s.%s' % (
                 bpy.path.clean_name(texture.name), scene.render.image_settings.file_format)
@@ -393,6 +401,10 @@ def convert_texture(scene, texture, variant_hint=None):
                         'Image referenced in blender texture %s doesn\'t exist: %s' % (texture.name, f_path))
 
                 tex_image = efutil.filesystem_path(f_path)
+
+        if texture.image.packed_file:
+            # Restore the render output setting
+            scene.render.image_settings.file_format = orig_render_format
 
         lux_tex_name = 'imagemap'
         sampling = texture.luxrender_texture.luxrender_tex_imagesampling
