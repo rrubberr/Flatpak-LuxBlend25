@@ -1973,7 +1973,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
     viewFilmWidth = -1
     viewFilmHeight = -1
-    viewImageBufferFloat = None
+    glBuffer = None
     last_update_time = 0
     # store renderengine configuration of last update
     lastRenderSettings = ''
@@ -1987,30 +1987,29 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     update_counter = 0
 
     def create_view_buffer(self, width, height):
-        bufferdepth = 4 if self.transparent_film else 3
-        self.viewImageBufferFloat = array.array('f', [0.0] * (width * height * bufferdepth))
+        if self.transparent_film:
+            bufferdepth = 4
+            buffertype = bgl.GL_RGBA
+        else:
+            bufferdepth = 3
+            buffertype = bgl.GL_RGB
+
+        glBuffer = bgl.Buffer(bgl.GL_FLOAT, [width * height * bufferdepth])
+
+    def draw_framebuffer(self):
+        if self.transparent_film:
+            buffertype = bgl.GL_RGBA
+            # Enable GL_BLEND so the alpha channel is visible
+            bgl.glEnable(bgl.GL_BLEND)
+        else:
+            buffertype = bgl.GL_RGB
+
+        bgl.glRasterPos2i(0, 0)
+        bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, buffertype, bgl.GL_FLOAT, self.glBuffer)
+        # restore the default
+        bgl.glDisable(bgl.GL_BLEND)
 
     def luxcore_view_draw(self, context):
-        def draw_framebuffer():
-            # Update the screen
-
-            if self.transparent_film:
-                bufferdepth = 4
-                buffertype = bgl.GL_RGBA
-                # Enable GL_BLEND so the alpha channel is visible
-                bgl.glEnable(bgl.GL_BLEND)
-            else:
-                bufferdepth = 3
-                buffertype = bgl.GL_RGB
-
-            buffersize = self.viewFilmWidth * self.viewFilmHeight * bufferdepth
-            glBuffer = bgl.Buffer(bgl.GL_FLOAT, [buffersize], self.viewImageBufferFloat)
-
-            bgl.glRasterPos2i(0, 0)
-            bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, buffertype, bgl.GL_FLOAT, glBuffer)
-            # restore the default
-            bgl.glDisable(bgl.GL_BLEND)
-
         view_draw_startTime = time.time()
         elapsed = view_draw_startTime - self.last_update_time
 
@@ -2082,8 +2081,9 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             output_type = pyluxcore.FilmOutputType.RGB_TONEMAPPED
 
         session.luxcore_session.WaitNewFrame()
-        session.luxcore_session.GetFilm().GetOutputFloat(output_type, self.viewImageBufferFloat)
-        draw_framebuffer()
+        # experimental: trying to write directly into the OpenGL buffer
+        session.luxcore_session.GetFilm().GetOutputFloat(output_type, self.glBuffer)
+        self.draw_framebuffer()
 
         self.last_update_time = view_draw_startTime
 
