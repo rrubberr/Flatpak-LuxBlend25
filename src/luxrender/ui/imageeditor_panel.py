@@ -120,7 +120,6 @@ class tonemapping_panel(imageeditor_panel):
             layout.prop(imagepipeline_settings, 'crf_file')
 
         # TODO: can we only show the available passes here?
-        layout.label('Pass:')
         layout.prop(imagepipeline_settings, 'output_switcher_pass')
 
         if imagepipeline_settings.output_switcher_pass == 'IRRADIANCE':
@@ -134,8 +133,36 @@ class tonemapping_panel(imageeditor_panel):
 
         layout.prop(imagepipeline_settings, 'use_background_image')
         if imagepipeline_settings.use_background_image:
-            layout.prop(imagepipeline_settings, 'background_image', text='')
-            layout.prop(imagepipeline_settings, 'background_image_gamma')
+            alpha_pass_available = True
+            if not context.scene.luxrender_channels.enable_aovs:
+                layout.label('Not available (passes disabled)', icon='ERROR')
+                alpha_pass_available = False
+            elif not context.scene.luxrender_channels.ALPHA:
+                layout.label('Not available (Alpha pass disabled)', icon='ERROR')
+                alpha_pass_available = False
+
+            sub = layout.column()
+            sub.active = alpha_pass_available
+            sub.prop(imagepipeline_settings, 'background_image', text='')
+            sub.prop(imagepipeline_settings, 'background_image_gamma')
+
+        layout.prop(imagepipeline_settings, 'use_mist')
+        if imagepipeline_settings.use_mist:
+            depth_pass_available = True
+            if not context.scene.luxrender_channels.enable_aovs:
+                layout.label('Not available (passes disabled)', icon='ERROR')
+                depth_pass_available = False
+            elif not context.scene.luxrender_channels.DEPTH:
+                layout.label('Not available (Depth pass disabled)', icon='ERROR')
+                depth_pass_available = False
+
+            sub = layout.column(align=True)
+            sub.active = depth_pass_available
+            sub.prop(imagepipeline_settings, 'mist_excludebackground')
+            sub.prop(imagepipeline_settings, 'mist_color')
+            sub.prop(imagepipeline_settings, 'mist_amount')
+            sub.prop(imagepipeline_settings, 'mist_startdistance')
+            sub.prop(imagepipeline_settings, 'mist_enddistance')
 
 
 @LuxRenderAddon.addon_register_class
