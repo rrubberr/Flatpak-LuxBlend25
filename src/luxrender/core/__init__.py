@@ -2020,7 +2020,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         # Run at fixed fps
         if elapsed < interval:
-            draw_framebuffer()
+            self.draw_framebuffer()
             self.tag_redraw()
             return
 
