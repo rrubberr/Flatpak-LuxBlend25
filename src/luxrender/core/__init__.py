@@ -1994,7 +1994,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             bufferdepth = 3
             buffertype = bgl.GL_RGB
 
-        glBuffer = bgl.Buffer(bgl.GL_FLOAT, [width * height * bufferdepth])
+        self.glBuffer = bgl.Buffer(bgl.GL_FLOAT, [width * height * bufferdepth])
 
     def draw_framebuffer(self):
         if self.transparent_film:
