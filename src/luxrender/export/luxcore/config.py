@@ -318,6 +318,8 @@ class ConfigExporter(object):
         if self.get_engine() == 'RTPATHCPU':
             # RTPATHCPU needs a special sampler
             self.properties.Set(pyluxcore.Property('sampler.type', 'RTPATHCPUSAMPLER'))
+            # Set zoomphase weight to 0 so the low-res zoomphase samples are quickly replaced once the sceneedit is over
+            self.properties.Set(pyluxcore.Property('rtpathcpu.zoomphase.weight', 0.0))
         else:
             # Sampler settings (same as for final render)
             self.properties.Set(pyluxcore.Property('sampler.type', engine_settings.sampler_type))
