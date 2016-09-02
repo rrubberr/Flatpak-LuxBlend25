@@ -2054,10 +2054,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             self.lastCameraSettings = newCameraSettings
             self.luxcore_view_update(context, update_changes)
 
-        session = LuxCoreSessionManager.get_session(self.space)
+        session = LuxCoreSessionManager.get_session(context.space_data)
 
         # Update statistics
-        if LuxCoreSessionManager.is_session_active(self.space):
+        if LuxCoreSessionManager.is_session_active(context.space_data):
             session.luxcore_session.UpdateStats()
             stats = session.luxcore_session.GetStats()
 
@@ -2089,7 +2089,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         if stop_redraw:
             # Pause rendering
-            LuxCoreSessionManager.pause(self.space)
+            LuxCoreSessionManager.pause(context.space_data)
         else:
             # Trigger another update
             self.tag_redraw()
@@ -2118,7 +2118,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
             self.lastVisibilitySettings = set(context.visible_objects)
 
-            if (not LuxCoreSessionManager.is_session_active(self.space) or
+            if (not LuxCoreSessionManager.is_session_active(context.space_data) or
                     self.luxcore_exporter is None):
                 update_changes.set_cause(startViewportRender = True)
 
@@ -2299,7 +2299,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 # Find out in which space this rendersession is running.
                 self.space = context.space_data
 
-                LuxCoreSessionManager.stop_luxcore_session(self.space)
+                LuxCoreSessionManager.stop_luxcore_session(context.space_data)
 
                 if context.scene.camera:
                     self.transparent_film = context.scene.camera.data.luxrender_camera.luxcore_imagepipeline.transparent_film
@@ -2327,8 +2327,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     LuxLog('ERROR: not a valid luxcore config')
                     return
 
-                LuxCoreSessionManager.create_luxcore_session(luxcore_config, self.space)
-                LuxCoreSessionManager.start_luxcore_session(self.space)
+                LuxCoreSessionManager.create_luxcore_session(luxcore_config, context.space_data)
+                LuxCoreSessionManager.start_luxcore_session(context.space_data)
 
                 self.critical_errors = False
             except Exception as exc:
@@ -2357,8 +2357,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
                 self.create_view_buffer(self.viewFilmWidth, self.viewFilmHeight)
 
-                luxcore_config = LuxCoreSessionManager.get_session(self.space).luxcore_session.GetRenderConfig()
-                LuxCoreSessionManager.stop_luxcore_session(self.space)
+                luxcore_config = LuxCoreSessionManager.get_session(context.space_data).luxcore_session.GetRenderConfig()
+                LuxCoreSessionManager.stop_luxcore_session(context.space_data)
 
                 self.luxcore_exporter.convert_config(self.viewFilmWidth, self.viewFilmHeight)
 
@@ -2368,13 +2368,13 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                     LuxLog('ERROR: not a valid luxcore config')
                     return
 
-                LuxCoreSessionManager.create_luxcore_session(luxcore_config, self.space)
-                LuxCoreSessionManager.start_luxcore_session(self.space)
+                LuxCoreSessionManager.create_luxcore_session(luxcore_config, context.space_data)
+                LuxCoreSessionManager.start_luxcore_session(context.space_data)
 
             if update_changes.scene_edit_necessary:
                 # begin sceneEdit
-                luxcore_scene = LuxCoreSessionManager.get_session(self.space).luxcore_session.GetRenderConfig().GetScene()
-                LuxCoreSessionManager.begin_scene_edit(self.space)
+                luxcore_scene = LuxCoreSessionManager.get_session(context.space_data).luxcore_session.GetRenderConfig().GetScene()
+                LuxCoreSessionManager.begin_scene_edit(context.space_data)
 
                 if update_changes.cause_camera:
                     LuxLog('Camera update')
@@ -2438,17 +2438,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 # parse scene changes and end sceneEdit
                 luxcore_scene.Parse(updated_properties)
 
-                LuxCoreSessionManager.end_scene_edit(self.space)
+                LuxCoreSessionManager.end_scene_edit(context.space_data)
 
             if update_changes.cause_session:
                 # Only update the session without restarting the rendering
                 props = self.luxcore_exporter.convert_imagepipeline()
                 props.Set(self.luxcore_exporter.convert_lightgroup_scales())
 
-                LuxCoreSessionManager.get_session(self.space).luxcore_session.Parse(props)
+                LuxCoreSessionManager.get_session(context.space_data).luxcore_session.Parse(props)
 
             # Resume in case the session was paused
-            LuxCoreSessionManager.resume(self.space)
+            LuxCoreSessionManager.resume(context.space_data)
 
         # report time it took to update
         view_update_time = int(round(time.time() * 1000)) - view_update_startTime
