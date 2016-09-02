@@ -2297,16 +2297,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         elif update_changes.cause_startViewportRender:
             try:
                 # Find out in which space this rendersession is running.
-                # This code assumes that only one VIEW_3D is set to RENDERED mode at a time - scripts that set
-                # many views to rendered at once might break this detection, but I fear we can't implement a better
-                # detection algorithm
-                for area in context.screen.areas:
-                    if area.type == 'VIEW_3D':
-                        for space in area.spaces:
-                            if (space.type == 'VIEW_3D' and space.viewport_shade == 'RENDERED' and
-                                        space not in LuxCoreSessionManager.sessions.keys()):
-                                self.space = space
-                                break
+                self.space = context.space_data
 
                 LuxCoreSessionManager.stop_luxcore_session(self.space)
 

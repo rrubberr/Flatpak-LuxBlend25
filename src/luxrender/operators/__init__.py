@@ -26,10 +26,11 @@
 #
 # Blender Libs
 import bpy, bl_operators
-import os, re, mathutils, tempfile, shutil, urllib.request, urllib.error, zipfile
+import os, time, re, mathutils, tempfile, shutil, urllib.request, urllib.error, zipfile
 
 # LuxRender Libs
 from .. import LuxRenderAddon
+from ..extensions_framework import util as efutil
 
 # Per-IDPropertyGroup preset handling
 
@@ -432,3 +433,94 @@ class LUXRENDER_OT_fix_color_management(bpy.types.Operator):
             vs.use_curve_mapping = False
 
         return {'FINISHED'}
+
+
+@LuxRenderAddon.addon_register_class
+class ModalTimerOperator(bpy.types.Operator):
+    """LuxRender Viewport Animation Render"""
+    bl_idname = "luxrender.viewport_animation"
+    bl_label = "Lux Viewport Animation"
+
+    _timer = None
+    _start_time = 0
+    _space = None
+
+    def modal(self, context, event):
+        if event.type == 'ESC':
+            self.cancel(context)
+            return {'CANCELLED'}
+
+        if event.type == 'TIMER':
+            try:
+                from ..core import LuxCoreSessionManager
+                from ..outputs.luxcore_api import pyluxcore
+                scene = context.scene
+
+                elapsed = time.time() - self._start_time
+                print("[%.1fs] Saving frame %d" % (elapsed, scene.frame_current))
+
+                # Save current frame
+                filename = "%d.png" % scene.frame_current
+                output_path = efutil.filesystem_path(scene.render.filepath)
+                if not os.path.isdir(output_path):
+                    os.makedirs(output_path)
+                output_path = os.path.join(output_path, filename)
+
+                # TODO: transparent film (RGBA_IMAGEPIPELINE)
+                props = pyluxcore.Properties()
+
+                print(len(LuxCoreSessionManager.sessions))
+
+                print('session:', self._session)
+                print('active:', LuxCoreSessionManager.is_session_active(self._space))
+                LuxCoreSessionManager.get_session(self._space).luxcore_session.GetFilm().SaveOutput(output_path, pyluxcore.FilmOutputType.RGB_IMAGEPIPELINE, props)
+
+                # Next frame
+                scene.frame_current += scene.frame_step
+
+                elapsed = time.time() - self._start_time
+                print("[%.1fs] Rendering frame %d" % (elapsed, scene.frame_current))
+
+                if scene.frame_current > scene.frame_end:
+                    print("Done.")
+                    self.cancel(context)
+                    return {'CANCELLED'}
+            except Exception as e:
+                self.report({'ERROR'}, str(e))
+                self.cancel(context)
+                import traceback
+                traceback.print_exc()
+                return {'CANCELLED'}
+
+        return {'PASS_THROUGH'}
+
+    def execute(self, context):
+        from ..core import LuxCoreSessionManager
+
+        if len(LuxCoreSessionManager.sessions) > 0:
+            # Pick one of the sessions. The user should make sure that only one session is running
+            #self._session = next(iter(LuxCoreSessionManager.sessions.values()))
+            #space = context.area.spaces.active
+            self._space = context.space_data
+            self._session = LuxCoreSessionManager.get_session(self._space)
+        else:
+            # No running session, we have to abort
+            self.report({'ERROR'}, 'No running Lux session')
+            return {'CANCELLED'}
+
+        scene = context.scene
+        scene.frame_current = scene.frame_start
+
+        self._start_time = time.time()
+
+        wm = context.window_manager
+        # TODO: get time from halt condition or so
+        self._timer = wm.event_timer_add(4, context.window)
+        wm.modal_handler_add(self)
+        print('Start')
+        return {'RUNNING_MODAL'}
+
+    def cancel(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+        print('Removed timer.')
