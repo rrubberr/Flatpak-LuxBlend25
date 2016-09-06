@@ -473,10 +473,12 @@ class ModalTimerOperator(bpy.types.Operator):
 
                 print('session:', self._session)
                 print('active:', LuxCoreSessionManager.is_session_active(self._space))
-                LuxCoreSessionManager.get_session(self._space).luxcore_session.GetFilm().SaveOutput(output_path, pyluxcore.FilmOutputType.RGB_IMAGEPIPELINE, props)
+                session = LuxCoreSessionManager.get_session(self._space)
+                session.luxcore_session.GetFilm().SaveOutput(output_path, pyluxcore.FilmOutputType.RGB_IMAGEPIPELINE, props)
 
                 # Next frame
                 scene.frame_current += scene.frame_step
+                #session.luxcore_exporter.renderengine.frame_set(scene.frame_current + scene.frame_step, scene.frame_subframe)
 
                 elapsed = time.time() - self._start_time
                 print("[%.1fs] Rendering frame %d" % (elapsed, scene.frame_current))
@@ -515,7 +517,7 @@ class ModalTimerOperator(bpy.types.Operator):
 
         wm = context.window_manager
         # TODO: get time from halt condition or so
-        self._timer = wm.event_timer_add(4, context.window)
+        self._timer = wm.event_timer_add(30, context.window)
         wm.modal_handler_add(self)
         print('Start')
         return {'RUNNING_MODAL'}

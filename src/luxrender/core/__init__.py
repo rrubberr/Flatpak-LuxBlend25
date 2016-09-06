@@ -1967,24 +1967,23 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
     # Viewport render
     ############################################################################
 
-    luxcore_exporter = None
-    space = None # The VIEW_3D space this viewport render is running in
-    critical_errors = False # Flag that tells wether critical errors prevent the viewport render from running
-
-    viewFilmWidth = -1
-    viewFilmHeight = -1
     glBuffer = None
+    critical_errors = False # Flag that tells wether critical errors prevent the viewport render from running
     last_update_time = 0
-    # store renderengine configuration of last update
-    lastRenderSettings = ''
-    lastVolumeSettings = ''
-    lastSessionSettings = ''
-    lastHaltTime = -1
-    lastHaltSamples = -1
-    lastCameraSettings = ''
-    lastVisibilitySettings = None
-    lastNodeMatSettings = ''
     update_counter = 0
+
+    # luxcore_exporter = None
+    # # store renderengine configuration of last update
+    # viewFilmWidth = -1
+    # viewFilmHeight = -1
+    # lastRenderSettings = ''
+    # lastVolumeSettings = ''
+    # lastSessionSettings = ''
+    # lastHaltTime = -1
+    # lastHaltSamples = -1
+    # lastCameraSettings = ''
+    # lastVisibilitySettings = None
+    # lastNodeMatSettings = ''
 
     def create_view_buffer(self, width, height):
         if self.transparent_film:
@@ -1996,7 +1995,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         self.glBuffer = bgl.Buffer(bgl.GL_FLOAT, [width * height * bufferdepth])
 
-    def draw_framebuffer(self):
+    def draw_framebuffer(self, width, height):
         if self.transparent_film:
             buffertype = bgl.GL_RGBA
             # Enable GL_BLEND so the alpha channel is visible
@@ -2005,13 +2004,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             buffertype = bgl.GL_RGB
 
         bgl.glRasterPos2i(0, 0)
-        bgl.glDrawPixels(self.viewFilmWidth, self.viewFilmHeight, buffertype, bgl.GL_FLOAT, self.glBuffer)
+        bgl.glDrawPixels(width, height, buffertype, bgl.GL_FLOAT, self.glBuffer)
         # restore the default
         bgl.glDisable(bgl.GL_BLEND)
 
     def luxcore_view_draw(self, context):
+        session = LuxCoreSessionManager.get_session(context.space_data)
         view_draw_startTime = time.time()
         elapsed = view_draw_startTime - self.last_update_time
+
+        if self.glBuffer is None:
+            self.create_view_buffer(session.filmWidth, session.filmHeight)
 
         if context.scene.camera:
             interval = context.scene.camera.data.luxrender_camera.luxcore_imagepipeline.viewport_interval / 1000
@@ -2020,7 +2023,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
         # Run at fixed fps
         if elapsed < interval:
-            self.draw_framebuffer()
+            self.draw_framebuffer(session.filmWidth, session.filmHeight)
             self.tag_redraw()
             return
 
@@ -2036,28 +2039,30 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         stop_redraw = False
 
         # Check if the size of the window is changed
-        if (self.viewFilmWidth != context.region.width) or (
-                self.viewFilmHeight != context.region.height):
+        # TODO: add delay to minimize lag during resize
+        if (session.filmWidth != context.region.width) or (session.filmHeight != context.region.height):
             update_changes = UpdateChanges()
             update_changes.set_cause(config = True)
+            print('config because: filmsize changed (in draw method)')
             self.luxcore_view_update(context, update_changes)
 
         # check if camera settings have changed
-        self.luxcore_exporter.convert_camera()
-        newCameraSettings = str(self.luxcore_exporter.pop_updated_scene_properties())
+        session.luxcore_exporter.convert_camera()
+        newCameraSettings = str(session.luxcore_exporter.pop_updated_scene_properties())
 
-        if self.lastCameraSettings == '':
-            self.lastCameraSettings = newCameraSettings
-        elif self.lastCameraSettings != newCameraSettings and newCameraSettings.strip() != '':
+        if session.lastCameraSettings == '':
+            session.lastCameraSettings = newCameraSettings
+        elif session.lastCameraSettings != newCameraSettings and newCameraSettings.strip() != '':
             update_changes = UpdateChanges()
             update_changes.set_cause(camera = True)
-            self.lastCameraSettings = newCameraSettings
+            session.lastCameraSettings = newCameraSettings
             self.luxcore_view_update(context, update_changes)
 
-        session = LuxCoreSessionManager.get_session(context.space_data)
+        # Might be None during some update phases!
+        luxcore_session = session.luxcore_session
 
         # Update statistics
-        if LuxCoreSessionManager.is_session_active(context.space_data):
+        if LuxCoreSessionManager.is_session_active(context.space_data) and luxcore_session:
             session.luxcore_session.UpdateStats()
             stats = session.luxcore_session.GetStats()
 
@@ -2080,10 +2085,11 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         else:
             output_type = pyluxcore.FilmOutputType.RGB_TONEMAPPED
 
-        session.luxcore_session.WaitNewFrame()
-        # experimental: trying to write directly into the OpenGL buffer
-        session.luxcore_session.GetFilm().GetOutputFloat(output_type, self.glBuffer)
-        self.draw_framebuffer()
+        if luxcore_session:
+            luxcore_session.WaitNewFrame()
+            # experimental: trying to write directly into the OpenGL buffer
+            luxcore_session.GetFilm().GetOutputFloat(output_type, self.glBuffer)
+            self.draw_framebuffer(session.filmWidth, session.filmHeight)
 
         self.last_update_time = view_draw_startTime
 
@@ -2100,36 +2106,43 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         """
         update_changes = UpdateChanges()
 
+        print('objs:', bpy.data.objects.is_updated)
+        print('scn:', context.scene.is_updated)
+        print('scn data:', context.scene.is_updated_data)
+
         try:
+            if (not LuxCoreSessionManager.is_session_active(context.space_data)):
+                update_changes.set_cause(startViewportRender = True)
+                return update_changes
+
+            session = LuxCoreSessionManager.get_session(context.space_data)
+
             # check if visibility of objects was changed
-            if self.lastVisibilitySettings is None:
-                self.lastVisibilitySettings = set(context.visible_objects)
+            if session.lastVisibilitySettings is None:
+                session.lastVisibilitySettings = set(context.visible_objects)
             else:
-                objectsToAdd = set(context.visible_objects) - self.lastVisibilitySettings
-                objectsToRemove = self.lastVisibilitySettings - set(context.visible_objects)
+                objectsToAdd = set(context.visible_objects) - session.lastVisibilitySettings
+                objectsToRemove = session.lastVisibilitySettings - set(context.visible_objects)
 
                 if len(objectsToAdd) > 0:
-                    update_changes.set_cause(mesh = True)
+                    update_changes.set_cause(mesh=True)
                     update_changes.changed_objects_mesh.update(objectsToAdd)
 
                 if len(objectsToRemove) > 0:
-                    update_changes.set_cause(objectsRemoved = True)
+                    update_changes.set_cause(objectsRemoved=True)
                     update_changes.removed_objects.update(objectsToRemove)
 
-            self.lastVisibilitySettings = set(context.visible_objects)
-
-            if (not LuxCoreSessionManager.is_session_active(context.space_data) or
-                    self.luxcore_exporter is None):
-                update_changes.set_cause(startViewportRender = True)
-
-                # LuxCoreExporter instance for viewport rendering is only created here
-                self.luxcore_exporter = LuxCoreExporter(context.scene, self, True, context)
+            session.lastVisibilitySettings = set(context.visible_objects)
 
             # check if filmsize has changed
-            if (self.viewFilmWidth == -1) or (self.viewFilmHeight == -1) or (
-                    self.viewFilmWidth != context.region.width) or (
-                    self.viewFilmHeight != context.region.height):
+            if (session.filmWidth == -1) or (session.filmHeight == -1) or (
+                    session.filmWidth != context.region.width) or (
+                    session.filmHeight != context.region.height):
                 update_changes.set_cause(config = True)
+                print('config because: filmsize changed')
+                # We don't need to check for more, when the viewport size is edited it is not possible to edit
+                # objects, materials or other stuff at the same time
+                return update_changes
 
             if bpy.data.objects.is_updated:
                 # check objects for updates
@@ -2173,15 +2186,15 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                         nodetree = bpy.data.node_groups[nodetree_name]
 
                         if nodetree.is_updated or nodetree.is_updated_data:
-                            self.luxcore_exporter.convert_material(mat)
-                            newNodeMatSettings = str(self.luxcore_exporter.pop_updated_scene_properties())
+                            session.luxcore_exporter.convert_material(mat)
+                            newNodeMatSettings = str(session.luxcore_exporter.pop_updated_scene_properties())
 
-                            if self.lastNodeMatSettings == '':
-                                self.lastNodeMatSettings = newNodeMatSettings
-                                mat_updated = True
-                            elif self.lastNodeMatSettings != newNodeMatSettings:
-                                self.lastNodeMatSettings = newNodeMatSettings
-                                mat_updated = True
+                            if session.lastNodeMatSettings == '':
+                                session.lastNodeMatSettings = newNodeMatSettings
+                                #mat_updated = True
+                            elif session.lastNodeMatSettings != newNodeMatSettings:
+                                session.lastNodeMatSettings = newNodeMatSettings
+                                #mat_updated = True
                     else:
                         mat_updated = mat.is_updated
 
@@ -2199,12 +2212,12 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
             # check for changes in volume configuration
             for volume in context.scene.luxrender_volumes.volumes:
-                self.luxcore_exporter.convert_volume(volume)
+                session.luxcore_exporter.convert_volume(volume)
 
             # Exclude all densitygrid data properties from the update check
             # All lines of the form "scene.textures.<densitygrid_tex_name>.data = [...]" will be removed
             # This allows us to avoid re-exports of the smoke for every volume update check
-            newVolumeProperties = self.luxcore_exporter.pop_updated_scene_properties()
+            newVolumeProperties = session.luxcore_exporter.pop_updated_scene_properties()
             lines = str(newVolumeProperties).split('\n')
             densitygrid_textures = [line for line in lines if 'type = "densitygrid"' in line]
             names = [elem.split('.')[2] for elem in densitygrid_textures]
@@ -2213,11 +2226,11 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
             newVolumeSettings = str(newVolumeProperties)
 
-            if self.lastVolumeSettings == '':
-                self.lastVolumeSettings = newVolumeSettings
-            elif self.lastVolumeSettings != newVolumeSettings:
+            if session.lastVolumeSettings == '':
+                session.lastVolumeSettings = newVolumeSettings
+            elif session.lastVolumeSettings != newVolumeSettings:
                 update_changes.set_cause(volumes = True)
-                self.lastVolumeSettings = newVolumeSettings
+                session.lastVolumeSettings = newVolumeSettings
                 # reset the smoke cache because we need to redefine volume properties
                 SmokeCache.reset()
 
@@ -2225,33 +2238,39 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             newHaltTime = context.scene.luxcore_enginesettings.halt_time_preview
             newHaltSamples = context.scene.luxcore_enginesettings.halt_samples_preview
 
-            if self.lastHaltTime != -1 and self.lastHaltSamples != -1:
-                if newHaltTime > self.lastHaltTime or newHaltSamples > self.lastHaltSamples:
+            if session.lastHaltTime != -1 and session.lastHaltSamples != -1:
+                if newHaltTime > session.lastHaltTime or newHaltSamples > session.lastHaltSamples:
                     update_changes.set_cause(haltconditions = True)
 
-            self.lastHaltTime = newHaltTime
-            self.lastHaltSamples = newHaltSamples
+            session.lastHaltTime = newHaltTime
+            session.lastHaltSamples = newHaltSamples
 
             # Check for config changes that need a restart of the rendering
-            self.luxcore_exporter.convert_config(self.viewFilmWidth, self.viewFilmHeight)
-            newRenderSettings = str(self.luxcore_exporter.config_exporter.properties)
+            session.luxcore_exporter.convert_config(session.filmWidth, session.filmHeight)
+            newRenderSettings = str(session.luxcore_exporter.config_exporter.properties)
 
-            if self.lastRenderSettings == '':
-                self.lastRenderSettings = newRenderSettings
-            elif self.lastRenderSettings != newRenderSettings:
+            if session.lastRenderSettings == '':
+                session.lastRenderSettings = newRenderSettings
+            elif session.lastRenderSettings != newRenderSettings:
                 update_changes.set_cause(config = True)
-                self.lastRenderSettings = newRenderSettings
+                print('config because: new rendersettings')
+                print('last rendersettings:')
+                print(session.lastRenderSettings)
+                print('-----')
+                print('new rendersettings:')
+                print(newRenderSettings)
+                session.lastRenderSettings = newRenderSettings
 
             # Check for config changes that do not require the rendering to be restarted (tonemapping, lightgroups)
-            session_props = self.luxcore_exporter.convert_imagepipeline()
-            session_props.Set(self.luxcore_exporter.convert_lightgroup_scales())
+            session_props = session.luxcore_exporter.convert_imagepipeline()
+            session_props.Set(session.luxcore_exporter.convert_lightgroup_scales())
             newSessionSettings = str(session_props)
 
-            if self.lastSessionSettings == '':
-                self.lastSessionSettings = newSessionSettings
-            elif self.lastSessionSettings != newSessionSettings:
+            if session.lastSessionSettings == '':
+                session.lastSessionSettings = newSessionSettings
+            elif session.lastSessionSettings != newSessionSettings:
                 update_changes.set_cause(session = True)
-                self.lastSessionSettings = newSessionSettings
+                session.lastSessionSettings = newSessionSettings
 
         except Exception as exc:
             LuxLog('Update check failed: %s' % exc)
@@ -2297,8 +2316,6 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         elif update_changes.cause_startViewportRender:
             try:
                 # Find out in which space this rendersession is running.
-                self.space = context.space_data
-
                 LuxCoreSessionManager.stop_luxcore_session(context.space_data)
 
                 if context.scene.camera:
@@ -2306,31 +2323,33 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 else:
                     self.transparent_film = False
 
-                self.lastRenderSettings = ''
-                self.lastVolumeSettings = ''
-                self.lastSessionSettings = ''
-                self.lastHaltTime = -1
-                self.lastHaltSamples = -1
-                self.lastCameraSettings = ''
-                self.lastVisibilitySettings = None
-                self.update_counter = 0
-
                 LuxManager.SetCurrentScene(context.scene)
 
-                self.viewFilmWidth = context.region.width
-                self.viewFilmHeight = context.region.height
-                self.create_view_buffer(self.viewFilmWidth, self.viewFilmHeight)
-
                 # Export the Blender scene
-                luxcore_config = self.luxcore_exporter.convert(self.viewFilmWidth, self.viewFilmHeight)
+                # Todo: I pass "self" here - what if this RenderEngine instance is deleted?
+                luxcore_exporter = LuxCoreExporter(context.scene, self, True, context)
+                luxcore_config = luxcore_exporter.convert(context.region.width, context.region.height)
                 if luxcore_config is None:
                     LuxLog('ERROR: not a valid luxcore config')
                     return
 
-                LuxCoreSessionManager.create_luxcore_session(luxcore_config, context.space_data)
-                LuxCoreSessionManager.start_luxcore_session(context.space_data)
+                session = LuxCoreSessionManager.create_luxcore_session(luxcore_config, context.space_data)
+                session.luxcore_exporter = luxcore_exporter
+                session.filmWidth = context.region.width
+                session.filmHeight = context.region.height
+                # session.lastRenderSettings = '' # todo remove
+                # session.lastVolumeSettings = ''
+                # session.lastSessionSettings = ''
+                # session.lastHaltTime = -1
+                # session.lastHaltSamples = -1
+                # session.lastCameraSettings = ''
+                # session.lastVisibilitySettings = None
 
+                self.create_view_buffer(context.region.width, context.region.height)
                 self.critical_errors = False
+                self.update_counter = 0
+
+                LuxCoreSessionManager.start_luxcore_session(context.space_data)
             except Exception as exc:
                 # This flag is used to prevent the luxcore_draw() function from crashing Blender
                 self.critical_errors = True
@@ -2352,58 +2371,64 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 else:
                     self.transparent_film = False
 
-                self.viewFilmWidth = context.region.width
-                self.viewFilmHeight = context.region.height
+                session = LuxCoreSessionManager.get_session(context.space_data)
+                luxcore_config = session.luxcore_session.GetRenderConfig()
+                luxcore_exporter = session.luxcore_exporter
+                LuxCoreSessionManager.stop_luxcore_session(context.space_data)  # This deletes the session object
 
-                self.create_view_buffer(self.viewFilmWidth, self.viewFilmHeight)
+                luxcore_exporter.convert_config(context.region.width, context.region.height)
 
-                luxcore_config = LuxCoreSessionManager.get_session(context.space_data).luxcore_session.GetRenderConfig()
-                LuxCoreSessionManager.stop_luxcore_session(context.space_data)
-
-                self.luxcore_exporter.convert_config(self.viewFilmWidth, self.viewFilmHeight)
-
-                # change config
-                luxcore_config.Parse(self.luxcore_exporter.config_properties)
+                # Export the Blender scene
+                luxcore_config.Parse(luxcore_exporter.config_properties)
                 if luxcore_config is None:
                     LuxLog('ERROR: not a valid luxcore config')
                     return
 
-                LuxCoreSessionManager.create_luxcore_session(luxcore_config, context.space_data)
+                session = LuxCoreSessionManager.create_luxcore_session(luxcore_config, context.space_data)
+                session.luxcore_exporter = luxcore_exporter
+                session.filmWidth = context.region.width
+                session.filmHeight = context.region.height
+                self.create_view_buffer(context.region.width, context.region.height)
+
                 LuxCoreSessionManager.start_luxcore_session(context.space_data)
 
+            session = LuxCoreSessionManager.get_session(context.space_data)
+
             if update_changes.scene_edit_necessary:
+                # Clear the dupli cache (duplis are only cached for the time of one update to prevent multi-export)
+                session.luxcore_exporter.dupli_cache = {}
                 # begin sceneEdit
-                luxcore_scene = LuxCoreSessionManager.get_session(context.space_data).luxcore_session.GetRenderConfig().GetScene()
+                luxcore_scene = session.luxcore_session.GetRenderConfig().GetScene()
                 LuxCoreSessionManager.begin_scene_edit(context.space_data)
 
                 if update_changes.cause_camera:
                     LuxLog('Camera update')
-                    self.luxcore_exporter.convert_camera()
+                    session.luxcore_exporter.convert_camera()
 
                 if update_changes.cause_materials:
                     LuxLog('Materials update')
                     for material in update_changes.changed_materials:
-                        self.luxcore_exporter.convert_material(material)
+                        session.luxcore_exporter.convert_material(material)
 
                 if update_changes.cause_mesh:
                     for ob in update_changes.changed_objects_mesh:
                         LuxLog('Mesh update: ' + ob.name)
-                        self.luxcore_exporter.convert_object(ob, luxcore_scene, update_mesh=True, update_material=False)
+                        session.luxcore_exporter.convert_object(ob, luxcore_scene, update_mesh=True, update_material=False)
 
                 if update_changes.cause_light or update_changes.cause_objectTransform:
                     for ob in update_changes.changed_objects_transform:
                         LuxLog('Transformation update: ' + ob.name)
 
-                        self.luxcore_exporter.convert_object(ob, luxcore_scene, update_mesh=False, update_material=False)
+                        session.luxcore_exporter.convert_object(ob, luxcore_scene, update_mesh=False, update_material=False)
 
                 if update_changes.cause_objectsRemoved:
                     for ob in update_changes.removed_objects:
                         key = get_elem_key(ob)
 
                         if ob.type == 'LAMP':
-                            if key in self.luxcore_exporter.light_cache:
+                            if key in session.luxcore_exporter.light_cache:
                                 # In case of sunsky there might be multiple light sources, loop through them
-                                for exported_light in self.luxcore_exporter.light_cache[key].exported_lights:
+                                for exported_light in session.luxcore_exporter.light_cache[key].exported_lights:
                                     luxcore_name = exported_light.luxcore_name
 
                                     if exported_light.type == 'AREA':
@@ -2412,17 +2437,17 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                                     else:
                                         luxcore_scene.DeleteLight(luxcore_name)
                         else:
-                            if key in self.luxcore_exporter.object_cache:
+                            if key in session.luxcore_exporter.object_cache:
                                 # loop through object components (split by materials)
-                                for exported_object in self.luxcore_exporter.object_cache[key].exported_objects:
+                                for exported_object in session.luxcore_exporter.object_cache[key].exported_objects:
                                     luxcore_name = exported_object.luxcore_object_name
                                     luxcore_scene.DeleteObject(luxcore_name)
 
                 if update_changes.cause_volumes:
                     for volume in context.scene.luxrender_volumes.volumes:
-                        self.luxcore_exporter.convert_volume(volume)
+                        session.luxcore_exporter.convert_volume(volume)
 
-                updated_properties = self.luxcore_exporter.pop_updated_scene_properties()
+                updated_properties = session.luxcore_exporter.pop_updated_scene_properties()
 
                 if context.space_data.local_view:
                     # Add a uniform white background light in local view so we have a lightsource
@@ -2442,10 +2467,10 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
             if update_changes.cause_session:
                 # Only update the session without restarting the rendering
-                props = self.luxcore_exporter.convert_imagepipeline()
-                props.Set(self.luxcore_exporter.convert_lightgroup_scales())
+                props = session.luxcore_exporter.convert_imagepipeline()
+                props.Set(session.luxcore_exporter.convert_lightgroup_scales())
 
-                LuxCoreSessionManager.get_session(context.space_data).luxcore_session.Parse(props)
+                session.luxcore_session.Parse(props)
 
             # Resume in case the session was paused
             LuxCoreSessionManager.resume(context.space_data)
@@ -2465,6 +2490,20 @@ class Session(object):
         self.luxcore_session = luxcore_session
         self.is_active = False
 
+        self.luxcore_exporter = None
+
+        # store renderengine configuration of last update
+        self.filmWidth = -1
+        self.filmHeight = -1
+        self.lastRenderSettings = ''
+        self.lastVolumeSettings = ''
+        self.lastSessionSettings = ''
+        self.lastHaltTime = -1
+        self.lastHaltSamples = -1
+        self.lastCameraSettings = ''
+        self.lastVisibilitySettings = None
+        self.lastNodeMatSettings = ''
+
     def is_in_scene_edit(self):
         return self.luxcore_session.IsInSceneEdit()
 
@@ -2483,7 +2522,9 @@ class LuxCoreSessionManager(object):
     @classmethod
     def create_luxcore_session(cls, luxcore_config, space):
         # space: bpy.context.screen.areas[x].spaces[y] (areas[x].type == "VIEW_3D", spaces[y].type == "VIEW_3D")
-        cls.sessions[space] = Session(pyluxcore.RenderSession(luxcore_config))
+        session = Session(pyluxcore.RenderSession(luxcore_config))
+        cls.sessions[space] = session
+        return session
 
     @classmethod
     def get_session(cls, space):
