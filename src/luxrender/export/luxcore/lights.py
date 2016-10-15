@@ -417,7 +417,8 @@ class LightExporter(object):
                 if light.shape == 'RECTANGLE':
                     scale_y = mathutils.Matrix.Scale(light.size_y / 2, 4, (0, 1, 0))
                 else:
-                    scale_y = scale_x
+                    # basically scale_x, but for the y axis (note the last tuple argument)
+                    scale_y = mathutils.Matrix.Scale(light.size / 2, 4, (0, 1, 0))
 
                 transform_matrix *= scale_x
                 transform_matrix *= scale_y
