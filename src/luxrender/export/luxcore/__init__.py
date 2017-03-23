@@ -177,7 +177,9 @@ class LuxCoreExporter(object):
         export_time = time.time() - start_time
         print('Export finished (%.1fs)' % export_time)
 
-        if self.config_exporter.get_engine().endswith('CPU'):
+        if self.blender_scene.luxcore_translatorsettings.export_type == 'luxcoreui':
+            message = 'Starting LuxCoreUI...'
+        elif self.config_exporter.get_engine().endswith('CPU'):
             message = 'Starting LuxRender...'
         else:
             message = 'Compiling OpenCL Kernels...'
@@ -258,8 +260,14 @@ class LuxCoreExporter(object):
         elif tonemapper == 'TONEMAP_LUXLINEAR':
             lux_camera = self.blender_scene.camera.data.luxrender_camera
             sensitivity = lux_camera.sensitivity
-            exposure = lux_camera.exposure_time() if not self.is_viewport_render else lux_camera.exposure_time() * 2.25
+            #exposure = lux_camera.exposure_time() if not self.is_viewport_render else lux_camera.exposure_time() * 2.25
             fstop = lux_camera.fstop
+
+            if self.is_viewport_render or export_to_luxcoreui:
+                exposure = lux_camera.exposure_time() * 2.25
+            else:
+                exposure = lux_camera.exposure_time()
+
             temp_properties.Set(pyluxcore.Property(prefix + str(index) + '.sensitivity', sensitivity))
             temp_properties.Set(pyluxcore.Property(prefix + str(index) + '.exposure', exposure))
             temp_properties.Set(pyluxcore.Property(prefix + str(index) + '.fstop', fstop))
