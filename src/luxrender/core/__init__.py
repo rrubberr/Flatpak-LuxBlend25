@@ -684,7 +684,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
 
                 preview_context.updateStatisticsWindow()
                 LuxLog('Updating preview (%ix%i - %s)' % (xres, yres,
-                        preview_context.getAttribute('renderer_statistics_formatted_short', '_recommended_string')))
+                        preview_context.getAttribute('renderer_statistics', '_recommended_string')))
 
                 result = self.begin_result(0, 0, xres, yres)
 
