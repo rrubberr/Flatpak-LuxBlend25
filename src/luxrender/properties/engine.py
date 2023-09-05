@@ -193,8 +193,8 @@ class luxrender_engine(declarative_property_group):
             'default': 1,
             'min': 1,
             'soft_min': 1,
-            'max': 64,
-            'soft_max': 64
+            'max': 512,
+            'soft_max': 128
         },
         {
             'type': 'enum',
