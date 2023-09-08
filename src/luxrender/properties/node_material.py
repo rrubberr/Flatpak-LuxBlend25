@@ -1801,8 +1801,6 @@ class luxrender_material_output_node(luxrender_node):
 
     def init(self, context):
         self.inputs.new('NodeSocketShader', 'Surface')
-        self.inputs.new('NodeSocketShader', 'Interior Volume')
-        self.inputs.new('NodeSocketShader', 'Exterior Volume')
         self.inputs.new('NodeSocketShader', 'Emission')
 
     def draw_buttons(self, context, layout):
@@ -1958,7 +1956,7 @@ class luxrender_material_output_node(luxrender_node):
                     surface_node.export_material(make_material=make_material, make_texture=make_texture)
 
         # TODO: remove, volumes (with nodes) are now exported from their own output node
-    
+        '''
         # Volumes exporting:
         int_vol_socket = self.inputs[1]
         if int_vol_socket.is_linked:
@@ -1989,5 +1987,7 @@ class luxrender_material_output_node(luxrender_node):
 
         if ext_vol_socket.is_linked:
             ext_vol_node.export_volume(make_volume=make_volume, make_texture=make_texture)
+        '''
 
         return set()
+

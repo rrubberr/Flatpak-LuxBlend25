@@ -261,7 +261,7 @@ class ui_luxrender_material_coating(luxrender_material_base):
         except:
             return super().poll(context)
 
-
+'''
 @LuxRenderAddon.addon_register_class
 class ui_luxrender_material_node_volume(luxrender_material_base):
     bl_label = 'Volumes'
@@ -280,7 +280,7 @@ class ui_luxrender_material_node_volume(luxrender_material_base):
             return context.material.luxrender_material.nodetree
         except:
             return False
-
+'''
 
 
 @LuxRenderAddon.addon_register_class
