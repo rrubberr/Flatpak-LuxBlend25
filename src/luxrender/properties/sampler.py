@@ -49,7 +49,6 @@ class luxrender_sampler(declarative_property_group):
         'pixelsampler',
         'pixelsamples',
 
-        # 'adaptive_largemutationprob',
         'usecooldown',
         'noiseaware',
         'largemutationprob',
