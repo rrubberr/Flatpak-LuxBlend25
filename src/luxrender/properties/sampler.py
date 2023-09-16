@@ -43,6 +43,9 @@ class luxrender_sampler(declarative_property_group):
         'spacer',
         'sampler',
 
+        'chainlength',
+
+		'basesampler',
         'pixelsampler',
         'pixelsamples',
 
@@ -56,13 +59,13 @@ class luxrender_sampler(declarative_property_group):
 
     visibility = {
         'spacer': {'advanced': True},
-        'pixelsampler': {'sampler': O(['lowdiscrepancy', 'random'])},
-        'pixelsamples': {'sampler': O(['lowdiscrepancy', 'random'])},
-        # 'adaptive_largemutationprob':	{ 'sampler': 'metropolis' },
-        'largemutationprob': A([{'sampler': 'metropolis'}, ]),  # { 'adaptive_largemutationprob': False },
-        'usecooldown': A([{'advanced': True}, {'sampler': 'metropolis'}, ]),
-        # { 'adaptive_largemutationprob': False },
-        'maxconsecrejects': A([{'advanced': True}, {'sampler': 'metropolis'}, ]),
+		'chainlength': { 'sampler': 'erpt' },
+		'basesampler': { 'sampler': 'erpt' },
+		'pixelsampler':			O([{ 'sampler': O(['lowdiscrepancy', 'random']) },			{'sampler':'erpt', 'basesampler':O(['lowdiscrepancy', 'random'])} ]),
+		'pixelsamples':			O([{ 'sampler': O(['lowdiscrepancy', 'random']) },			{'sampler':'erpt', 'basesampler':O(['lowdiscrepancy', 'random'])} ]),
+		'largemutationprob':	O([{ 'sampler': 'metropolis' },								{'sampler':'erpt', 'basesampler': 'metropolis' } ]),
+        'usecooldown':          A([{'advanced': True}, {'sampler': 'metropolis'}, ]),
+		'maxconsecrejects':		A([{ 'advanced': True }, O([{ 'sampler': 'metropolis' },	{'sampler':'erpt', 'basesampler': 'metropolis' } ]) ]),
         'usersamplingmap_filename': {'advanced': True},
     }
 
@@ -80,6 +83,7 @@ class luxrender_sampler(declarative_property_group):
             'default': 'metropolis',
             'items': [
                 ('metropolis', 'Metropolis', 'Keleman-style metropolis light transport'),
+                ('erpt', 'ERPT', 'Energy redistribution path tracing'),
                 ('sobol', 'Sobol', 'Use a Sobol sequence'),
                 ('lowdiscrepancy', 'Low Discrepancy', 'Use a low discrepancy sequence'),
                 ('random', 'Random', 'Completely random sampler')
@@ -122,7 +126,7 @@ class luxrender_sampler(declarative_property_group):
             may mute lamps and caustics',
             'default': 512,
             'min': 128,
-            'max': 2048,
+            'max': 32768,
             'save_in_preset': True
         },
         {
@@ -133,6 +137,27 @@ class luxrender_sampler(declarative_property_group):
             'default': False,
             'save_in_preset': True
         },
+        {
+			'type': 'enum',
+			'attr': 'basesampler',
+			'name': 'Base Sampler',
+			'items': [
+				('lowdiscrepancy', 'Low Discrepancy', 'Use a low discrepancy sequence'),
+                ('random', 'Random', 'Completely random sampler'),
+                ('metropolis', 'Metropolis', 'Keleman-style metropolis light transport')
+			],
+			'save_in_preset': True
+		},
+        {
+			'type': 'int', 
+			'attr': 'chainlength',
+			'name': 'Chain Length',
+			'description': 'Chain Length',
+			'default': 512,
+			'min': 1,
+			'max': 32768,
+			'save_in_preset': True
+		},
         {
             'type': 'string',
             'subtype': 'FILE_PATH',
@@ -197,23 +222,28 @@ class luxrender_sampler(declarative_property_group):
 
         params = ParamSet()
 
-        if self.sampler in ['random', 'lowdiscrepancy']:
+        if self.sampler in ['random', 'lowdiscrepancy'] or (self.sampler == 'erpt' and self.basesampler in ['random', 'lowdiscrepancy']):
             params.add_integer('pixelsamples', self.pixelsamples)
             params.add_string('pixelsampler', self.pixelsampler)
-
-            # if self.sampler == 'metropolis':
+		
+        if self.sampler == 'erpt':
+            params.add_integer('chainlength', self.chainlength)
+            params.add_string('basesampler', self.basesampler)
+		
+        # if self.sampler == 'metropolis':
         # params.add_bool('adaptive_largemutationprob', self.adaptive_largemutationprob)
         # if not self.adaptive_largemutationprob:
         # params.add_float('largemutationprob', self.largemutationprob)
         # params.add_bool('usecooldown', self.usecooldown)
 
-        if self.sampler == 'metropolis':
+        if self.sampler == 'metropolis' or (self.sampler == 'erpt' and self.basesampler == 'metropolis'):
             params.add_float('largemutationprob', self.largemutationprob)
+            params.add_bool('usecooldown', self.usecooldown)
 
         params.add_bool('noiseaware', self.noiseaware)
 
         if self.advanced:
-            if self.sampler == 'metropolis':
+            if self.sampler == 'metropolis' or (self.sampler == 'erpt' and self.basesampler == 'metropolis'):
                 params.add_integer('maxconsecrejects', self.maxconsecrejects)
                 params.add_bool('usecooldown', self.usecooldown)
 
