@@ -177,6 +177,7 @@ class luxrender_integrator(declarative_property_group):
         'nsets',
         'nlights',
         'mindist',  #sppm
+        'startk',
         ['hitpointperpass', 'photonperpass'],
         ['startradius', 'alpha'],
         ['directlightsampling', 'includeenvironment'],  #sppm advanced
@@ -328,8 +329,7 @@ class luxrender_integrator(declarative_property_group):
                 ('importance', 'Importance', 'Each ray samples a single lamp chosen by importance value'),
                 ('powerimp', 'Power', 'Each ray samples a single lamp, chosen by importance value and output power'),
                 ('allpowerimp', 'All Power',
-                 'Each ray starts a number of samples equal to the number of lamps, and distributes them according to \
-                 importance and output power'),
+                 'Each ray starts a number of samples equal to the number of lamps, and distributes them according to importance and output power'),
                 ('autopowerimp', 'Auto Power',
                  'Automatically choose between Power and All-Power depending on the number of lights'),
                 ('logpowerimp', 'Log Power',
@@ -402,8 +402,7 @@ class luxrender_integrator(declarative_property_group):
                 ('powerimp', 'Power',
                  'A single light path is started from a lamp chosen by importance value and output power'),
                 ('allpowerimp', 'All Power',
-                 'Starts a number of light paths equal to the number of lamps, the paths will be launched from lamps \
-                 chosen by importance value and output power'),
+                 'Starts a number of light paths equal to the number of lamps, the paths will be launched from lamps chosen by importance value and output power'),
                 ('autopowerimp', 'Auto Power',
                  'Automatically choose between Power and All-Power depending on the number of lights'),
                 ('logpowerimp', 'Log Power',
@@ -415,8 +414,7 @@ class luxrender_integrator(declarative_property_group):
             'type': 'int',
             'attr': 'shadowraycount',
             'name': 'Shadow Ray Count',
-            'description': 'Multiplier for the number of shadow rays traced: higher values are slower overall, but can \
-            speed convergence of direct light and soft shadows',
+            'description': 'Multiplier for the number of shadow rays traced: higher values are slower overall, but can speed convergence of direct light and soft shadows',
             'default': 1,
             'min': 1,
             'max': 1024,
@@ -426,8 +424,7 @@ class luxrender_integrator(declarative_property_group):
             'type': 'int',
             'attr': 'lightraycount',
             'name': 'Light Ray Count',
-            'description': 'Multiplier for the number of light paths traced: higher values can speed convergence of \
-            indirect light and caustics at the expense of reflections and refractions',
+            'description': 'Multiplier for the number of light paths traced: higher values can speed convergence of indirect light and caustics at the expense of reflections and refractions',
             'default': 1,
             'min': 1,
             'max': 1024,
@@ -572,8 +569,7 @@ class luxrender_integrator(declarative_property_group):
             'type': 'int',
             'attr': 'glossyrefractdepth',
             'name': 'Refraction Depth',
-            'description': 'Max recursion depth after bouncing through a glossy-refraction surface, such as \
-            rough glass',
+            'description': 'Max recursion depth after bouncing through a glossy-refraction surface, such as rough glass',
             'default': 5,
             'min': 0,
             'save_in_preset': True
@@ -743,8 +739,7 @@ class luxrender_integrator(declarative_property_group):
             'type': 'int',
             'attr': 'finalgathersamples',
             'name': 'Final Gather Samples',
-            'description': 'Number of final gather rays to cast for each primary ray. Higher values reduce indirect \
-            light noise at the cost of overall speed',
+            'description': 'Number of final gather rays to cast for each primary ray. Higher values reduce indirect light noise at the cost of overall speed',
             'default': 16,
             'save_in_preset': True
         },
@@ -752,8 +747,7 @@ class luxrender_integrator(declarative_property_group):
             'type': 'float',
             'attr': 'gatherangle',
             'name': 'Gather angle',
-            'description': 'Reject final gather rays beyond this angle. Adjusts final gather accuracy, higher values \
-            reduce noise at the cost of possible light leaks',
+            'description': 'Reject final gather rays beyond this angle. Adjusts final gather accuracy, higher values reduce noise at the cost of possible light leaks',
             'default': 10.0,
             'save_in_preset': True
         },
@@ -783,8 +777,7 @@ class luxrender_integrator(declarative_property_group):
             'subtype': 'FILE_PATH',
             'attr': 'photonmapsfile',
             'name': 'Photon Maps File',
-            'description': 'Photon map storage path. If no map is found here, the current one will be saved for \
-            next time',
+            'description': 'Photon map storage path. If no map is found here, the current one will be saved for next time',
             'default': '',
             'save_in_preset': True
         },
@@ -910,8 +903,7 @@ class luxrender_integrator(declarative_property_group):
             'type': 'int',
             'attr': 'hitpointperpass',
             'name': 'Hit Points Per Pass',
-            'description': 'Number of hit points to store per eye-pass before moving on. Lower values can decrease \
-            memory useage at the cost of some performance. 0=one hitpoint per pixel',
+            'description': 'Number of hit points to store per eye-pass before moving on. Lower values can decrease memory useage at the cost of some performance. 0=one hitpoint per pixel',
             'default': 0,
             'save_in_preset': True
         },
@@ -919,22 +911,20 @@ class luxrender_integrator(declarative_property_group):
             'type': 'float',
             'attr': 'startradius',
             'name': 'Starting Radius',
-            'description': 'Photon radius used for initial pass. Try lowering this if the first pass renders very \
-            slowly',
+            'description': 'Photon radius used for initial pass. Try lowering this if the first pass renders very slowly',
             'default': 2.0,
             'min': 0.0001,
             'save_in_preset': True
         },
-        # 		{
-        # 			'type': 'int',
-        # 			'attr': 'startk',
-        # 			'name': 'Starting K',
-        # 			'description': 'Adjust starting photon radius to get this many photons. Higher values clear \
-        # faster but are less accurate. 0=use initial radius',
-        # 			'default': 30,
-        # 			'min': 0,
-        # 			'save_in_preset': True
-        # 		},
+        {
+         	'type': 'int',
+         	'attr': 'startk',
+         	'name': 'Starting K',
+         	'description': 'Adjust starting photon radius to get this many photons. Higher values clear faster but are less accurate. 0=use initial radius',
+         	'default': 30,
+         	'min': 0,
+         	'save_in_preset': True
+        },
         {
             'type': 'float',
             'attr': 'alpha',
@@ -949,8 +939,7 @@ class luxrender_integrator(declarative_property_group):
             'type': 'bool',
             'attr': 'storeglossy',
             'name': 'Store on Glossy',
-            'description': 'Use the photon pass to render glossy and metal surfaces. Can introduce noise, but is \
-            needed for some corner cases',
+            'description': 'Use the photon pass to render glossy and metal surfaces. Can introduce noise, but is needed for some corner cases',
             'default': False,
             'save_in_preset': True
         },
@@ -1006,8 +995,7 @@ class luxrender_integrator(declarative_property_group):
             'type': 'int',
             'attr': 'wavelengthstratificationpasses',
             'name': 'Wavelength Stratification Passes',
-            'description': 'Use non-random wavelengths for this many passes. Can help with wierd initial coloration \
-            due to unsampled wavelengths',
+            'description': 'Use non-random wavelengths for this many passes. Can help with wierd initial coloration due to unsampled wavelengths',
             'default': 8,
             'min': 0,
             'max': 64,
@@ -1032,8 +1020,7 @@ class luxrender_integrator(declarative_property_group):
 
         params = ParamSet()
 
-        # Check to make sure all settings are correct when hybrid is selected. Keep this up to date as hybrid gets \
-        # new options in later versions
+        # Check to make sure all settings are correct when hybrid is selected. Keep this up to date as hybrid gets new options in later versions
 
         if scene.luxrender_rendermode.renderer == 'hybrid':
             #Check each integrator seperately so they don't mess with each other!
@@ -1087,6 +1074,7 @@ class luxrender_integrator(declarative_property_group):
         if self.surfaceintegrator == 'sppm':
             params.add_integer('maxeyedepth', self.maxeyedepth) \
                 .add_integer('maxphotondepth', self.maxphotondepth) \
+                .add_integer('startk', self.startk) \
                 .add_integer('photonperpass', self.photonperpass) \
                 .add_integer('hitpointperpass', self.hitpointperpass) \
                 .add_float('startradius', self.startradius) \

@@ -153,8 +153,7 @@ class luxrender_rendermode(declarative_property_group):
             'type': 'int',
             'attr': 'opencl_platform_index',
             'name': 'OpenCL Platform Index',
-            'description': 'OpenCL Platform to target. Try increasing this value 1 at a time if LuxRender fails \
-            to use your GPU. -1=all platforms',
+            'description': 'OpenCL Platform to target. Try increasing this value 1 at a time if LuxRender fails to use your GPU. -1=all platforms',
             'default': 0,
             'min': -1,
             'soft_min': 0,
@@ -167,8 +166,7 @@ class luxrender_rendermode(declarative_property_group):
             'subtype': 'FILE_PATH',
             'attr': 'configfile',
             'name': 'OpenCL Config File',
-            'description': 'Path to a machine-specific OpenCL configuration file. The settings from the lxs (set \
-            below) are used if this is not specified or found',
+            'description': 'Path to a machine-specific OpenCL configuration file. The settings from the lxs (set below) are used if this is not specified or found',
             'default': '',
             'save_in_preset': True
         },
@@ -220,8 +218,7 @@ class luxrender_rendermode(declarative_property_group):
             'type': 'enum',
             'attr': 'kernelcache',
             'name': 'OpenCL Kernel Cache',
-            'description': 'Select the type of OpenCL compilation kernel cache used (in order to reduce compilation \
-            time)',
+            'description': 'Select the type of OpenCL compilation kernel cache used (in order to reduce compilation time)',
             'default': 'PERSISTENT',
             'items': [
                 ('NONE', 'None', 'NONE'),

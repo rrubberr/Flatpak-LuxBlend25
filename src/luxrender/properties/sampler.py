@@ -111,8 +111,7 @@ class luxrender_sampler(declarative_property_group):
             'type': 'float',
             'attr': 'largemutationprob',
             'name': 'Large Mutation Probability',
-            'description': 'Probability of a completely random mutation rather than a guided one. Lower values \
-            increase sampler strength',
+            'description': 'Probability of a completely random mutation rather than a guided one. Lower values increase sampler strength',
             'default': 0.4,
             'min': 0,
             'max': 1,
@@ -123,8 +122,7 @@ class luxrender_sampler(declarative_property_group):
             'type': 'int',
             'attr': 'maxconsecrejects',
             'name': 'Max. Consecutive Rejections',
-            'description': 'Maximum amount of samples in a particular area before moving on. Setting this too low \
-            may mute lamps and caustics',
+            'description': 'Maximum amount of samples in a particular area before moving on. Setting this too low may mute lamps and caustics',
             'default': 512,
             'min': 128,
             'max': 32768,
@@ -164,16 +162,14 @@ class luxrender_sampler(declarative_property_group):
             'subtype': 'FILE_PATH',
             'attr': 'usersamplingmap_filename',
             'name': 'User Sampling Map',
-            'description': 'Image map to guide sample distribution, none = disabled. Extension is added \
-            automatically (.exr)',
+            'description': 'Image map to guide sample distribution, none = disabled. Extension is added automatically (.exr)',
             'default': ''
         },
         {
             'type': 'bool',
             'attr': 'usecooldown',
             'name': 'Use Cooldown',
-            'description': 'Use fixed large mutation probability at the beginning of the render, to avoid \
-            convergence errors with extreme settings',
+            'description': 'Use fixed large mutation probability at the beginning of the render, to avoid convergence errors with extreme settings',
             'default': True,
             'save_in_preset': True
         },
@@ -206,8 +202,7 @@ class luxrender_sampler(declarative_property_group):
             'type': 'int',
             'attr': 'pixelsamples',
             'name': 'Pixel Samples',
-            'description': 'Average number of samples taken per pixel. More samples create a higher quality image at \
-            the cost of render time',
+            'description': 'Average number of samples taken per pixel. More samples create a higher quality image at the cost of render time',
             'default': 4,
             'min': 1,
             'max': 8192,
