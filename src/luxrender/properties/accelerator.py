@@ -57,11 +57,11 @@ class luxrender_accelerator(declarative_property_group):
     visibility = {
         'spacer': {'advanced': True},
         'accelerator': {'advanced': True},
-        'intersectcost': {'advanced': True, 'accelerator': 'tabreckdtree'},
-        'traversalcost': {'advanced': True, 'accelerator': 'tabreckdtree'},
-        'emptybonus': {'advanced': True, 'accelerator': 'tabreckdtree'},
-        'maxprims': {'advanced': True, 'accelerator': 'tabreckdtree'},
-        'maxdepth': {'advanced': True, 'accelerator': 'tabreckdtree'},
+        'intersectcost': {'advanced': True, 'accelerator': O(['tabreckdtree', 'unsafekdtree'])},
+        'traversalcost': {'advanced': True, 'accelerator': O(['tabreckdtree', 'unsafekdtree'])},
+        'emptybonus': {'advanced': True, 'accelerator': O(['tabreckdtree', 'unsafekdtree'])},
+        'maxprims': {'advanced': True, 'accelerator': O(['tabreckdtree', 'unsafekdtree'])},
+        'maxdepth': {'advanced': True, 'accelerator': O(['tabreckdtree', 'unsafekdtree'])},
         'maxprimsperleaf': {'advanced': True, 'accelerator': O(['qbvh', 'sqbvh'])},
         'fullsweepthreshold': {'advanced': True, 'accelerator': O(['qbvh', 'sqbvh'])},
         'skipfactor': {'advanced': True, 'accelerator': O(['qbvh', 'sqbvh'])},
@@ -81,10 +81,10 @@ class luxrender_accelerator(declarative_property_group):
             'default': 'qbvh',
             'items': [  # As of 0.9, other accelerator types have been removed from the core entirely
                         ('tabreckdtree', 'KD Tree', 'A traditional KD Tree'),
+                        ('unsafekdtree', 'Unsafe KD Tree', 'An unsafe traditional KD Tree'),
                         ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
-                        ('sqbvh', 'SQBVH',
-                         'Spatial quad bounding volume hierarchy. Should be faster than normal \
-                         QBVH, but may use more memory'),
+                        ('sqbvh', 'SQBVH', 'Spatial quad bounding volume hierarchy. May be faster than normal QBVH, but may use more memory'),
+                        ('none', 'None', 'Simply brute-force the scene. This is not recommended in actual production use.'),
             ],
             'save_in_preset': True
         },
@@ -164,7 +164,7 @@ class luxrender_accelerator(declarative_property_group):
         params = ParamSet()
 
         if self.advanced:
-            if self.accelerator == 'tabreckdtree':
+            if self.accelerator in ('tabreckdtree', 'unsafekdtree'):
                 params.add_integer('intersectcost', self.intersectcost)
                 params.add_integer('traversalcost', self.traversalcost)
                 params.add_float('emptybonus', self.emptybonus)
