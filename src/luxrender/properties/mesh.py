@@ -79,7 +79,7 @@ class luxrender_mesh(declarative_property_group):
     visibility = dict_merge({
                                 'mesh_type': lambda: not UseLuxCore(),
                                 'instancing_mode': lambda: not UseLuxCore(),
-                                'acceltype': lambda: not UseLuxCore(),
+                                'acceltype': {'mesh_type': 'native'},
                                 'nsmooth': {'subdiv': 'loop'},
                                 'sharpbound': {'subdiv': 'loop'},
                                 'splitnormal': {'subdiv': 'loop'},
@@ -226,7 +226,8 @@ class luxrender_mesh(declarative_property_group):
         params.add_bool('generatetangents', self.generatetangents)
 
         # Export acceltype
-        params.add_string('acceltype', self.acceltype)
+        if self.mesh_type == 'native':
+            params.add_string('acceltype', self.acceltype)
 
         # check if subdivision is used
         if self.subdiv != 'None':
