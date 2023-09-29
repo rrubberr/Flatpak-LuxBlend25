@@ -62,6 +62,7 @@ class luxrender_mesh(declarative_property_group):
     controls = [
                    'mesh_type',
                    'instancing_mode',
+                   'acceltype',
                    'portal',
                    'generatetangents',
                    'subdiv',
@@ -78,6 +79,7 @@ class luxrender_mesh(declarative_property_group):
     visibility = dict_merge({
                                 'mesh_type': lambda: not UseLuxCore(),
                                 'instancing_mode': lambda: not UseLuxCore(),
+                                'acceltype': lambda: not UseLuxCore(),
                                 'nsmooth': {'subdiv': 'loop'},
                                 'sharpbound': {'subdiv': 'loop'},
                                 'splitnormal': {'subdiv': 'loop'},
@@ -109,6 +111,19 @@ class luxrender_mesh(declarative_property_group):
                              ('auto', 'Automatic', 'Let the exporter code decide'),
                              ('always', 'Always', 'Always export this mesh as instances'),
                              ('never', 'Never', 'Never export this mesh as instances')
+                         ],
+                         'default': 'auto'
+                     },
+                     {
+                         'type': 'enum',
+                         'attr': 'acceltype',
+                         'name': 'Accelerator Type',
+                         'items': [
+                             ('kdtree', 'KD Tree', 'A traditional KD Tree'),
+                             ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
+                             ('none', 'Global', 'Use the global accelerator setting'),
+                             ('bruteforce', 'Brute Force', 'Simply brute-force the object'),
+                             ('auto', 'Auto', 'Automatically determine accelerator based on primitive count')
                          ],
                          'default': 'auto'
                      },
@@ -209,6 +224,9 @@ class luxrender_mesh(declarative_property_group):
 
         # Export generatetangents
         params.add_bool('generatetangents', self.generatetangents)
+
+        # Export acceltype
+        params.add_string('acceltype', self.acceltype)
 
         # check if subdivision is used
         if self.subdiv != 'None':

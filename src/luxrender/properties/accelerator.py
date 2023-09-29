@@ -85,7 +85,7 @@ class luxrender_accelerator(declarative_property_group):
             'default': 'qbvh',
             'items': [  # As of 0.9, other accelerator types have been removed from the core entirely
                         ('tabreckdtree', 'KD Tree', 'A traditional KD Tree'),
-                        ('unsafekdtree', 'Unsafe KD Tree', 'An unsafe traditional KD Tree'),
+                        ('unsafekdtree', 'Unsafe KD Tree', 'An unsafe KD Tree'),
                         ('bvh', 'BVH', 'Bounding volume hierarchy'),
                         ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
                         ('sqbvh', 'SQBVH', 'Spatial quad bounding volume hierarchy. May be faster than normal QBVH, but may use more memory'),
