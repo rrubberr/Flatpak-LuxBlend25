@@ -128,14 +128,15 @@ class luxrender_mesh(declarative_property_group):
                          'attr': 'acceltype',
                          'name': 'Accelerator Type',
                          'items': [
-                             ('kdtree', 'KD Tree', 'A traditional KD Tree'),
-                             ('bvh', 'BVH', 'Bounding volume hierarchy'),
-                             ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
-                             ('none', 'Global', 'Use the global accelerator setting'),
+                             ('auto', 'Auto', 'Automatically determine accelerator based on primitive count'),
                              ('bruteforce', 'Brute Force', 'Simply brute-force the object'),
-                             ('auto', 'Auto', 'Automatically determine accelerator based on primitive count')
+                             ('bvh', 'BVH', 'Bounding volume hierarchy'),
+                             ('none', 'Global', 'Use the global accelerator setting'),
+                             ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
+                             ('sqbvh', 'SQBVH', 'Spatial quad bounding volume hierarchy; may be faster than normal QBVH, but may use more memory'),
+                             ('tabreckdtree', 'KD Tree', 'A traditional KD Tree')
                          ],
-                         'default': 'auto'
+                         'default': 'qbvh'
                      },
                      {
                          'type': 'bool',
