@@ -64,6 +64,7 @@ class luxrender_mesh(declarative_property_group):
                    'instancing_mode',
                    'acceltype',
 #                   'treetype',
+                   'tritype',
                    'portal',
                    'generatetangents',
                    'subdiv',
@@ -81,6 +82,7 @@ class luxrender_mesh(declarative_property_group):
                                 'mesh_type': lambda: not UseLuxCore(),
                                 'instancing_mode': lambda: not UseLuxCore(),
                                 'acceltype': {'mesh_type': 'native'},
+                                'tritype': {'mesh_type': 'native'},
 #                                'treetype': {'acceltype': 'bvh'},
                                 'nsmooth': {'subdiv': 'loop'},
                                 'sharpbound': {'subdiv': 'loop'},
@@ -106,12 +108,23 @@ class luxrender_mesh(declarative_property_group):
                          'default': 'global'
                      },
                      {
-                         'attr': 'treetype',
-                         'type': 'int',
-                         'name': 'Tree Type',
-                         'description': 'Tree type to generate (2 = binary, 4 = quad, 8 = octree)',
-                         'default': 8,
+                         'type': 'enum',
+                         'attr': 'tritype',
+                         'name': 'Triangle Type',
+                         'items': [
+                             ('bary', 'Bary', 'Refine to Bary triangles; 52 bytes/triangle'),
+                             ('wald', 'Wald', 'Refine to Wald triangles; 128 bytes/triangle'),
+                             ('auto', 'auto', 'Automatically choose Bary or Wald based on triangle count'),
+                         ],
+                         'default': 'auto'
                      },
+#                     {
+#                         'attr': 'treetype',
+#                         'type': 'int',
+#                         'name': 'Tree Type',
+#                         'description': 'Tree type to generate (2 = binary, 4 = quad, 8 = octree)',
+#                         'default': 8,
+#                     },
                      {
                          'type': 'enum',
                          'attr': 'instancing_mode',
@@ -239,6 +252,10 @@ class luxrender_mesh(declarative_property_group):
         # Export acceltype
         if self.mesh_type == 'native':
             params.add_string('acceltype', self.acceltype)
+        
+        # Export tritype
+        if self.mesh_type == 'native':
+            params.add_string('tritype', self.tritype)
         
 #        if self.acceltype == 'bvh':
 #            params.add_string('treetype', self.treetype)
