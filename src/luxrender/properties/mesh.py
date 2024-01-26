@@ -63,6 +63,7 @@ class luxrender_mesh(declarative_property_group):
                    'mesh_type',
                    'instancing_mode',
                    'acceltype',
+#                   'treetype',
                    'portal',
                    'generatetangents',
                    'subdiv',
@@ -80,6 +81,7 @@ class luxrender_mesh(declarative_property_group):
                                 'mesh_type': lambda: not UseLuxCore(),
                                 'instancing_mode': lambda: not UseLuxCore(),
                                 'acceltype': {'mesh_type': 'native'},
+#                                'treetype': {'acceltype': 'bvh'},
                                 'nsmooth': {'subdiv': 'loop'},
                                 'sharpbound': {'subdiv': 'loop'},
                                 'splitnormal': {'subdiv': 'loop'},
@@ -104,6 +106,13 @@ class luxrender_mesh(declarative_property_group):
                          'default': 'global'
                      },
                      {
+                         'attr': 'treetype',
+                         'type': 'int',
+                         'name': 'Tree Type',
+                         'description': 'Tree type to generate (2 = binary, 4 = quad, 8 = octree)',
+                         'default': 8,
+                     },
+                     {
                          'type': 'enum',
                          'attr': 'instancing_mode',
                          'name': 'Instancing',
@@ -120,6 +129,7 @@ class luxrender_mesh(declarative_property_group):
                          'name': 'Accelerator Type',
                          'items': [
                              ('kdtree', 'KD Tree', 'A traditional KD Tree'),
+                             ('bvh', 'BVH', 'Bounding volume hierarchy'),
                              ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
                              ('none', 'Global', 'Use the global accelerator setting'),
                              ('bruteforce', 'Brute Force', 'Simply brute-force the object'),
@@ -228,6 +238,9 @@ class luxrender_mesh(declarative_property_group):
         # Export acceltype
         if self.mesh_type == 'native':
             params.add_string('acceltype', self.acceltype)
+        
+#        if self.acceltype == 'bvh':
+#            params.add_string('treetype', self.treetype)
 
         # check if subdivision is used
         if self.subdiv != 'None':
