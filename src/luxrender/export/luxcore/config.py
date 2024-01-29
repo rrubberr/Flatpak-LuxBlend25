@@ -193,8 +193,8 @@ class ConfigExporter(object):
         if self.get_engine() == 'RTPATHCPU':
             # RTPATHCPU needs a special sampler
             self.properties.Set(pyluxcore.Property('sampler.type', 'RTPATHCPUSAMPLER'))
-        elif self.get_engine() in ('TILEPATHCPU', 'TILEPATHOCL', 'RTPATHOCL'):
-            # (RT)TILEPATHOCL needs a special sampler
+        elif self.get_engine() in ('BIASPATHCPU', 'BIASPATHOCL', 'RTPATHOCL'):
+            # (RT)BIASPATHOCL needs a special sampler
             self.properties.Set(pyluxcore.Property('sampler.type', 'TILEPATHSAMPLER'))
         else:
             self.properties.Set(pyluxcore.Property('sampler.type', [engine_settings.sampler_type]))
@@ -247,7 +247,7 @@ class ConfigExporter(object):
             radiance_clamp = 0
             pdf_clamp = 0
 
-        if engine in ['TILEPATHCPU', 'TILEPATHOCL']:
+        if engine in ['BIASPATHCPU', 'BIASPATHOCL']:
             self.properties.Set(pyluxcore.Property('path.clamping.variance.maxvalue', radiance_clamp))
             self.properties.Set(pyluxcore.Property('path.clamping.pdf.value', pdf_clamp))
 
@@ -279,7 +279,7 @@ class ConfigExporter(object):
 
             self.properties.Set(pyluxcore.Property('tilepath.sampling.aa.size', aa_samples))
 
-            if engine == 'TILEPATHCPU':
+            if engine == 'BIASPATHCPU':
                 self.properties.Set(pyluxcore.Property('tilepath.sampling.diffuse.size', diffuse_samples))
                 self.properties.Set(pyluxcore.Property('tilepath.sampling.glossy.size', glossy_samples))
                 self.properties.Set(pyluxcore.Property('tilepath.sampling.specular.size', specular_samples))
@@ -332,8 +332,8 @@ class ConfigExporter(object):
         if self.get_engine() == 'RTPATHCPU':
             # RTPATHCPU needs a special sampler
             self.properties.Set(pyluxcore.Property('sampler.type', 'RTPATHCPUSAMPLER'))
-        elif self.get_engine() in ('TILEPATHOCL', 'RTPATHOCL'):
-            # (RT)TILEPATHOCL needs a special sampler
+        elif self.get_engine() in ('BIASPATHOCL', 'RTPATHOCL'):
+            # (RT)BIASPATHOCL needs a special sampler
             self.properties.Set(pyluxcore.Property('sampler.type', 'TILEPATHSAMPLER'))
         else:
             # Sampler settings (same as for final render)

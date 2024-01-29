@@ -1094,8 +1094,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         engine_dict = {
             'PATHCPU' : 'Path CPU',
             'PATHOCL' : 'Path OpenCL',
-            'TILEPATHCPU' : 'Tile Path CPU',
-            'TILEPATHOCL' : 'Tile Path OpenCL',
+            'BIASPATHCPU' : 'Tile Path CPU',
+            'BIASPATHOCL' : 'Tile Path OpenCL',
             'BIDIRCPU' : 'Bidir CPU',
             'BIDIRVMCPU' : 'BidirVCM CPU',
             'RTPATHOCL': 'RT Path OpenCL',
@@ -1136,11 +1136,11 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
         # Samples/Passes stats
         if rendering_controls.stats_samples:
             samples_count = stats.Get('stats.renderengine.pass').GetInt()
-            samples_term = 'Pass' if engine in ['TILEPATHCPU', 'TILEPATHOCL'] else 'Samples'
+            samples_term = 'Pass' if engine in ['BIASPATHCPU', 'BIASPATHOCL'] else 'Samples'
 
             # Do not show when engine is TILEPATH because it uses different halt conditions
             if ((not realtime_preview and settings.use_halt_samples) or (realtime_preview and settings.use_halt_samples_preview)) \
-                    and engine not in ['TILEPATHCPU', 'TILEPATHOCL']:
+                    and engine not in ['BIASPATHCPU', 'BIASPATHOCL']:
                 stats_list.append('%s: %d/%d' % (samples_term, samples_count, halt_samples))
                 if not realtime_preview:
                     progress_samples = samples_count / halt_samples
@@ -1148,7 +1148,7 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
                 stats_list.append('%s: %d' % (samples_term, samples_count))
 
         # Tile stats
-        if engine in ['TILEPATHCPU', 'TILEPATHOCL'] and rendering_controls.stats_tiles:
+        if engine in ['BIASPATHCPU', 'BIASPATHOCL'] and rendering_controls.stats_tiles:
             converged = stats.Get('stats.tilepath.tiles.converged.count').GetInt()
             notconverged = stats.Get('stats.tilepath.tiles.notconverged.count').GetInt()
             pending = stats.Get('stats.tilepath.tiles.pending.count').GetInt()

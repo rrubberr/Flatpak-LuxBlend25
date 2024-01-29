@@ -358,7 +358,7 @@ class MaterialPreviewExporter(object):
             cfg_props.Set(pyluxcore.Property('film.filter.type', 'BLACKMANHARRIS'))
             cfg_props.Set(pyluxcore.Property('film.filter.width', 1.5))
 
-            cfg_props.Set(pyluxcore.Property('renderengine.type', 'TILEPATHCPU'))
+            cfg_props.Set(pyluxcore.Property('renderengine.type', 'BIASPATHCPU'))
             cfg_props.Set(pyluxcore.Property('sampler.type', 'TILEPATHSAMPLER'))
 
             cfg_props.Set(pyluxcore.Property('tile.size', 16))

@@ -289,9 +289,9 @@ class luxrender_rendermode(declarative_property_group):
             elif self.rendermode == 'luxcorepathocl':
                 luxcore_renderengine_type = 'PATHOCL'
             elif self.rendermode == 'luxcorebiaspath':
-                luxcore_renderengine_type = 'TILEPATHCPU'
+                luxcore_renderengine_type = 'BIASPATHCPU'
             elif self.rendermode == 'luxcorebiaspathocl':
-                luxcore_renderengine_type = 'TILEPATHOCL'
+                luxcore_renderengine_type = 'BIASPATHOCL'
             elif self.rendermode == 'luxcorebidir':
                 luxcore_renderengine_type = 'BIDIRCPU'
             elif self.rendermode == 'luxcorebidirvcm':
