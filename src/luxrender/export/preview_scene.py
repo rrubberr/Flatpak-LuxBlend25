@@ -104,10 +104,11 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
         .add_bool('write_resume_flm', False) \
         .add_integer('displayinterval', 300) \
         .add_float('haltthreshold', 0.005) \
+        .add_integer('outlierrejection_k', 3) \
         .add_integer('halttime', 30) \
         .add_string('tonemapkernel', 'linear') \
         .add_string('ldr_clamp_method', 'hue') \
-        .add_integer('tilecount', 2) \
+        .add_integer('tilecount', 4) \
         .add_float('convergencestep', 4)
 
     if tex is not None:

@@ -639,8 +639,8 @@ class RENDERENGINE_luxrender(bpy.types.RenderEngine):
             xres, yres = scene.camera.data.luxrender_camera.luxrender_film.resolution(scene)
 
             # Don't render the tiny images
-            if xres <= 96:
-                raise Exception('Skipping material thumbnail update, image too small (%ix%i)' % (xres, yres))
+            #if xres <= 96:
+            #    raise Exception('Skipping material thumbnail update, image too small (%ix%i)' % (xres, yres))
 
             preview_scene.preview_scene(scene, preview_context, obj=preview_objects[0], mat=pm, tex=pt)
 
