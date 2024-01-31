@@ -177,7 +177,7 @@ class luxrender_integrator(declarative_property_group):
         'nsets',
         'nlights',
         'mindist',  #sppm
-        'startk',
+        # 'startk',
         ['hitpointperpass', 'photonperpass'],
         ['startradius', 'alpha'],
         ['directlightsampling', 'includeenvironment'],  #sppm advanced
@@ -270,7 +270,7 @@ class luxrender_integrator(declarative_property_group):
                     'directlightsampling': {'surfaceintegrator': O(['sppm', 'path'])},  # sppm
                     'photonperpass': {'surfaceintegrator': 'sppm'},
                     'hitpointperpass': {'surfaceintegrator': 'sppm'},
-                    'startk': {'surfaceintegrator': 'sppm'},
+                    # 'startk': {'surfaceintegrator': 'sppm'},
                     'alpha': {'surfaceintegrator': 'sppm'},
                     'startradius': {'surfaceintegrator': 'sppm'},  # sppm advanced
                     'storeglossy': {'advanced': True, 'surfaceintegrator': 'sppm'},
@@ -916,15 +916,15 @@ class luxrender_integrator(declarative_property_group):
             'min': 0.0001,
             'save_in_preset': True
         },
-        {
-         	'type': 'int',
-         	'attr': 'startk',
-         	'name': 'Starting K',
-         	'description': 'Adjust starting photon radius to get this many photons. Higher values clear faster but are less accurate. 0=use starting radius',
-         	'default': 0,
-         	'min': 0,
-         	'save_in_preset': True
-        },
+        # {
+        #  	'type': 'int',
+        #  	'attr': 'startk',
+        #  	'name': 'Starting K',
+        #  	'description': 'Adjust starting photon radius to get this many photons. Higher values clear faster but are less accurate. 0=use starting radius',
+        #  	'default': 0,
+        #  	'min': 0,
+        #  	'save_in_preset': True
+        # },
         {
             'type': 'float',
             'attr': 'alpha',
@@ -1074,7 +1074,6 @@ class luxrender_integrator(declarative_property_group):
         if self.surfaceintegrator == 'sppm':
             params.add_integer('maxeyedepth', self.maxeyedepth) \
                 .add_integer('maxphotondepth', self.maxphotondepth) \
-                .add_integer('startk', self.startk) \
                 .add_integer('photonperpass', self.photonperpass) \
                 .add_integer('hitpointperpass', self.hitpointperpass) \
                 .add_float('startradius', self.startradius) \
