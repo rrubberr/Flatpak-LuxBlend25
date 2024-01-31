@@ -103,12 +103,11 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
         .add_bool('write_tga', False) \
         .add_bool('write_resume_flm', False) \
         .add_integer('displayinterval', 300) \
-        .add_integer('outlierrejection_k', 3) \
         .add_float('haltthreshold', 0.005) \
         .add_integer('halttime', 30) \
         .add_string('tonemapkernel', 'linear') \
         .add_string('ldr_clamp_method', 'hue') \
-        .add_integer('tilecount', 0) \
+        .add_integer('tilecount', 2) \
         .add_float('convergencestep', 4)
 
     if tex is not None:
@@ -143,8 +142,8 @@ def preview_scene(scene, lux_context, obj=None, mat=None, tex=None):
     surfaceintegrator_params = ParamSet() \
         .add_string('lightstrategy', 'all') \
         .add_string('lightpathstrategy', 'all') \
-        .add_integer('eyedepth', 16) \
-        .add_integer('lightdepth', 16) \
+        .add_integer('eyedepth', 12) \
+        .add_integer('lightdepth', 8) \
         .add_integer('lightraycount', 1) \
         .add_integer('shadowraycount', 1)
     lux_context.surfaceIntegrator('bidirectional', surfaceintegrator_params)
