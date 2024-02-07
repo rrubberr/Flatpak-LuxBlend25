@@ -233,14 +233,11 @@ class luxrender_engine(declarative_property_group):
             'type': 'enum',
             'attr': 'selected_luxrender_api',
             'name': 'LuxRender API version',
-            'description': 'Choose between LuxRender v1.x and v2.x API',
+            'description': 'Choose between LuxRender API',
             'default': 'classic',
             'items': [
                          ('classic', 'Classic API', 'Use LuxRender v1.x API', 'NONE', 0),
-                     ] + ([
-                         ('luxcore', 'LuxCore API (Experimental)', 'Use LuxRender v2.x API (experimental and unstable!)',
-                          'ERROR', 1)
-                     ] if PYLUXCORE_AVAILABLE else []),
+                     ],
             'save_in_preset': True
         },
         {
@@ -260,7 +257,6 @@ class luxrender_engine(declarative_property_group):
             'items': [
                 ('luxrender', 'LuxRender GUI', 'Render with the LuxRender GUI application'),
                 ('luxconsole', 'LuxConsole', 'Render with LuxConsole and feed the result to the UV/Image Editor'),
-                ('luxvr', 'LuxVR', 'Render with the LuxVR realtime preview tool'),
             ],
             'save_in_preset': True
         },

@@ -62,29 +62,6 @@ def CameraVolumeParameter(attr, name):
         },
     ]
 
-def ArbitraryClippingPlane():
-    """
-    LuxCore arbitrary clipping plane
-    The user selects an object and its rotation and location are used as clipping plane parameters
-    """
-    return [
-        {
-            'attr': 'clipping_plane_obj',
-            'type': 'string',
-            'name': 'clipping_plane_obj',
-            'description': 'Arbitrary clipping plane object (only rotation and location are used)',
-        },
-        {
-            'type': 'prop_search',
-            'attr': 'clipping_plane_selector',
-            'src': lambda s, c: s.scene,
-            'src_attr': 'objects',
-            'trg': lambda s, c: c.luxrender_camera,
-            'trg_attr': 'clipping_plane_obj',
-            'name': 'Plane'
-        },
-    ]
-
 
 @LuxRenderAddon.addon_register_class
 class luxrender_camera(declarative_property_group):
@@ -136,14 +113,7 @@ class luxrender_camera(declarative_property_group):
         #'clipping_plane_selector': A([{'enable_clipping_plane': True}, lambda: UseLuxCore()])
     }
 
-    properties = CameraVolumeParameter('Exterior', 'Exterior') + ArbitraryClippingPlane() + [
-        {
-            'type': 'bool',
-            'attr': 'use_clipping',
-            'name': 'Clipping',
-            'description': 'Use near/far geometry clipping',
-            'default': False,
-        },
+    properties = CameraVolumeParameter('Exterior', 'Exterior') + [
         {
             'type': 'bool',
             'attr': 'use_dof',
@@ -357,13 +327,6 @@ class luxrender_camera(declarative_property_group):
             'type': 'separator',
             'attr': 'separator_after_mblur'
         },
-        {
-            'type': 'bool',
-            'attr': 'enable_clipping_plane',
-            'name': 'Arbitrary Clipping Plane',
-            'description': 'LuxCore only',
-            'default': False
-        },
     ]
 
     def lookAt(self, camera, matrix=None):
@@ -523,10 +486,6 @@ class luxrender_camera(declarative_property_group):
                 params.add_float('focaldistance', ws * ((scene.camera.location - cam.dof_object.location).length))
             elif cam.dof_distance > 0:
                 params.add_float('focaldistance', ws * cam.dof_distance)
-
-        if self.use_clipping:
-            params.add_float('hither', ws * cam.clip_start)
-            params.add_float('yon', ws * cam.clip_end)
 
         if self.usemblur:
             # update the camera settings with motion blur settings

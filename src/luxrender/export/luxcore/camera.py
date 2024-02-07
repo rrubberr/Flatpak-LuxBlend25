@@ -163,8 +163,6 @@ class CameraExporter(object):
             set_prop_cam(self.properties, 'screenwindow', screenwindow)
 
         if luxCamera is not None:
-            # arbitrary clipping plane
-            self.__convert_clipping_plane(luxCamera)
             # Shutter open/close
             self.__convert_shutter(luxCamera)
 
@@ -218,13 +216,6 @@ class CameraExporter(object):
                 set_prop_cam(self.properties, 'focaldistance', distance)
             elif blCameraData.dof_distance > 0:
                 set_prop_cam(self.properties, 'focaldistance', ws * blCameraData.dof_distance)
-
-        if luxCamera.use_clipping:
-            set_prop_cam(self.properties, 'cliphither', ws * blCameraData.clip_start)
-            set_prop_cam(self.properties, 'clipyon', ws * blCameraData.clip_end)
-
-        # arbitrary clipping plane
-        self.__convert_clipping_plane(luxCamera)
 
 
     def __convert_lookat(self, matrix):
@@ -287,27 +278,6 @@ class CameraExporter(object):
         set_prop_cam(self.properties, 'lookat.orig', orig)
         set_prop_cam(self.properties, 'lookat.target', target)
         set_prop_cam(self.properties, 'up', up)
-
-
-    def __convert_clipping_plane(self, lux_camera_settings):
-        if lux_camera_settings.enable_clipping_plane:
-            obj_name = lux_camera_settings.clipping_plane_obj
-
-            try:
-                obj = bpy.data.objects[obj_name]
-
-                position = [obj.location.x, obj.location.y, obj.location.z]
-                normal_vector = obj.rotation_euler.to_matrix() * mathutils.Vector((0.0, 0.0, 1.0))
-                normal = [normal_vector.x, normal_vector.y, normal_vector.z]
-
-                set_prop_cam(self.properties, 'clippingplane.enable', True)
-                set_prop_cam(self.properties, 'clippingplane.center', position)
-                set_prop_cam(self.properties, 'clippingplane.normal', normal)
-            except KeyError:
-                # No valid clipping plane object selected
-                set_prop_cam(self.properties, 'clippingplane.enable', False)
-        else:
-            set_prop_cam(self.properties, 'clippingplane.enable', False)
 
 
     def __convert_shutter(self, lux_camera_settings):

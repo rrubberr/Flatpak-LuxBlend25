@@ -108,12 +108,6 @@ class luxrender_rendermode(declarative_property_group):
                 ('sppm', 'SPPM (Experimental)', 'Stochastic progressive photon mapping integrator'),
                 ('hybridbidir', 'Hybrid Bidirectional', 'Experimental OpenCL-acclerated bidirectional path tracer'),
                 ('hybridpath', 'Hybrid Path', 'OpenCL-accelerated simple (eye-only) path tracer'),
-                ('luxcorepath', 'LuxCore Path', 'Experimental path tracer'),
-                ('luxcorepathocl', 'LuxCore Path OpenCL', 'Experimental pure OpenCL path tracer'),
-                ('luxcorebiaspath', 'LuxCore Biased Path', 'Experimental biased path tracer'),
-                ('luxcorebiaspathocl', 'LuxCore Biased Path OpenCL', 'Experimental pure OpenCL biased path tracer'),
-                ('luxcorebidir', 'LuxCore Bidir', 'Experimental bidirectional integrator'),
-                ('luxcorebidirvcm', 'LuxCore BidirVCM', 'Experimental bidirectional/vertex merging integrator'),
             ],
             'update': update_rendering_mode,
             'save_in_preset': True

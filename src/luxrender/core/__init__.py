@@ -288,17 +288,6 @@ def lux_use_alternate_texview(self, context):
 _register_elm(bl_ui.properties_texture.TEXTURE_PT_preview.append(lux_use_alternate_texview))
 
 
-# Add use_clipping button to lens panel
-def lux_use_clipping(self, context):
-    if context.scene.render.engine == 'LUXRENDER_RENDER':
-        split = self.layout.split()
-        split.label("")
-        split.column().prop(context.camera.luxrender_camera, "use_clipping", text="Export Clipping")
-
-
-_register_elm(bl_ui.properties_data_camera.DATA_PT_lens.append(lux_use_clipping))
-
-
 # Add options by render image/anim buttons
 def render_start_options(self, context):
     if context.scene.render.engine == 'LUXRENDER_RENDER':
