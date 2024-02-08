@@ -307,7 +307,7 @@ class luxrender_engine(declarative_property_group):
                 ('native', 'LuxRender mesh', 'native'),
                 ('binary_ply', 'Binary PLY', 'binary_ply')
             ],
-            'default': 'binary_ply',
+            'default': 'native',
             'save_in_preset': True
         },
         {

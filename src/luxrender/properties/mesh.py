@@ -105,7 +105,7 @@ class luxrender_mesh(declarative_property_group):
                              ('native', 'LuxRender Mesh', 'native'),
                              ('binary_ply', 'Binary PLY', 'binary_ply')
                          ],
-                         'default': 'global'
+                         'default': 'native'
                      },
                      {
                          'type': 'enum',
@@ -116,7 +116,7 @@ class luxrender_mesh(declarative_property_group):
                              ('wald', 'Wald', 'Refine to Wald triangles; 128 bytes/triangle'),
                              ('auto', 'auto', 'Automatically choose Bary or Wald based on triangle count'),
                          ],
-                         'default': 'auto'
+                         'default': 'bary'
                      },
 #                     {
 #                         'attr': 'treetype',
@@ -134,7 +134,7 @@ class luxrender_mesh(declarative_property_group):
                              ('always', 'Always', 'Always export this mesh as instances'),
                              ('never', 'Never', 'Never export this mesh as instances')
                          ],
-                         'default': 'auto'
+                         'default': 'never'
                      },
                      {
                          'type': 'enum',
@@ -149,7 +149,7 @@ class luxrender_mesh(declarative_property_group):
                              ('sqbvh', 'SQBVH', 'Spatial quad bounding volume hierarchy; may be faster than normal QBVH, but may use more memory'),
                              ('tabreckdtree', 'KD Tree', 'A traditional KD Tree')
                          ],
-                         'default': 'qbvh'
+                         'default': 'none'
                      },
                      {
                          'type': 'bool',
