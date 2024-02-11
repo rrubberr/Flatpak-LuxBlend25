@@ -59,8 +59,6 @@ def import_bindings_module(name):
     from .outputs import LuxLog
 
     def _import_bindings_module(path, name, relative=False):
-        LuxLog('Attempting to import {} module '
-               'from "{}"'.format(name, path))
         if relative:
             package = os.path.split(path)[1]
             module = importlib.import_module('.' + name, package=package)
@@ -72,7 +70,6 @@ def import_bindings_module(name):
                 raise
             finally:
                 del sys.path[0]
-        LuxLog('{} module imported successfully'.format(name.title()))
         return module
 
     lux_path = find_luxrender_path()
@@ -83,7 +80,6 @@ def import_bindings_module(name):
         try:
             module = _import_bindings_module(lux_path, name)
         except ImportError as error:
-            LuxLog('Failed to import {} module from "{}" (Error: {})'.format(name, lux_path, error))
             module = _import_bindings_module(luxblend_path, name, True)
         return module
 
