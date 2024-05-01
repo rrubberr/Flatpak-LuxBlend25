@@ -135,7 +135,7 @@ TF_R1 = FloatTextureParameter('R1', 'R1', add_float_value=True, min=0.00001, max
 TF_R2 = FloatTextureParameter('R2', 'R2', add_float_value=True, min=0.00001, max=1.0, default=0.90)
 TF_R3 = FloatTextureParameter('R3', 'R3', add_float_value=True, min=0.00001, max=1.0, default=0.7)
 TF_sigma = FloatTextureParameter('sigma', 'Sigma', add_float_value=True, min=0.0, max=45.0)
-TF_uroughness = FloatTextureParameter('uroughness', 'U-Roughness', add_float_value=True, min=0.000001, max=0.8,
+TF_uroughness = FloatTextureParameter('uroughness', 'U-Roughness', add_float_value=True, min=0.000001, max=2.0,
                                       default=0.075)
 TF_uexponent = FloatTextureParameter('uexponent', 'U-Exponent', add_float_value=True, min=1.0, max=1000000000000,
                                      default=353.556)
