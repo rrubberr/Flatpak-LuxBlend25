@@ -967,6 +967,9 @@ crf_preset_names = [s.strip() for s in
                     Agfacolor_vista_200CD
                     Agfacolor_vista_400CD
                     Agfacolor_vista_800CD
+                    Agfapan_apx_025CD
+	                Agfapan_apx_100CD
+	                Agfapan_apx_400CD
                     Ektachrome_100_plusCD
                     Ektachrome_100CD
                     Ektachrome_320TCD
