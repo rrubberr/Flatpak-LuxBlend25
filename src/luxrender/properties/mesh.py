@@ -134,7 +134,7 @@ class luxrender_mesh(declarative_property_group):
                              ('always', 'Always', 'Always export this mesh as instances'),
                              ('never', 'Never', 'Never export this mesh as instances')
                          ],
-                         'default': 'never'
+                         'default': 'auto'
                      },
                      {
                          'type': 'enum',
