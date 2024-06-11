@@ -105,7 +105,7 @@ class luxrender_mesh(declarative_property_group):
                              ('native', 'LuxRender Mesh', 'native'),
                              ('binary_ply', 'Binary PLY', 'binary_ply')
                          ],
-                         'default': 'native'
+                         'default': 'binary_ply'
                      },
                      {
                          'type': 'enum',
