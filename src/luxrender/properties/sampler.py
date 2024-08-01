@@ -50,6 +50,7 @@ class luxrender_sampler(declarative_property_group):
         'pixelsamples',
 
         'usecooldown',
+        'usevariance',
         'noiseaware',
         'largemutationprob',
         'mutationrange',
@@ -66,6 +67,7 @@ class luxrender_sampler(declarative_property_group):
 		'pixelsamples':			O([{ 'sampler': O(['lowdiscrepancy', 'random']) },			{'sampler':'erpt', 'basesampler':O(['lowdiscrepancy', 'random'])} ]),
 		'largemutationprob':	O([{ 'sampler': 'metropolis' },								{'sampler':'erpt', 'basesampler': 'metropolis' } ]),
         'usecooldown':          A([{'advanced': True}, {'sampler': 'metropolis'}, ]),
+        'usevariance':          A([{'advanced': True}, {'sampler': 'metropolis'}, ]),
 		'maxconsecrejects':		A([{ 'advanced': True }, O([{ 'sampler': 'metropolis' },	{'sampler':'erpt', 'basesampler': 'metropolis' } ]) ]),
         'usersamplingmap_filename': {'advanced': True},
     }
@@ -152,7 +154,7 @@ class luxrender_sampler(declarative_property_group):
 			'attr': 'chainlength',
 			'name': 'Chain Length',
 			'description': 'Chain Length',
-			'default': 512,
+			'default': 100,
 			'min': 1,
 			'max': 32768,
 			'save_in_preset': True
@@ -174,11 +176,19 @@ class luxrender_sampler(declarative_property_group):
             'save_in_preset': True
         },
         {
+            'type': 'bool',
+            'attr': 'usevariance',
+            'name': 'Use Variance',
+            'description': 'Use the variance hint provided by some integrators to alter sample acceptance',
+            'default': True,
+            'save_in_preset': True
+        },
+        {
             'type': 'int',
             'attr': 'mutationrange',
             'name': 'Mutation Range',
             'description': 'Maximum distance in pixel for a small mutation',
-            'default': 256,
+            'default': 50,
             'min': 1,
             'max': 32768,
             'save_in_preset': True
