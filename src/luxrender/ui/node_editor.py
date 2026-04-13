@@ -235,13 +235,13 @@ luxrender_node_categories_material = [
     ]),
 
     luxrender_node_category_material("LUX_DEPRECATED", "Classic API", items=[
-        NodeItem("luxrender_texture_image_map_node", label="Image Map"),
-        NodeItem("luxrender_texture_normal_map_node", label="Normal Map"),
-        NodeItem("luxrender_texture_mix_node"),
-        NodeItem("luxrender_texture_scale_node"),
         NodeItem("luxrender_texture_add_node"),
-        NodeItem("luxrender_texture_subtract_node"),
         NodeItem("luxrender_texture_glossyexponent_node"), # Works in LuxCore, but kind of deprecated
+        NodeItem("luxrender_texture_image_map_node", label="Image Map"),
+        NodeItem("luxrender_texture_mix_node"),
+        NodeItem("luxrender_texture_normal_map_node", label="Normal Map"),
+        NodeItem("luxrender_texture_scale_node"),
+        NodeItem("luxrender_texture_subtract_node"),
     ]),
     
     luxrender_node_category_material("LUX_VOLUME", "Volume", items=[
