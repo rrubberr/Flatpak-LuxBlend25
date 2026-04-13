@@ -102,12 +102,8 @@ class luxrender_rendermode(declarative_property_group):
                 ('bidirectional', 'Bidirectional', 'Bidirectional path tracer'),
                 ('path', 'Path', 'Simple (eye-only) Path tracer'),
                 ('directlighting', 'Direct Lighting', 'Direct-light (Whitted) ray tracer'),
-                ('distributedpath', 'Distributed Path', 'Distributed path tracer, similar to Cycles non-progressive integrator'),
-                ('igi', 'Instant Global Illumination', 'Instant global illumination renderer',),
                 ('exphotonmap', 'Ex-Photon Map', 'Traditional photon mapping integrator'),
                 ('sppm', 'SPPM (Experimental)', 'Stochastic progressive photon mapping integrator'),
-                ('hybridbidir', 'Hybrid Bidirectional', 'Experimental OpenCL-acclerated bidirectional path tracer'),
-                ('hybridpath', 'Hybrid Path', 'OpenCL-accelerated simple (eye-only) path tracer'),
             ],
             'update': update_rendering_mode,
             'save_in_preset': True
