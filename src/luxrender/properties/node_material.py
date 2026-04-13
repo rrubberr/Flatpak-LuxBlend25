@@ -1403,17 +1403,12 @@ class luxrender_material_type_node_mix(luxrender_material_node):
 class luxrender_material_type_node_null(luxrender_material_node):
     """Null material node"""
     bl_idname = 'luxrender_material_null_node'
-    bl_label = 'Transparent Material'
+    bl_label = 'Null Material'
     bl_icon = 'MATERIAL'
-    bl_width_min = 180
+    bl_width_min = 160
 
     def init(self, context):
-        self.inputs.new('luxrender_TC_Kt_socket', 'Transmission Color')
         self.outputs.new('NodeSocketShader', 'Surface')
-
-    def draw_buttons(self, context, layout):
-        if not UseLuxCore():
-            layout.label('Color not supported in Classic API', icon='ERROR')
 
     def export_material(self, make_material, make_texture):
         mat_type = 'null'
@@ -1421,21 +1416,6 @@ class luxrender_material_type_node_null(luxrender_material_node):
         null_params = ParamSet()
 
         return make_material(mat_type, self.name, null_params)
-
-    def export_luxcore(self, properties, luxcore_exporter, name=None):
-        luxcore_name = create_luxcore_name_mat(self, name)
-
-        if 'Transmission Color' in self.inputs:
-            transparency = self.inputs['Transmission Color'].export_luxcore(properties)
-        else:
-            transparency = 1.0
-
-        set_prop_mat(properties, luxcore_name, 'type', 'null')
-
-        if transparency != 1.0 and transparency != [1.0, 1.0, 1.0]:
-            set_prop_mat(properties, luxcore_name, 'transparency', transparency)
-
-        return luxcore_name
 
 
 # Deprecated, replaced by unified glass node
@@ -1779,106 +1759,18 @@ class luxrender_material_output_node(luxrender_node):
     bl_idname = 'luxrender_material_output_node'
     bl_label = 'Material Output'
     bl_icon = 'MATERIAL'
-    bl_width_min = 180
-
-    interior_volume = bpy.props.StringProperty(description='Volume inside of the object with this material')
-    exterior_volume = bpy.props.StringProperty(description='Volume outside of the object with this material')
-    materialgroup = bpy.props.StringProperty(description='Materialgroup for Material ID pass; leave blank to use default')
-    is_shadow_catcher = bpy.props.BoolProperty(name='Shadow Catcher', default=False, description=
-        'Make material transparent where hit by light and opaque where shadowed (alpha transparency)')
-    sc_onlyinfinitelights = bpy.props.BoolProperty(name='Only Infinite Lights', default=False, description=
-        'Only consider infinite lights for this shadow catcher')
-    advanced = bpy.props.BoolProperty(name='Advanced Options', default=False, description=
-        'Show advanced material settings')
-    samples = bpy.props.IntProperty(name='Samples', default=-1, min=-1, soft_max=16, max=256, description=
-        'Material samples count (-1 = global default, size x size)')
-    visibility_indirect_diffuse_enable = bpy.props.BoolProperty(name='Diffuse', default=True, description=
-        'Enable material visibility for indirect rays')
-    visibility_indirect_glossy_enable = bpy.props.BoolProperty(name='Glossy', default=True, description=
-        'Enable material visibility for glossy rays')
-    visibility_indirect_specular_enable = bpy.props.BoolProperty(name='Specular', default=True, description=
-        'Enable material visibility for specular rays')
+    bl_width_min = 120
 
     def init(self, context):
         self.inputs.new('NodeSocketShader', 'Surface')
+        self.inputs.new('NodeSocketShader', 'Interior Volume')
+        self.inputs.new('NodeSocketShader', 'Exterior Volume')
         self.inputs.new('NodeSocketShader', 'Emission')
 
     def draw_buttons(self, context, layout):
-        layout.label('Volumes:')
-
-        layout.prop_search(self, 'interior_volume', context.scene.luxrender_volumes, 'volumes', 'Interior',
-                           icon='MOD_FLUIDSIM')
-
-        default_interior = context.scene.luxrender_world.default_interior_volume
-        if not self.interior_volume and default_interior:
-            layout.label('Using default: "%s"' % default_interior, icon='INFO')
-
-        layout.prop_search(self, 'exterior_volume', context.scene.luxrender_volumes, 'volumes', 'Exterior',
-                           icon='MOD_FLUIDSIM')
-
-        default_exterior = context.scene.luxrender_world.default_exterior_volume
-        if not self.exterior_volume and default_exterior:
-            layout.label('Using default: "%s"' % default_exterior, icon='INFO')
-
         if UseLuxCore():
-            layout.prop(self, 'is_shadow_catcher')
-            if self.is_shadow_catcher:
-                layout.prop(self, 'sc_onlyinfinitelights')
-            layout.prop_search(self, 'materialgroup', context.scene.luxrender_materialgroups, 'materialgroups',
-                               'MGroup', icon='IMASEL')
-
-            layout.prop(self, 'advanced', toggle=True)
-
-            if self.advanced:
-                layout.label('Biased Path Settings:')
-                column = layout.column()
-                column.enabled = context.scene.luxcore_enginesettings.renderengine_type == 'TILEPATH'
-
-                column.prop(self, 'samples')
-                column.label('Visibility for indirect rays:')
-                row = column.row()
-                row.prop(self, 'visibility_indirect_diffuse_enable')
-                row.prop(self, 'visibility_indirect_glossy_enable')
-                row.prop(self, 'visibility_indirect_specular_enable')
-
-    def export_luxcore(self, material, properties, blender_scene, luxcore_exporter, luxcore_name):
-        # Note: volumes are exported in export/luxcore/materials.py (in "parent" function that calls this function)
-
-        tree_name = material.luxrender_material.nodetree
-        print('Converting material: %s (Nodetree: %s)' % (material.name, tree_name))
-
-        # Export the material tree
-        export_submat_luxcore(properties, self.inputs[0], luxcore_exporter, luxcore_name)
-
-        # Export emission node if attached to this node
-        export_emission_luxcore(properties, luxcore_exporter, self.inputs['Emission'], luxcore_name)
-
-        # Material group
-        materialgroup_name = self.materialgroup
-        if materialgroup_name in blender_scene.luxrender_materialgroups.materialgroups:
-            group = blender_scene.luxrender_materialgroups.materialgroups[materialgroup_name]
-
-            set_prop_mat(properties, luxcore_name, 'id', group.id)
-
-            if group.create_MATERIAL_ID_MASK and blender_scene.luxrender_channels.enable_aovs:
-                luxcore_exporter.config_exporter.convert_channel('MATERIAL_ID_MASK', group.id)
-            if group.create_BY_MATERIAL_ID and blender_scene.luxrender_channels.enable_aovs:
-                luxcore_exporter.config_exporter.convert_channel('BY_MATERIAL_ID', group.id)
-
-        # Export advanced LuxCore material settings
-        set_prop_mat(properties, luxcore_name, 'samples', self.samples)
-        set_prop_mat(properties, luxcore_name, 'visibility.indirect.diffuse.enable',
-                     self.visibility_indirect_diffuse_enable)
-        set_prop_mat(properties, luxcore_name, 'visibility.indirect.glossy.enable',
-                     self.visibility_indirect_glossy_enable)
-        set_prop_mat(properties, luxcore_name, 'visibility.indirect.specular.enable',
-                     self.visibility_indirect_specular_enable)
-
-        # Shadow catcher
-        set_prop_mat(properties, luxcore_name, 'shadowcatcher.enable', self.is_shadow_catcher)
-        set_prop_mat(properties, luxcore_name, 'shadowcatcher.onlyinfinitelights', self.sc_onlyinfinitelights)
-
-        return luxcore_name
+            layout.label(text='Not supported', icon='ERROR')
+            layout.label(text='in LuxCore mode!')
 
     def export(self, scene, lux_context, material, mode='indirect'):
 
@@ -1955,8 +1847,6 @@ class luxrender_material_output_node(luxrender_node):
                 if check_node_export_material(surface_node):
                     surface_node.export_material(make_material=make_material, make_texture=make_texture)
 
-        # TODO: remove, volumes (with nodes) are now exported from their own output node
-        '''
         # Volumes exporting:
         int_vol_socket = self.inputs[1]
         if int_vol_socket.is_linked:
@@ -1987,7 +1877,6 @@ class luxrender_material_output_node(luxrender_node):
 
         if ext_vol_socket.is_linked:
             ext_vol_node.export_volume(make_volume=make_volume, make_texture=make_texture)
-        '''
 
         return set()
 

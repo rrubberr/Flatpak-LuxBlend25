@@ -128,19 +128,15 @@ class ui_luxrender_material_header(luxrender_material_base):
                 row.operator("object.material_slot_select", text="Select")
                 row.operator("object.material_slot_deselect", text="Deselect")
 
-        split = layout.split(percentage=0.68)
+        split = layout.split(percentage=0.65)
 
         if ob:
             split.template_ID(ob, "active_material", new="material.new")
+            row = split.row()
 
             if slot:
-                # Special copy operator that not only duplicates the material but also the Lux nodetree if it exists
-                split.operator("luxrender.material_copy")
-
-                row = split.row()
                 row.prop(slot, "link", text="")
             else:
-                row = split.row()
                 row.label()
         elif mat:
             split.template_ID(space, "pin_id")
@@ -153,14 +149,6 @@ class ui_luxrender_material_header(luxrender_material_base):
                 row.label("Material type")
                 row.menu('MATERIAL_MT_luxrender_type', text=context.material.luxrender_material.type_label)
                 super().draw(context)
-        else:
-            # Draw volume dropdowns for material output node
-            output_node = find_node(mat, 'luxrender_material_output_node')
-            if output_node:
-                layout.prop_search(output_node, 'interior_volume', context.scene.luxrender_volumes, 'volumes',
-                                   'Interior', icon='MOD_FLUIDSIM')
-                layout.prop_search(output_node, 'exterior_volume', context.scene.luxrender_volumes, 'volumes',
-                                   'Exterior', icon='MOD_FLUIDSIM')
 
 
 @LuxRenderAddon.addon_register_class

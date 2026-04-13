@@ -139,9 +139,6 @@ class volumes_base(object):
 
                 col = self.layout.column()
                 col.enabled = UseLuxCore()
-                col.operator('luxrender.add_volume_nodetree', icon='NODETREE')
-                if not UseLuxCore():
-                    self.layout.label('Volume nodes not supported in Classic API', icon='INFO')
                 self.layout.separator()
 
                 # Here we draw the currently selected luxrender_volumes_data property group
