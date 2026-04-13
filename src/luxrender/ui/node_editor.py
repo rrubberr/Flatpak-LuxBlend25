@@ -115,33 +115,20 @@ class NodeItemMultiImageImport(NodeItemCustom):
 
 
 luxrender_node_categories_material = [
-    # elements that make no sense for materials are disabled or removed
 
-    luxrender_node_category_material("LUX_MATERIAL", "Material", items=[
-        #NodeItem("luxrender_material_type_node_standard", label="Standard"), # TODO: Work in progress
-        NodeItem("luxrender_material_carpaint_node", label="Car Paint"),
-        NodeItem("luxrender_material_cloth_node", label="Cloth"),
-        NodeItem("luxrender_material_doubleside_node", label="Double-Sided"),
-        NodeItem("luxrender_material_glass_node", label="Glass"),
-        NodeItem("luxrender_material_glossy_node", label="Glossy"),
-        NodeItem("luxrender_material_glossycoating_node", label="Glossy Coating"),
-        NodeItem("luxrender_material_glossytranslucent_node", label="Glossy Translucent"),
-        NodeItem("luxrender_material_layered_node", label="Layered"),
-        NodeItem("luxrender_material_matte_node", label="Matte"),
-        NodeItem("luxrender_material_mattetranslucent_node", label="Matte Translucent"),
-        NodeItem("luxrender_material_metal2_node", label="Metal"),
-        NodeItem("luxrender_material_mirror_node", label="Mirror"),
-        NodeItem("luxrender_material_mix_node", label="Mix"),
-        NodeItem("luxrender_material_null_node", label="Null"),
-        NodeItem("luxrender_material_scatter_node", label="Scatter"),
-        NodeItem("luxrender_material_velvet_node", label="Velvet"),
-        #NodeItem("luxrender_material_glass2_node", label="Glass2"), # replaced by unified glass node
-        #NodeItem("luxrender_material_roughglass_node", label="Rough Glass"), # replaced by unified glass node
-        #NodeItem("luxrender_material_metal_node", label="Metal"), # replaced by unified metal2 node
-        #NodeItem("luxrender_material_shinymetal_node", label="Shiny Metal"),
-        Separator(),
-        NodeItem("luxrender_material_type_node_datablock"),
+    luxrender_node_category_material("LUX_VOLUME", "Volume", items=[
+        NodeItem("luxrender_volume_clear_node"),
+        NodeItem("luxrender_volume_heterogeneous_node"),
+        NodeItem("luxrender_volume_homogeneous_node"),
     ]),
+
+    luxrender_node_category_material("LUX_VERTEXDATA", "Vertex Data", items=[
+        #NodeItem("luxrender_texture_pointiness_node"),
+        NodeItem("luxrender_texture_hitpointcolor_node"),  # vertex color node
+        NodeItem("luxrender_texture_hitpointgrey_node"),  # vertex mask node
+    ]),
+
+
 
     # Often used textures
     luxrender_node_category_material("LUX_TEXTURE", "Texture", items=[
@@ -172,6 +159,41 @@ luxrender_node_categories_material = [
         NodeItem("luxrender_texture_wrinkled_node", label="Wrinkled"),
     ]),
 
+    luxrender_node_category_material("LUX_OUTPUT", "Output", items=[
+        NodeItem("luxrender_material_output_node"),
+    ]),
+
+    #luxrender_node_category_material("LUX_GROUP", "Group", items=[ # ...maybe...
+        # NodeItem("NodeGroupInput", poll=group_input_output_item_poll),
+        # NodeItem("NodeGroupOutput", poll=group_input_output_item_poll),
+    #]),
+
+    luxrender_node_category_material("LUX_MATERIAL", "Material", items=[
+        #NodeItem("luxrender_material_type_node_standard", label="Standard"), # TODO: Work in progress
+        NodeItem("luxrender_material_carpaint_node", label="Car Paint"),
+        NodeItem("luxrender_material_cloth_node", label="Cloth"),
+        NodeItem("luxrender_material_doubleside_node", label="Double-Sided"),
+        NodeItem("luxrender_material_glass_node", label="Glass"),
+        NodeItem("luxrender_material_glossy_node", label="Glossy"),
+        NodeItem("luxrender_material_glossycoating_node", label="Glossy Coating"),
+        NodeItem("luxrender_material_glossytranslucent_node", label="Glossy Translucent"),
+        NodeItem("luxrender_material_layered_node", label="Layered"),
+        NodeItem("luxrender_material_matte_node", label="Matte"),
+        NodeItem("luxrender_material_mattetranslucent_node", label="Matte Translucent"),
+        NodeItem("luxrender_material_metal2_node", label="Metal"),
+        NodeItem("luxrender_material_mirror_node", label="Mirror"),
+        NodeItem("luxrender_material_mix_node", label="Mix"),
+        NodeItem("luxrender_material_null_node", label="Null"),
+        NodeItem("luxrender_material_scatter_node", label="Scatter"),
+        NodeItem("luxrender_material_velvet_node", label="Velvet"),
+        #NodeItem("luxrender_material_glass2_node", label="Glass2"), # replaced by unified glass node
+        #NodeItem("luxrender_material_roughglass_node", label="Rough Glass"), # replaced by unified glass node
+        #NodeItem("luxrender_material_metal_node", label="Metal"), # replaced by unified metal2 node
+        #NodeItem("luxrender_material_shinymetal_node", label="Shiny Metal"),
+        Separator(),
+        NodeItem("luxrender_material_type_node_datablock"),
+    ]),
+
     luxrender_node_category_material("LUX_MAPPING", "Mapping", items=[
         NodeItem("luxrender_2d_coordinates_node"),
         NodeItem("luxrender_3d_coordinates_node"),
@@ -179,25 +201,25 @@ luxrender_node_categories_material = [
         NodeItem("luxrender_manipulate_3d_mapping_node"),
     ]),
 
-    luxrender_node_category_material("LUX_COLOR_MATH", "Color & Math", items=[
-        #NodeItem("luxrender_texture_colormix_node"),
-        #NodeItem("luxrender_texture_math_node"),
-        #NodeItem("luxrender_texture_colorinvert_node"),
-        #NodeItem("luxrender_texture_hsv_node"),
-        NodeItem("luxrender_texture_constant_node", label="Color Input"),
-        NodeItem("luxrender_texture_python_node"),
-        NodeItem("luxrender_texture_constant_node", label="Value Input", settings={
-            "variant": repr("float"),
-            }),
-        #NodeItem("luxrender_texture_band_node"),
-        #NodeItem("luxrender_texture_colorramp_node"), # TODO: activate when ready
-        #NodeItem("luxrender_texture_colordepth_node"),
+    luxrender_node_category_material("LUX_LIGHT", "Light", items=[
+        NodeItem("luxrender_light_area_node"),
+        Separator(),
+        NodeItem("luxrender_texture_blackbody_node"),
+        NodeItem("luxrender_texture_gaussian_node"),
+        NodeItem("luxrender_texture_tabulateddata_node"),
     ]),
 
-    luxrender_node_category_material("LUX_VERTEXDATA", "Vertex Data", items=[
-        #NodeItem("luxrender_texture_pointiness_node"),
-        NodeItem("luxrender_texture_hitpointcolor_node"),  # vertex color node
-        NodeItem("luxrender_texture_hitpointgrey_node"),  # vertex mask node
+    luxrender_node_category_material("LUX_LAYOUT", "Layout", items=[
+        NodeItem("NodeFrame"),
+        # NodeItem("NodeReroute") #not working yet
+    ]),
+
+    luxrender_node_category_material("LUX_LIGHT", "Light", items=[
+        NodeItem("luxrender_light_area_node"),
+        Separator(),
+        NodeItem("luxrender_texture_blackbody_node"),
+        NodeItem("luxrender_texture_gaussian_node"),
+        NodeItem("luxrender_texture_tabulateddata_node"),
     ]),
 
     luxrender_node_category_material("LUX_FRESNEL", "Fresnel", items=[
@@ -212,26 +234,19 @@ luxrender_node_categories_material = [
         NodeItem("luxrender_texture_sellmeier_node"),
     ]),
 
-    luxrender_node_category_material("LUX_LIGHT", "Light", items=[
-        NodeItem("luxrender_light_area_node"),
-        Separator(),
-        NodeItem("luxrender_texture_blackbody_node"),
-        NodeItem("luxrender_texture_gaussian_node"),
-        NodeItem("luxrender_texture_tabulateddata_node"),
-    ]),
-
-    luxrender_node_category_material("LUX_OUTPUT", "Output", items=[
-        NodeItem("luxrender_material_output_node"),
-    ]),
-
-    #luxrender_node_category_material("LUX_GROUP", "Group", items=[ # ...maybe...
-        # NodeItem("NodeGroupInput", poll=group_input_output_item_poll),
-        # NodeItem("NodeGroupOutput", poll=group_input_output_item_poll),
-    #]),
-
-    luxrender_node_category_material("LUX_LAYOUT", "Layout", items=[
-        NodeItem("NodeFrame"),
-        # NodeItem("NodeReroute") #not working yet
+    luxrender_node_category_material("LUX_COLOR_MATH", "Color", items=[
+        #NodeItem("luxrender_texture_colormix_node"),
+        #NodeItem("luxrender_texture_math_node"),
+        #NodeItem("luxrender_texture_colorinvert_node"),
+        #NodeItem("luxrender_texture_hsv_node"),
+        NodeItem("luxrender_texture_constant_node", label="Color Input"),
+        NodeItem("luxrender_texture_python_node"),
+        NodeItem("luxrender_texture_constant_node", label="Value Input", settings={
+            "variant": repr("float"),
+            }),
+        #NodeItem("luxrender_texture_band_node"),
+        #NodeItem("luxrender_texture_colorramp_node"), # TODO: activate when ready
+        #NodeItem("luxrender_texture_colordepth_node"),
     ]),
 
     luxrender_node_category_material("LUX_DEPRECATED", "Classic API", items=[
@@ -243,10 +258,5 @@ luxrender_node_categories_material = [
         NodeItem("luxrender_texture_scale_node"),
         NodeItem("luxrender_texture_subtract_node"),
     ]),
-    
-    luxrender_node_category_material("LUX_VOLUME", "Volume", items=[
-        NodeItem("luxrender_volume_clear_node"),
-        NodeItem("luxrender_volume_heterogeneous_node"),
-        NodeItem("luxrender_volume_homogeneous_node"),
-    ]),
+
 ]
