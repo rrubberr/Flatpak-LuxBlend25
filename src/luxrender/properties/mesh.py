@@ -63,7 +63,6 @@ class luxrender_mesh(declarative_property_group):
                    'mesh_type',
                    'instancing_mode',
                    'acceltype',
-#                   'treetype',
                    'tritype',
                    'portal',
                    'generatetangents',
@@ -83,7 +82,6 @@ class luxrender_mesh(declarative_property_group):
                                 'instancing_mode': lambda: not UseLuxCore(),
                                 'acceltype': {'mesh_type': 'native'},
                                 'tritype': {'mesh_type': 'native'},
-#                                'treetype': {'acceltype': 'bvh'},
                                 'nsmooth': {'subdiv': 'loop'},
                                 'sharpbound': {'subdiv': 'loop'},
                                 'splitnormal': {'subdiv': 'loop'},
@@ -118,13 +116,6 @@ class luxrender_mesh(declarative_property_group):
                          ],
                          'default': 'bary'
                      },
-#                     {
-#                         'attr': 'treetype',
-#                         'type': 'int',
-#                         'name': 'Tree Type',
-#                         'description': 'Tree type to generate (2 = binary, 4 = quad, 8 = octree)',
-#                         'default': 8,
-#                     },
                      {
                          'type': 'enum',
                          'attr': 'instancing_mode',
@@ -143,10 +134,8 @@ class luxrender_mesh(declarative_property_group):
                          'items': [
                              ('auto', 'Auto', 'Automatically determine accelerator based on primitive count'),
                              ('bruteforce', 'Brute Force', 'Simply brute-force the object'),
-                             ('bvh', 'BVH', 'Bounding volume hierarchy'),
                              ('none', 'Global', 'Use the global accelerator setting'),
                              ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
-                             ('sqbvh', 'SQBVH', 'Spatial quad bounding volume hierarchy; may be faster than normal QBVH, but may use more memory'),
                              ('tabreckdtree', 'KD Tree', 'A traditional KD Tree')
                          ],
                          'default': 'none'
@@ -256,9 +245,6 @@ class luxrender_mesh(declarative_property_group):
         # Export tritype
         if self.mesh_type == 'native':
             params.add_string('tritype', self.tritype)
-        
-#        if self.acceltype == 'bvh':
-#            params.add_string('treetype', self.treetype)
 
         # check if subdivision is used
         if self.subdiv != 'None':
