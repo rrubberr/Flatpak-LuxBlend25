@@ -34,6 +34,13 @@ from .. import LuxRenderAddon
 from .lamps import lamps_panel
 from .imageeditor_panel import imageeditor_panel
 
+def show_sampler_panel():
+    ctx = bpy.context
+    scene = getattr(ctx, "scene", None)
+    lri = getattr(scene, "luxrender_integrator", None)
+
+    # Show panel ONLY when integrator != 'sppm'
+    return bool(lri and lri.surfaceintegrator != 'sppm')
 
 class render_panel(bl_ui.properties_render.RenderButtonsPanel, property_group_renderer):
     """
@@ -54,7 +61,7 @@ class render_settings(render_panel):
     display_property_groups = [
         ( ('scene',), 'luxrender_rendermode', lambda: not UseLuxCore() ),
         ( ('scene',), 'luxrender_integrator', lambda: not UseLuxCore() ),
-        ( ('scene',), 'luxrender_sampler', lambda: not UseLuxCore() ),
+        ( ('scene',), 'luxrender_sampler', lambda: not UseLuxCore() and show_sampler_panel() ),
         ( ('scene',), 'luxrender_volumeintegrator', lambda: not UseLuxCore() ),
         ( ('scene',), 'luxrender_filter', lambda: not UseLuxCore() ),
         ( ('scene',), 'luxrender_accelerator', lambda: not UseLuxCore() ),

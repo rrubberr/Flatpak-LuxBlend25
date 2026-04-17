@@ -188,21 +188,27 @@ class luxrender_sampler(declarative_property_group):
 
         params = ParamSet()
 
-        if self.sampler in ['random', 'lowdiscrepancy']:
-            params.add_integer('pixelsamples', self.pixelsamples)
-            params.add_string('pixelsampler', self.pixelsampler)
+        scene = self.id_data
+        lri = getattr(scene, "luxrender_integrator", None)
 
-        if self.sampler == 'metropolis':
-            params.add_float('largemutationprob', self.largemutationprob)
+        is_sppm = (lri and lri.surfaceintegrator == 'sppm')
 
-        params.add_bool('noiseaware', self.noiseaware)
+        if not is_sppm:
+            if self.sampler in ['random', 'lowdiscrepancy']:
+                params.add_integer('pixelsamples', self.pixelsamples)
+                params.add_string('pixelsampler', self.pixelsampler)
 
-        if self.advanced:
             if self.sampler == 'metropolis':
-                params.add_integer('maxconsecrejects', self.maxconsecrejects)
-                params.add_bool('usecooldown', self.usecooldown)
+                params.add_float('largemutationprob', self.largemutationprob)
 
-            if self.usersamplingmap_filename:
-                params.add_string('usersamplingmap_filename', self.usersamplingmap_filename)
+            params.add_bool('noiseaware', self.noiseaware)
+
+            if self.advanced:
+                if self.sampler == 'metropolis':
+                    params.add_integer('maxconsecrejects', self.maxconsecrejects)
+                    params.add_bool('usecooldown', self.usecooldown)
+
+                if self.usersamplingmap_filename:
+                    params.add_string('usersamplingmap_filename', self.usersamplingmap_filename)
 
         return self.sampler, params
