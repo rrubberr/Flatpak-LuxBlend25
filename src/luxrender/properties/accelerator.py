@@ -43,9 +43,10 @@ class luxrender_accelerator(declarative_property_group):
         'spacer',
         'accelerator',
 
+        'costsamples',
         'intersectcost',
         'traversalcost',
-        'emptybonus'
+        'emptybonus',
         'maxprims',
         'maxdepth',
         'maxprimsperleaf',
@@ -57,14 +58,15 @@ class luxrender_accelerator(declarative_property_group):
     visibility = {
         'spacer': {'advanced': True},
         'accelerator': {'advanced': True},
-        'intersectcost': {'advanced': True, 'accelerator': O(['tabreckdtree'])},
-        'traversalcost': {'advanced': True, 'accelerator': O(['tabreckdtree'])},
-        'emptybonus': {'advanced': True, 'accelerator': O(['tabreckdtree'])},
-        'maxprims': {'advanced': True, 'accelerator': O(['tabreckdtree'])},
-        'maxdepth': {'advanced': True, 'accelerator': O(['tabreckdtree'])},
-        'maxprimsperleaf': {'advanced': True, 'accelerator': O(['qbvh'])},
-        'fullsweepthreshold': {'advanced': True, 'accelerator': O(['qbvh'])},
-        'skipfactor': {'advanced': True, 'accelerator': O(['qbvh'])},
+        'costsamples': {'advanced': True, 'accelerator': 'bvh'},
+        'intersectcost': {'advanced': True, 'accelerator': O(['tabreckdtree', 'bvh'])},
+        'traversalcost': {'advanced': True, 'accelerator': O(['tabreckdtree', 'bvh'])},
+        'emptybonus': {'advanced': True, 'accelerator': O(['tabreckdtree', 'bvh'])},
+        'maxprims': {'advanced': True, 'accelerator': 'tabreckdtree'},
+        'maxdepth': {'advanced': True, 'accelerator': 'tabreckdtree'},
+        'maxprimsperleaf': {'advanced': True, 'accelerator': 'qbvh'},
+        'fullsweepthreshold': {'advanced': True, 'accelerator': 'qbvh'},
+        'skipfactor': {'advanced': True, 'accelerator': 'qbvh'},
     }
 
     properties = [
@@ -79,9 +81,10 @@ class luxrender_accelerator(declarative_property_group):
             'name': 'Accelerator',
             'description': 'Scene accelerator type',
             'default': 'qbvh',
-            'items': [  # As of 0.9, other accelerator types have been removed from the core entirely
+            'items': [  # As of 1.9, other accelerator types have been removed from the core entirely
                         ('tabreckdtree', 'KD Tree', 'A traditional KD Tree'),
                         ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
+                        ('bvh', 'BVH', 'Experimental 8-wide SIMD BVH accelerator with node collapsing'),
                         ('none', 'None', 'Simply brute-force the scene. This is not recommended in actual production use.'),
             ],
             'save_in_preset': True
@@ -95,6 +98,13 @@ class luxrender_accelerator(declarative_property_group):
             'save_in_preset': True
         },
         {
+            'attr': 'costsamples',
+            'type': 'int',
+            'name': 'Cost Samples',
+            'default': 40,
+            'save_in_preset': True
+        },
+        {
             'attr': 'intersectcost',
             'type': 'int',
             'name': 'Intersect Cost',
@@ -105,7 +115,7 @@ class luxrender_accelerator(declarative_property_group):
             'attr': 'traversalcost',
             'type': 'int',
             'name': 'Traversal Cost',
-            'default': 1,
+            'default': 10,
             'save_in_preset': True
         },
         {
@@ -163,16 +173,22 @@ class luxrender_accelerator(declarative_property_group):
 
         if self.advanced:
          
-            if self.accelerator in ('tabreckdtree'):
+            if self.accelerator == 'tabreckdtree':
                 params.add_integer('intersectcost', self.intersectcost)
                 params.add_integer('traversalcost', self.traversalcost)
                 params.add_float('emptybonus', self.emptybonus)
                 params.add_integer('maxprims', self.maxprims)
                 params.add_integer('maxdepth', self.maxdepth)
 
-            if self.accelerator in ('qbvh'):
+            if self.accelerator == 'qbvh':
                 params.add_integer('maxprimsperleaf', self.maxprimsperleaf)
                 params.add_integer('fullsweepthreshold', self.fullsweepthreshold)
                 params.add_integer('skipfactor', self.skipfactor)
+            
+            if self.accelerator == 'bvh':
+                params.add_integer('intersectcost', self.intersectcost)
+                params.add_integer('traversalcost', self.traversalcost)
+                params.add_float('emptybonus', self.emptybonus)
+                params.add_integer('costsamples', self.costsamples)
 
         return self.accelerator, params
