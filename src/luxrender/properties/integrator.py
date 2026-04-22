@@ -184,6 +184,7 @@ class luxrender_integrator(declarative_property_group):
         'wavelengthstratificationpasses',
         'lookupaccel',
         'parallelhashgridspare',
+        'schedulerblocksize',
         'pixelsampler',
         'photonsampler',
         'useproba',  # path + bidir
@@ -277,6 +278,7 @@ class luxrender_integrator(declarative_property_group):
                     'lookupaccel': {'advanced': True, 'surfaceintegrator': 'sppm'},
                     'parallelhashgridspare': {'advanced': True, 'lookupaccel': 'parallelhashgrid',
                                               'surfaceintegrator': 'sppm'},
+                    'schedulerblocksize': {'advanced': True, 'surfaceintegrator': 'sppm'},
                     'pixelsampler': {'advanced': True, 'surfaceintegrator': 'sppm'},
                     'photonsampler': {'advanced': True, 'surfaceintegrator': 'sppm'},
                     'useproba': {'advanced': True, 'surfaceintegrator': 'sppm'},
@@ -959,7 +961,7 @@ class luxrender_integrator(declarative_property_group):
             'attr': 'lookupaccel',
             'name': 'Lookup Accelerator',
             'description': 'Acceleration structure for hitpoints (not scene geometry)',
-            'default': 'hybridhashgrid',
+            'default': 'parallelhashgrid',
             'items': [
                 ('hashgrid', 'Hash Grid', 'hashgrid'),
                 ('kdtree', 'KD Tree', 'kdtree'),
@@ -972,8 +974,18 @@ class luxrender_integrator(declarative_property_group):
             'type': 'float',
             'attr': 'parallelhashgridspare',
             'name': 'Parallel Hash Grid Spare',
-            'description': 'Higher values are faster but can use more memory',
+            'description': 'Density/Sparseness of the hash grid',
             'default': 1.0,
+            'save_in_preset': True
+        },
+        {
+            'type': 'int',
+            'attr': 'schedulerblocksize',
+            'name': 'Scheduler Block Size',
+            'description': 'Granularity of work chunks distributed to threads',
+            'default': 1000,
+            'min': 100,
+            'max': 100000,
             'save_in_preset': True
         },
         {
