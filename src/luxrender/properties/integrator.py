@@ -1112,6 +1112,7 @@ class luxrender_integrator(declarative_property_group):
                     .add_integer('wavelengthstratificationpasses', self.wavelengthstratificationpasses) \
                     .add_string('lookupaccel', self.lookupaccel) \
                     .add_float('parallelhashgridspare', self.parallelhashgridspare) \
+                    .add_integer('schedulerblocksize', self.schedulerblocksize) \
                     .add_string('pixelsampler', self.pixelsampler) \
                     .add_string('photonsampler', self.photonsampler)
 
