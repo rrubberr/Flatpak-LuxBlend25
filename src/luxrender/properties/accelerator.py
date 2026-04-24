@@ -101,7 +101,7 @@ class luxrender_accelerator(declarative_property_group):
             'attr': 'costsamples',
             'type': 'int',
             'name': 'Cost Samples',
-            'default': 40,
+            'default': 8,
             'save_in_preset': True
         },
         {
@@ -115,14 +115,14 @@ class luxrender_accelerator(declarative_property_group):
             'attr': 'traversalcost',
             'type': 'int',
             'name': 'Traversal Cost',
-            'default': 10,
+            'default': 1,
             'save_in_preset': True
         },
         {
             'attr': 'emptybonus',
             'type': 'float',
             'name': 'Empty Bonus',
-            'default': 0.2,
+            'default': 0.0,
             'save_in_preset': True
         },
         {
@@ -143,7 +143,7 @@ class luxrender_accelerator(declarative_property_group):
             'attr': 'maxprimsperleaf',
             'type': 'int',
             'name': 'Max. prims per leaf',
-            'default': 4,
+            'default': 8,
             'save_in_preset': True
         },
         {
