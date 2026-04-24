@@ -48,8 +48,10 @@ class luxrender_sampler(declarative_property_group):
 
         # 'adaptive_largemutationprob',
         'usecooldown',
+        'usevariance',
         'noiseaware',
-        'largemutationprob',  # 'mutationrange',
+        'largemutationprob',
+        # 'mutationrange',
         'maxconsecrejects',
         'usersamplingmap_filename',
     ]
@@ -112,8 +114,18 @@ class luxrender_sampler(declarative_property_group):
             'description': 'Maximum amount of samples in a particular area before moving on. Setting this too low \
             may mute lamps and caustics',
             'default': 512,
-            'min': 128,
-            'max': 2048,
+            'min': 32,
+            'max': 8192,
+            'save_in_preset': True
+        },
+        {
+            'type': 'float',
+            'attr': 'mutationrange',
+            'name': 'Mutation Range',
+            'description': 'Lower values increase sampling locality',
+            'default': 16,
+            'min': 1,
+            'max': 256,
             'save_in_preset': True
         },
         {
@@ -125,30 +137,27 @@ class luxrender_sampler(declarative_property_group):
             'save_in_preset': True
         },
         {
+            'type': 'bool',
+            'attr': 'usevariance',
+            'name': 'Use Variance',
+            'description': 'Enable variance-based sampling',
+            'default': False,
+            'save_in_preset': True
+        },
+        {
             'type': 'string',
             'subtype': 'FILE_PATH',
             'attr': 'usersamplingmap_filename',
             'name': 'User Sampling Map',
-            'description': 'Image map to guide sample distribution, none = disabled. Extension is added \
-            automatically (.exr)',
+            'description': 'Image map to guide sample distribution. Extension is added automatically (.exr)',
             'default': ''
         },
         {
             'type': 'bool',
             'attr': 'usecooldown',
             'name': 'Use Cooldown',
-            'description': 'Use fixed large mutation probability at the beginning of the render, to avoid \
-            convergence errors with extreme settings',
+            'description': 'Use fixed large mutation probability at the beginning of the render',
             'default': True,
-            'save_in_preset': True
-        },
-        {
-            'type': 'int',
-            'attr': 'mutationrange',
-            'name': 'Mutation Range',
-            'default': 256,
-            'min': 1,
-            'max': 32768,
             'save_in_preset': True
         },
         {
@@ -206,6 +215,8 @@ class luxrender_sampler(declarative_property_group):
             if self.advanced:
                 if self.sampler == 'metropolis':
                     params.add_integer('maxconsecrejects', self.maxconsecrejects)
+                    # params.add_integer('mutationrange', self.mutationrange)
+                    params.add_bool('usevariance', self.usevariance)
                     params.add_bool('usecooldown', self.usecooldown)
 
                 if self.usersamplingmap_filename:
