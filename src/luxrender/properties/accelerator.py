@@ -50,6 +50,7 @@ class luxrender_accelerator(declarative_property_group):
         'maxprims',
         'maxdepth',
         'maxprimsperleaf',
+        'maxleafprims',
         'fullsweepthreshold',
         'skipfactor',
         'spacer',  # add an extra one for halt settings, which does not have its own advanced option
@@ -58,13 +59,14 @@ class luxrender_accelerator(declarative_property_group):
     visibility = {
         'spacer': {'advanced': True},
         'accelerator': {'advanced': True},
-        'costsamples': {'advanced': True, 'accelerator': 'bvh'},
-        'intersectcost': {'advanced': True, 'accelerator': O(['tabreckdtree', 'bvh'])},
-        'traversalcost': {'advanced': True, 'accelerator': O(['tabreckdtree', 'bvh'])},
-        'emptybonus': {'advanced': True, 'accelerator': O(['tabreckdtree', 'bvh'])},
+        'costsamples': {'advanced': True, 'accelerator': 'mbvh'},
+        'intersectcost': {'advanced': True, 'accelerator': O(['tabreckdtree', 'mbvh'])},
+        'traversalcost': {'advanced': True, 'accelerator': O(['tabreckdtree', 'mbvh'])},
+        'emptybonus': {'advanced': True, 'accelerator': O(['tabreckdtree', 'mbvh'])},
         'maxprims': {'advanced': True, 'accelerator': 'tabreckdtree'},
         'maxdepth': {'advanced': True, 'accelerator': 'tabreckdtree'},
         'maxprimsperleaf': {'advanced': True, 'accelerator': 'qbvh'},
+        'maxleafprims' : {'advanced': True, 'accelerator': 'mbvh'},
         'fullsweepthreshold': {'advanced': True, 'accelerator': 'qbvh'},
         'skipfactor': {'advanced': True, 'accelerator': 'qbvh'},
     }
@@ -84,8 +86,8 @@ class luxrender_accelerator(declarative_property_group):
             'items': [  # As of 1.9, other accelerator types have been removed from the core entirely
                         ('tabreckdtree', 'KD Tree', 'A traditional KD Tree'),
                         ('qbvh', 'QBVH', 'Quad bounding volume hierarchy'),
-                        ('bvh', 'BVH', 'Experimental 8-wide SIMD BVH accelerator with node collapsing'),
-                        ('none', 'None', 'Simply brute-force the scene. This is not recommended in actual production use.'),
+                        ('mbvh', 'MBVH', 'Experimental Multi-BVH accelerator with node collapsing'),
+                        ('none', 'None', 'Simply brute-force the scene. This is not recommended'),
             ],
             'save_in_preset': True
         },
@@ -101,6 +103,7 @@ class luxrender_accelerator(declarative_property_group):
             'attr': 'costsamples',
             'type': 'int',
             'name': 'Cost Samples',
+            'description': 'Number of split options evaluated',
             'default': 8,
             'save_in_preset': True
         },
@@ -108,6 +111,7 @@ class luxrender_accelerator(declarative_property_group):
             'attr': 'intersectcost',
             'type': 'int',
             'name': 'Intersect Cost',
+            'description': 'Ray-triangle intersection cost',
             'default': 80,
             'save_in_preset': True
         },
@@ -115,6 +119,7 @@ class luxrender_accelerator(declarative_property_group):
             'attr': 'traversalcost',
             'type': 'int',
             'name': 'Traversal Cost',
+            'description': 'BVH traversal cost',
             'default': 1,
             'save_in_preset': True
         },
@@ -122,6 +127,7 @@ class luxrender_accelerator(declarative_property_group):
             'attr': 'emptybonus',
             'type': 'float',
             'name': 'Empty Bonus',
+            'description': 'Encourage creation of empty child nodes',
             'default': 0.0,
             'save_in_preset': True
         },
@@ -144,6 +150,14 @@ class luxrender_accelerator(declarative_property_group):
             'type': 'int',
             'name': 'Max. prims per leaf',
             'default': 8,
+            'save_in_preset': True
+        },
+        {
+            'attr': 'maxleafprims',
+            'type': 'int',
+            'name': 'Max. leaf prims',
+            'description': 'Maximum primitives per leaf; 1 produces the highest tree quality',
+            'default': 1,
             'save_in_preset': True
         },
         {
@@ -185,10 +199,11 @@ class luxrender_accelerator(declarative_property_group):
                 params.add_integer('fullsweepthreshold', self.fullsweepthreshold)
                 params.add_integer('skipfactor', self.skipfactor)
             
-            if self.accelerator == 'bvh':
+            if self.accelerator == 'mbvh':
                 params.add_integer('intersectcost', self.intersectcost)
                 params.add_integer('traversalcost', self.traversalcost)
                 params.add_float('emptybonus', self.emptybonus)
                 params.add_integer('costsamples', self.costsamples)
+                params.add_integer('maxleafprims', self.maxleafprims)
 
         return self.accelerator, params
